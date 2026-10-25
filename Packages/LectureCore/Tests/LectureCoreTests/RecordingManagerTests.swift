@@ -204,6 +204,83 @@ import Testing
         #expect(try context.fetch(FetchDescriptor<Recording>()).isEmpty)
     }
 
+    // MARK: 여러 건 처리 (3-55)
+
+    func addTitled(_ title: String, path: String, subject: Subject? = nil) -> Recording {
+        let recording = addRecording(path, subject: subject)
+        recording.title = title
+        return recording
+    }
+
+    @Test func 여러_녹음을_휴지통으로_보내면_전부_처리된다() throws {
+        let a = addTitled("1주차", path: "미분류/a.m4a")
+        let b = addTitled("2주차", path: "미분류/b.m4a")
+        let result = makeManager().trash([a, b])
+        #expect(result == RecordingBatchResult(succeededCount: 2, failedTitles: []))
+        #expect(result.failureNotice(done: "휴지통으로 이동했고,") == nil)
+        #expect(files.trashed.count == 2)
+        #expect(try context.fetch(FetchDescriptor<Recording>()).isEmpty)
+    }
+
+    @Test func 휴지통_이동이_한_건_실패해도_나머지는_계속하고_실패_제목을_모은다() throws {
+        let a = addTitled("1주차", path: "미분류/a.m4a")
+        let b = addTitled("2주차", path: "미분류/b.m4a")
+        let c = addTitled("3주차", path: "미분류/c.m4a")
+        files.failNextTrash = true
+        let manager = makeManager()
+        let result = manager.trash([a, b, c])
+        #expect(result.succeededCount == 2)
+        #expect(result.failedTitles == ["1주차"])
+        #expect(result.failureNotice(done: "휴지통으로 이동했고,") == "2개를 휴지통으로 이동했고, 1개는 하지 못했습니다: 1주차")
+        #expect(files.fileExists(at: storage.url(for: "미분류/a.m4a")))
+        #expect(try context.fetch(FetchDescriptor<Recording>()).map(\.title) == ["1주차"])
+        #expect(manager.errorMessage == nil)
+    }
+
+    @Test func 여러_녹음의_과목을_한꺼번에_옮긴다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let a = addTitled("1주차", path: "미분류/a.m4a")
+        let b = addTitled("2주차", path: "미분류/b.m4a")
+        let result = makeManager().move([a, b], to: ds)
+        #expect(result.succeededCount == 2)
+        #expect(a.subject === ds && b.subject === ds)
+        #expect(a.relativePath == "학기 미정/자료구조/a.m4a")
+        #expect(files.fileExists(at: storage.url(for: "학기 미정/자료구조/b.m4a")))
+    }
+
+    @Test func 과목_이동이_한_건_실패해도_나머지는_옮기고_실패한_것은_그대로다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let a = addTitled("1주차", path: "미분류/a.m4a")
+        let b = addTitled("2주차", path: "미분류/b.m4a")
+        files.failNextMove = true
+        let result = makeManager().move([a, b], to: ds)
+        #expect(result.succeededCount == 1)
+        #expect(result.failedTitles == ["1주차"])
+        #expect(a.subject == nil && a.relativePath == "미분류/a.m4a")
+        #expect(b.subject === ds)
+    }
+
+    @Test func 빈_선택은_아무것도_하지_않는다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let manager = makeManager()
+        #expect(manager.trash([]) == RecordingBatchResult())
+        #expect(manager.move([], to: ds) == RecordingBatchResult())
+        #expect(files.trashed.isEmpty)
+    }
+
+    @Test func 묶음_내보내기는_넘긴_녹음만_담는다() throws {
+        let a = addTitled("고른 녹음", path: "자료구조/a.m4a")
+        _ = addTitled("안 고른 녹음", path: "자료구조/b.m4a")
+        try context.save()
+        let parent = URL(filePath: "/tmp/내보내기", directoryHint: .isDirectory)
+        let result = try makeManager().exportBundle([a], label: "선택한 녹음 1개", to: parent, now: date(2026, 10, 25, 9, 0), calendar: seoulCalendar)
+        #expect(result.exportedCount == 1)
+        let summary = result.folder.appending(path: RecordingBundleExporter.summaryFileName)
+        let text = String(decoding: files.written[summary.standardizedFileURL.path] ?? Data(), as: UTF8.self)
+        #expect(text.contains("고른 녹음"))
+        #expect(!text.contains("안 고른 녹음"))
+    }
+
     @Test func 영구_삭제는_휴지통을_거치지_않는다() throws {
         let recording = addRecording("미분류/a.m4a")
         try makeManager().delete(recording)

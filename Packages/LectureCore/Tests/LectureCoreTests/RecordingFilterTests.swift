@@ -72,6 +72,68 @@ import Testing
         #expect(!matches(filter, title: "알고리즘", at: date(2026, 3, 29, 10, 0)))
     }
 
+    // MARK: 직접 지정
+
+    func custom(_ start: Date?, _ end: Date?) -> RecordingFilter {
+        RecordingFilter(period: .custom, customStart: start, customEnd: end)
+    }
+
+    @Test func 직접_지정은_시작일_0시부터_끝일_23시_59분까지_포함한다() {
+        let filter = custom(date(2026, 3, 10, 15, 0), date(2026, 3, 12, 9, 0))
+        #expect(filter.isActive)
+        #expect(!matches(filter, at: date(2026, 3, 9, 23, 59, second: 59)))
+        #expect(matches(filter, at: date(2026, 3, 10, 0, 0)))
+        #expect(matches(filter, at: date(2026, 3, 12, 23, 59, second: 59)))
+        #expect(!matches(filter, at: date(2026, 3, 13, 0, 0)))
+    }
+
+    @Test func 시작일이_끝일보다_늦으면_자동으로_바꿔_본다() {
+        let filter = custom(date(2026, 3, 12, 9, 0), date(2026, 3, 10, 15, 0))
+        #expect(matches(filter, at: date(2026, 3, 10, 0, 0)))
+        #expect(matches(filter, at: date(2026, 3, 12, 23, 0)))
+        #expect(!matches(filter, at: date(2026, 3, 9, 23, 0)))
+        #expect(!matches(filter, at: date(2026, 3, 13, 0, 1)))
+    }
+
+    @Test func 하루만_고르면_그날만_나온다() {
+        let filter = custom(date(2026, 3, 11, 8, 0), date(2026, 3, 11, 20, 0))
+        #expect(matches(filter, at: date(2026, 3, 11, 0, 0)))
+        #expect(matches(filter, at: date(2026, 3, 11, 23, 59, second: 59)))
+        #expect(!matches(filter, at: date(2026, 3, 10, 23, 59, second: 59)))
+        #expect(!matches(filter, at: date(2026, 3, 12, 0, 0)))
+    }
+
+    @Test func 직접_지정은_오늘_날짜와_상관없다() {
+        let filter = custom(date(2026, 1, 5, 0, 0), date(2026, 1, 6, 0, 0))
+        let later = date(2026, 12, 1, 9, 0)
+        #expect(filter.matches(title: "녹음", startedAt: date(2026, 1, 5, 12, 0), now: later, calendar: seoulCalendar))
+        #expect(!filter.matches(title: "녹음", startedAt: later, now: later, calendar: seoulCalendar))
+    }
+
+    @Test func 한쪽_날짜만_있으면_그쪽만_제한한다() {
+        let from = custom(date(2026, 3, 10, 0, 0), nil)
+        #expect(matches(from, at: date(2026, 12, 1, 0, 0)))
+        #expect(!matches(from, at: date(2026, 3, 9, 23, 0)))
+        let until = custom(nil, date(2026, 3, 10, 0, 0))
+        #expect(matches(until, at: date(2026, 3, 10, 23, 0)))
+        #expect(!matches(until, at: date(2026, 3, 11, 0, 0)))
+    }
+
+    @Test func 직접_지정은_검색어와_함께_적용되고_북마크_판정에도_쓰인다() {
+        var filter = custom(date(2026, 3, 10, 0, 0), date(2026, 3, 12, 0, 0))
+        filter.query = "자료"
+        #expect(matches(filter, at: date(2026, 3, 11, 10, 0)))
+        #expect(!matches(filter, title: "운영체제", at: date(2026, 3, 11, 10, 0)))
+        #expect(filter.matches(title: "운영체제", note: "자료 정리", startedAt: date(2026, 3, 11, 10, 0), now: now, calendar: seoulCalendar))
+        #expect(!filter.matches(title: "자료구조", note: "", startedAt: date(2026, 3, 20, 10, 0), now: now, calendar: seoulCalendar))
+    }
+
+    @Test func 기간_문구는_직접_지정이면_날짜를_담고_순서를_바로잡는다() {
+        #expect(RecordingFilter(period: .last7Days).periodLabel(calendar: seoulCalendar) == "최근 7일")
+        #expect(custom(date(2026, 3, 12, 9, 0), date(2026, 3, 10, 9, 0)).periodLabel(calendar: seoulCalendar) == "2026-03-10~2026-03-12")
+        #expect(RecordingPeriod.custom.label == "직접 지정…")
+    }
+
     // MARK: 안 들은 것만
 
     @Test func 안_들은_것만_켜면_조건이_걸린_것으로_본다() {
