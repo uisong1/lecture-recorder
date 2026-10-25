@@ -86,12 +86,12 @@ public final class SubjectManager {
     }
 
     /// 오류를 `errorMessage`로 바꿔 화면에 보여준다.
-    public func perform(_ action: () throws(SubjectError) -> Void) {
+    public func perform(_ action: () throws -> Void) {
         do {
             try action()
             errorMessage = nil
         } catch {
-            errorMessage = error.errorDescription
+            errorMessage = error.localizedDescription
         }
     }
 

@@ -5,7 +5,7 @@ set -uo pipefail
 
 report() {
   local log="$1"
-  grep -E "error:|warning: .*Swift 6|FAILED|failed|✘|Fatal|fatal" "$log" | head -40 | while IFS= read -r line; do
+  grep -E "error:|warning: .*Swift 6|FAILED|failed|✘|Fatal|fatal" "$log" | awk '!seen[$0]++' | head -40 | while IFS= read -r line; do
     echo "::error::${line//$'\n'/ }"
   done
 }
