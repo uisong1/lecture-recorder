@@ -90,6 +90,8 @@ public final class RecordingController {
     public private(set) var isInputSilent = false
     /// 지금 녹음에 찍은 북마크 시점(초). 정지하면 `Recording`의 북마크로 저장된다.
     public private(set) var bookmarkTimes: [TimeInterval] = []
+    /// `bookmarkTimes`와 같은 순서의 짧은 메모. 메모가 없으면 빈 문자열.
+    public private(set) var bookmarkNotes: [String] = []
     /// 녹음이 시작된 직후 불린다. 재생 중인 소리를 멈추는 데 쓴다 (재생 소리가 마이크로 들어가는 것 방지).
     public var onStarted: (@MainActor () -> Void)?
     /// 마지막으로 확인한 마이크 권한. 거부 상태면 화면이 녹음 버튼 대신 안내를 보여준다.
@@ -369,6 +371,7 @@ public final class RecordingController {
         subjectChoice = .automatic
         currentRelativePath = relativePath
         bookmarkTimes = []
+        bookmarkNotes = []
         state = .recording(startedAt: startedAt)
         interruptionNotice = nil
         recorderStallNotice = nil
@@ -431,10 +434,12 @@ public final class RecordingController {
 
         context.insert(recording)
         let createdAt = now()
-        for time in bookmarkTimes {
-            context.insert(Bookmark(time: min(time, duration), createdAt: createdAt, recording: recording))
+        for (index, time) in bookmarkTimes.enumerated() {
+            let note = bookmarkNotes.indices.contains(index) ? bookmarkNotes[index] : ""
+            context.insert(Bookmark(time: min(time, duration), note: note, createdAt: createdAt, recording: recording))
         }
         bookmarkTimes = []
+        bookmarkNotes = []
         do {
             try context.save()
         } catch {
@@ -468,7 +473,20 @@ public final class RecordingController {
     public func addBookmark() {
         guard isRecording else { return }
         bookmarkTimes.append(elapsed)
-        // 앱이 꺼져도 북마크 시점을 되살릴 수 있게 저널에 함께 남긴다. 실패해도 녹음은 계속한다.
+        bookmarkNotes.append("")
+        saveBookmarksToJournal()
+    }
+
+    /// `index`번째 북마크에 짧은 메모를 붙인다. 공백뿐인 메모나 없는 번호는 무시한다.
+    public func setBookmarkNote(_ note: String, at index: Int) {
+        let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, bookmarkNotes.indices.contains(index) else { return }
+        bookmarkNotes[index] = trimmed
+        saveBookmarksToJournal()
+    }
+
+    /// 앱이 꺼져도 북마크 시점과 메모를 되살릴 수 있게 저널에 함께 남긴다. 실패해도 녹음은 계속한다.
+    private func saveBookmarksToJournal() {
         do {
             try journal?.save(pendingRecording(bookmarkTimes: bookmarkTimes))
         } catch {
@@ -481,7 +499,8 @@ public final class RecordingController {
             relativePath: currentRelativePath ?? "",
             subjectName: currentSubject?.name,
             startedAt: state.startedAt ?? now(),
-            bookmarkTimes: bookmarkTimes
+            bookmarkTimes: bookmarkTimes,
+            bookmarkNotes: bookmarkNotes
         )
     }
 
