@@ -46,11 +46,11 @@ public struct RecordingCompressor {
     /// 녹음 하나를 압축한다. 실패하면 CAF를 그대로 두고 false를 돌려준다.
     @discardableResult
     public func compress(_ recording: Recording) async -> Bool {
-        let workingPath = recording.relativePath
+        var workingPath = recording.relativePath
         guard RecordingStorage.isWorkingPath(workingPath) else { return true }
-        let source = storage.url(for: workingPath)
-        let finalPath = RecordingStorage.compressedPath(for: workingPath)
-        let destination = storage.url(for: finalPath)
+        var source = storage.url(for: workingPath)
+        var finalPath = RecordingStorage.compressedPath(for: workingPath)
+        var destination = storage.url(for: finalPath)
         let temporary = storage.url(for: RecordingStorage.temporaryCompressedPath(for: workingPath))
 
         guard files.fileExists(at: source) else {
@@ -63,6 +63,17 @@ public struct RecordingCompressor {
             do {
                 if files.fileExists(at: temporary) { try files.removeItem(at: temporary) }
                 duration = try await converter.compress(from: source, to: temporary)
+                // 압축하는 동안 사용자가 녹음을 다른 과목으로 옮겼으면 CAF가 새 폴더에 있다. 거기에 m4a를 놓는다.
+                if recording.relativePath != workingPath {
+                    workingPath = recording.relativePath
+                    guard RecordingStorage.isWorkingPath(workingPath) else {
+                        try? files.removeItem(at: temporary)
+                        return false
+                    }
+                    source = storage.url(for: workingPath)
+                    finalPath = RecordingStorage.compressedPath(for: workingPath)
+                    destination = storage.url(for: finalPath)
+                }
                 try files.moveItem(at: temporary, to: destination)
             } catch {
                 Log.recording.error("압축 실패, CAF를 그대로 둠 \(workingPath, privacy: .public): \(error.localizedDescription, privacy: .public)")

@@ -7,6 +7,10 @@ import SwiftUI
 struct RecordingView: View {
     let recording: RecordingController
     let playback: PlaybackController
+    let manager: RecordingManager
+
+    @State private var isEditingSaved = false
+    @State private var titleDraft = ""
 
     var body: some View {
         VStack(spacing: Design.Spacing.lg) {
@@ -171,8 +175,38 @@ struct RecordingView: View {
                     }
                     .buttonStyle(.textLink)
                     .accessibilityIdentifier("playLastSaved")
+                    Button(isEditingSaved ? "완료" : "제목·과목 수정") {
+                        if isEditingSaved {
+                            if titleDraft != saved.title { try? manager.rename(saved, to: titleDraft) }
+                        } else {
+                            titleDraft = saved.title
+                        }
+                        isEditingSaved.toggle()
+                    }
+                    .buttonStyle(.textLink)
+                    .accessibilityIdentifier("editLastSaved")
                 }
                 .foregroundStyle(Design.Palette.inkMuted)
+                if isEditingSaved {
+                    HStack(spacing: Design.Spacing.sm) {
+                        TextField("제목", text: $titleDraft)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 260)
+                            .onSubmit { try? manager.rename(saved, to: titleDraft) }
+                            .accessibilityIdentifier("lastSavedTitleField")
+                        Menu("과목: \(saved.subject?.name ?? SubjectManager.unclassifiedName)") {
+                            ForEach(recording.availableSubjects()) { subject in
+                                Button(subject.name) { try? manager.move(saved, to: subject) }
+                            }
+                            Button(SubjectManager.unclassifiedName) { try? manager.move(saved, to: nil) }
+                        }
+                        .fixedSize()
+                        .accessibilityIdentifier("lastSavedSubjectMenu")
+                    }
+                }
+                if let message = manager.errorMessage {
+                    Text(message).designText(.caption).foregroundStyle(Design.Palette.danger)
+                }
                 if let message = playback.errorMessage {
                     Text(message).designText(.caption).foregroundStyle(Design.Palette.danger)
                 }
@@ -181,6 +215,7 @@ struct RecordingView: View {
         .padding(Design.Spacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .designCanvas(Design.Palette.parchment)
+        .onChange(of: recording.lastSaved) { isEditingSaved = false }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if playback.current != nil { PlaybackBar(playback: playback) }
         }
