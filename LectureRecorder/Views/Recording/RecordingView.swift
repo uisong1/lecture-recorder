@@ -15,15 +15,16 @@ struct RecordingView: View {
                         .designText(.tagline)
                         .foregroundStyle(Design.Palette.ink)
                         .accessibilityIdentifier("recordingSubject")
-                    if !recording.isRecording {
+                    if recording.isRecording {
+                        RecordingIndicator(isPaused: recording.isPaused)
+                    } else {
                         Text("지금 녹음하면: \(recording.expectedSubjectName)")
                             .designText(.caption)
                             .foregroundStyle(Design.Palette.inkMuted)
                             .accessibilityIdentifier("expectedSubject")
                     }
                     Text(recording.elapsedText)
-                        .font(.system(size: 56, weight: .semibold))
-                        .tracking(-0.28)
+                        .designText(.hero)
                         .monospacedDigit()
                         .foregroundStyle(Design.Palette.ink)
                         .accessibilityIdentifier("elapsedTime")
@@ -36,7 +37,7 @@ struct RecordingView: View {
                 if recording.isInputSilent {
                     Label("소리가 거의 들어오지 않습니다", systemImage: "mic.slash")
                         .designText(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Design.Palette.danger)
                         .accessibilityIdentifier("silenceWarning")
                 }
             }
@@ -68,7 +69,7 @@ struct RecordingView: View {
             } label: {
                 Label(recording.isRecording ? "녹음 정지" : "녹음 시작", systemImage: recording.isRecording ? "stop.fill" : "mic.fill")
             }
-            .buttonStyle(PillButtonStyle(kind: recording.isRecording ? .dark : .primary))
+            .buttonStyle(.pill)
             .keyboardShortcut("r", modifiers: .command)
             .help(recording.isRecording ? "녹음 정지 (⌘R)" : "녹음 시작 (⌘R)")
             .accessibilityLabel(recording.isRecording ? "녹음 정지" : "녹음 시작")
@@ -116,14 +117,14 @@ struct RecordingView: View {
             if let message = recording.errorMessage {
                 Label(message, systemImage: "exclamationmark.triangle")
                     .designText(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Design.Palette.danger)
                     .accessibilityIdentifier("recordingError")
             }
 
             if let warning = recording.storageWarning, recording.isRecording {
                 Label(warning, systemImage: "externaldrive.badge.exclamationmark")
                     .designText(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Design.Palette.danger)
                     .accessibilityIdentifier("storageWarning")
             }
 
@@ -148,7 +149,7 @@ struct RecordingView: View {
                 }
                 .foregroundStyle(Design.Palette.inkMuted)
                 if let message = playback.errorMessage {
-                    Text(message).designText(.caption).foregroundStyle(.red)
+                    Text(message).designText(.caption).foregroundStyle(Design.Palette.danger)
                 }
             }
         }
@@ -193,5 +194,23 @@ private struct InputLevelBar: View {
         .frame(width: 200, height: 6)
         .animation(.linear(duration: 0.1), value: level)
         .accessibilityHidden(true)
+    }
+}
+
+/// 녹음 중임을 알리는 표시. 버튼은 파랑이고 이 표시만 빨강이다 (DECISIONS.md).
+private struct RecordingIndicator: View {
+    let isPaused: Bool
+
+    var body: some View {
+        HStack(spacing: Design.Spacing.xs) {
+            Circle()
+                .fill(isPaused ? Design.Palette.inkMuted : Design.Palette.danger)
+                .frame(width: 10, height: 10)
+            Text(isPaused ? "일시정지 중" : "녹음 중")
+                .designText(.captionStrong)
+                .foregroundStyle(isPaused ? Design.Palette.inkMuted : Design.Palette.danger)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("recordingIndicator")
     }
 }

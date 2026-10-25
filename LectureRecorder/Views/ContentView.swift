@@ -36,7 +36,7 @@ struct ContentView: View {
                 if let startupError = dependencies.startupError {
                     Label(startupError, systemImage: "exclamationmark.triangle")
                         .designText(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Design.Palette.danger)
                         .padding(8)
                 }
                 if let notice = dependencies.recoveryNotice {

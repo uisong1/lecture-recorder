@@ -15,6 +15,9 @@ enum Design {
         static let pearl = Color(light: 0xFAFAFC, dark: 0x2A2A2C)
         static let hairline = Color(light: 0xE0E0E0, dark: 0x3A3A3C)
         static let onPrimary = Color.white
+        /// 오류와 "녹음 중" 표시에만 쓰는 빨강. DESIGN.md에는 오류 색이 없어 따로 정했다 (DECISIONS.md 참고).
+        /// 버튼과 눌러야 하는 것에는 쓰지 않는다.
+        static let danger = Color(light: 0xD70015, dark: 0xFF453A)
     }
 
     enum Radius {
@@ -34,10 +37,11 @@ enum Design {
 
     /// 글자 크기·굵기·자간. 굵기는 300 / 400 / 600만 쓴다(500 금지).
     enum Text {
-        case displayLg, tagline, body, bodyStrong, caption, captionStrong, finePrint
+        case hero, displayLg, tagline, body, bodyStrong, caption, captionStrong, finePrint
 
         var font: Font {
             switch self {
+            case .hero: .system(size: 56, weight: .semibold)
             case .displayLg: .system(size: 40, weight: .semibold)
             case .tagline: .system(size: 21, weight: .semibold)
             case .body: .system(size: 17, weight: .regular)
@@ -50,6 +54,7 @@ enum Design {
 
         var tracking: CGFloat {
             switch self {
+            case .hero: -0.28
             case .displayLg: 0
             case .tagline: 0.231
             case .body, .bodyStrong: -0.374
@@ -77,16 +82,35 @@ struct PillButtonStyle: ButtonStyle {
     var kind: Kind = .primary
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .designText(.body)
-            .foregroundStyle(foreground)
-            .padding(.vertical, 11)
-            .padding(.horizontal, 22)
-            .background(background, in: Capsule())
-            .overlay {
-                if kind == .secondary { Capsule().strokeBorder(Design.Palette.primary, lineWidth: 1) }
-            }
-            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+        PillLabel(label: configuration.label, kind: kind, isPressed: configuration.isPressed, foreground: foreground, background: background)
+    }
+
+    /// 키보드 포커스는 `Environment`로만 알 수 있어서 뷰로 한 번 감싼다.
+    private struct PillLabel<Label: View>: View {
+        let label: Label
+        let kind: Kind
+        let isPressed: Bool
+        let foreground: Color
+        let background: Color
+        @Environment(\.isFocused) private var isFocused
+
+        var body: some View {
+            label
+                .designText(.body)
+                .foregroundStyle(foreground)
+                .padding(.vertical, 11)
+                .padding(.horizontal, 22)
+                .background(background, in: Capsule())
+                .overlay {
+                    if kind == .secondary { Capsule().strokeBorder(Design.Palette.primary, lineWidth: 1) }
+                }
+                .overlay {
+                    // 포커스 링: 2px primaryFocus (DESIGN.md)
+                    if isFocused { Capsule().inset(by: -4).strokeBorder(Design.Palette.primaryFocus, lineWidth: 2) }
+                }
+                .focusEffectDisabled()
+                .scaleEffect(isPressed ? 0.95 : 1)
+        }
     }
 
     private var foreground: Color {
