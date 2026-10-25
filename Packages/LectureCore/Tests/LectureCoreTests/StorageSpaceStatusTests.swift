@@ -25,8 +25,10 @@ import Testing
         #expect(StorageSpaceStatus.low(minutesLeft: 25).warningMessage == "저장 공간이 부족합니다. 약 25분 더 녹음할 수 있어요. 공간을 비워 주세요.")
     }
 
+#if canImport(SwiftData)
     @Test func 컨트롤러의_기준값은_같은_값을_쓴다() {
         #expect(RecordingController.storageWarningBytes == StorageSpaceStatus.warningBytes)
         #expect(RecordingController.storageCriticalBytes == StorageSpaceStatus.criticalBytes)
     }
+#endif
 }
