@@ -42,9 +42,9 @@ public final class RecordingController {
     /// 녹음을 시작하려면 남아 있어야 하는 공간. 3시간 CAF(약 346MB)와 압축한 m4a(약 43MB)가 함께 있어도 남는 크기.
     public static let minimumFreeBytes: Int64 = 600 * 1024 * 1024
     /// 녹음 중 남은 공간이 이보다 적으면 경고한다 (1시간 분량).
-    public static let storageWarningBytes = RecordingFormat.workingBytes(for: 3_600)
+    public static let storageWarningBytes = StorageSpaceStatus.warningBytes
     /// 녹음 중 남은 공간이 이보다 적으면 바닥나기 전에 자동으로 정지·저장한다 (10분 분량).
-    public static let storageCriticalBytes = RecordingFormat.workingBytes(for: 600)
+    public static let storageCriticalBytes = StorageSpaceStatus.criticalBytes
 
     public enum State: Equatable {
         case idle
@@ -190,14 +190,12 @@ public final class RecordingController {
     /// 녹음 중에는 주기적으로 불리고, 공간을 알 수 없으면 아무 일도 하지 않는다.
     public func checkStorage() {
         guard isRecording, let free = files.availableCapacity(at: storage.root) else { return }
-        if free < Self.storageCriticalBytes {
+        let status = StorageSpaceStatus.assess(freeBytes: free)
+        if status == .critical {
             Log.recording.error("저장 공간 바닥, 자동 정지: \(free, privacy: .public) bytes")
             stopAndNotify(because: "저장 공간이 거의 없어서", advice: "공간을 비운 뒤 다시 녹음하세요.", alert: .storageFull)
-        } else if free < Self.storageWarningBytes {
-            let minutes = Int(free / RecordingFormat.workingBytesPerSecond / 60)
-            storageWarning = "저장 공간이 부족합니다. 약 \(minutes)분 더 녹음할 수 있어요. 공간을 비워 주세요."
         } else {
-            storageWarning = nil
+            storageWarning = status.warningMessage
         }
     }
 
