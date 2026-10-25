@@ -28,7 +28,12 @@ public protocol FileStoring: Sendable {
 
 /// `FileManager`를 쓰는 실제 구현.
 public struct LocalFileStore: FileStoring {
-    public init() {}
+    /// 휴지통 대신 파일을 옮겨 둘 폴더. UI 테스트가 사용자의 실제 휴지통을 건드리지 않게 할 때만 쓴다.
+    private let trashDirectory: URL?
+
+    public init(trashDirectory: URL? = nil) {
+        self.trashDirectory = trashDirectory
+    }
 
     public func fileExists(at url: URL) -> Bool {
         FileManager.default.fileExists(atPath: url.path(percentEncoded: false))
@@ -47,6 +52,12 @@ public struct LocalFileStore: FileStoring {
     }
 
     public func trashItem(at url: URL) throws {
+        if let trashDirectory {
+            try FileManager.default.createDirectory(at: trashDirectory, withIntermediateDirectories: true)
+            // 같은 이름이 이미 있어도 덮어쓰지 않도록 이름 앞에 고유한 접두를 붙인다.
+            try FileManager.default.moveItem(at: url, to: trashDirectory.appending(path: "\(UUID().uuidString)-\(url.lastPathComponent)"))
+            return
+        }
         #if os(macOS)
         try FileManager.default.trashItem(at: url, resultingItemURL: nil)
         #else
