@@ -35,7 +35,9 @@ public struct FileRecordingJournal: RecordingJournaling {
         do {
             return try JSONDecoder().decode(PendingRecording.self, from: data)
         } catch {
+            #if canImport(os)
             Log.recording.error("녹음 저널을 읽지 못함: \(error.localizedDescription, privacy: .public)")
+            #endif
             return nil
         }
     }
@@ -50,7 +52,9 @@ public struct FileRecordingJournal: RecordingJournaling {
         } catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {
             // 이미 없다.
         } catch {
+            #if canImport(os)
             Log.recording.error("녹음 저널을 지우지 못함: \(error.localizedDescription, privacy: .public)")
+            #endif
         }
     }
 }
