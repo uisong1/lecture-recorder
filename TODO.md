@@ -4,7 +4,7 @@
 
 ## Phase 0. 프로젝트 초기 설정
 
-- [ ] **0-1. Xcode 프로젝트 생성**
+- [x] **0-1. Xcode 프로젝트 생성**
   - 완료 기준: macOS 14+ SwiftUI 앱 `LectureRecorder`가 ⌘R로 실행되어 빈 창이 뜬다.
 - [ ] **0-2. `LectureCore` 로컬 패키지 생성 및 연결**
   - 완료 기준: 앱에서 `import LectureCore`가 되고 `swift test --package-path Packages/LectureCore`로 샘플 테스트 1개가 통과한다.

@@ -39,6 +39,11 @@ fi
 
 APP="build/Build/Products/Debug/LectureRecorder.app"
 run inspect bash -c "plutil -p '$APP/Contents/Info.plist'; codesign -d --entitlements - '$APP'"
+# 확인용 요약을 annotation(notice)으로 남긴다.
+grep -E "NSMicrophoneUsageDescription|audio-input|app-sandbox" /tmp/ci-inspect.log | while IFS= read -r line; do echo "::notice::${line}"; done
+for f in /tmp/ci-package-test.log /tmp/ci-app-test.log; do
+  [ -f "$f" ] && grep -E "Test run with|Executed [0-9]+ tests|TEST SUCCEEDED|passed after" "$f" | tail -15 | while IFS= read -r line; do echo "::notice::$(basename "$f"): ${line}"; done
+done
 
 # 실행 확인: 앱이 떠서 5초 동안 살아 있는지 본다.
 "$APP/Contents/MacOS/LectureRecorder" -UITesting &

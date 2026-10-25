@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.1-noble
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: swift test
         run: |
           if [ -d Packages/LectureCore ]; then
@@ -24,7 +24,7 @@ jobs:
     name: macOS 빌드와 테스트
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Xcode 버전
         run: xcodebuild -version && swift --version
       - name: 빌드·테스트·실행 확인
