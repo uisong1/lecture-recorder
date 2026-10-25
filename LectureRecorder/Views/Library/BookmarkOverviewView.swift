@@ -53,6 +53,8 @@ struct BookmarkOverviewView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityHint("이 시점부터 재생합니다")
                 .accessibilityIdentifier("bookmarkOverviewRow")
             }
             }

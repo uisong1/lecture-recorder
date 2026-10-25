@@ -8,9 +8,9 @@ struct MenuBarLabel: View {
 
     var body: some View {
         switch recording.menuBarStatus.icon {
-        case .idle: Image(systemName: "mic")
-        case .recording: Image(systemName: "record.circle.fill")
-        case .paused: Image(systemName: "pause.circle.fill")
+        case .idle: Image(systemName: "mic").accessibilityLabel(recording.menuBarStatus.headline)
+        case .recording: Image(systemName: "record.circle.fill").accessibilityLabel(recording.menuBarStatus.headline)
+        case .paused: Image(systemName: "pause.circle.fill").accessibilityLabel(recording.menuBarStatus.headline)
         }
     }
 }
@@ -36,6 +36,7 @@ struct MenuBarContent: View {
                     Circle()
                         .fill(status.isPaused ? Design.Palette.inkMuted : Design.Palette.danger)
                         .frame(width: 10, height: 10)
+                        .accessibilityHidden(true)
                 }
                 Text(status.headline)
                     .designText(.bodyStrong)
@@ -66,7 +67,7 @@ struct MenuBarContent: View {
             .accessibilityIdentifier("menuBarToggle")
 
             if status.isRecording {
-                HStack(spacing: Design.Spacing.xs) {
+                VStack(spacing: Design.Spacing.xs) {
                     Button {
                         recording.togglePause()
                     } label: {
