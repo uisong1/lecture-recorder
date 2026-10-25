@@ -15,6 +15,7 @@ final class AppDependencies {
     let recoveryNotice: String?
     let subjects: SubjectManager
     let schedule: ScheduleManager
+    let reminders: ClassReminderController
     let recording: RecordingController
     let playback: PlaybackController
     let library: RecordingLibrary
@@ -57,6 +58,13 @@ final class AppDependencies {
                 compressor: compressor
             )
         }
+        // UI 테스트에서는 시스템 알림 센터를 건드리지 않는다.
+        let notifications: any NotificationScheduling = Self.isUITesting ? NoNotificationScheduler() : SystemNotificationScheduler()
+        reminders = ClassReminderController(context: container.mainContext, notifications: notifications)
+        let reminders = reminders
+        schedule.onChange = { Task { await reminders.reschedule() } }
+        subjects.onChange = { Task { await reminders.reschedule() } }
+        Task { await reminders.reschedule() }
         library = RecordingLibrary(context: container.mainContext)
         manager = RecordingManager(context: container.mainContext, storage: storage)
         playback = PlaybackController(player: SystemAudioPlayer(), storage: storage, bookmarkManager: BookmarkManager(context: container.mainContext))

@@ -25,7 +25,11 @@ public enum ScheduleEditError: Error, Equatable, LocalizedError {
 @Observable
 public final class ScheduleManager {
     /// 요일 → 시작 순으로 정렬된 시간표 칸.
-    public private(set) var slots: [TimeSlot] = []
+    public private(set) var slots: [TimeSlot] = [] {
+        didSet { onChange?() }
+    }
+    /// 시간표 칸이 다시 읽힐 때마다 불린다 (수업 시작 알림 예약을 다시 만드는 데 쓴다).
+    public var onChange: (@MainActor () -> Void)?
     public var errorMessage: String?
 
     /// 새 칸 입력란.
