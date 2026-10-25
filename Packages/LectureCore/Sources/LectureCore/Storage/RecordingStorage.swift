@@ -233,10 +233,9 @@ public struct RecordingStorage: Sendable {
         let rootPath = root.standardizedFileURL.path
         /// 폴더가 지워졌으면 true.
         func clean(_ directory: URL, isRoot: Bool) -> Bool {
-            if !isRoot {
-                let path = directory.standardizedFileURL.path
-                if path.hasPrefix(rootPath + "/"), Self.folder(String(path.dropFirst(rootPath.count + 1)), containsActive: active) { return false }
-            }
+            // 녹음 중인 파일이 들어갈 폴더와 그 윗폴더는 지우지 않는다. 안의 다른 빈 폴더는 계속 정리한다.
+            let path = directory.standardizedFileURL.path
+            let isProtected = path.hasPrefix(rootPath + "/") && Self.folder(String(path.dropFirst(rootPath.count + 1)), containsActive: active)
             let entries: [URL]
             do {
                 entries = try files.contentsOfDirectory(at: directory)
@@ -254,7 +253,7 @@ public struct RecordingStorage: Sendable {
                     remaining += 1
                 }
             }
-            guard remaining == 0, !isRoot else { return false }
+            guard remaining == 0, !isRoot, !isProtected else { return false }
             do {
                 if let finder { try files.removeItem(at: finder) }
                 try files.removeEmptyDirectory(at: directory)
