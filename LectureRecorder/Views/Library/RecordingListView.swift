@@ -66,7 +66,7 @@ struct RecordingListView: View {
                             ShareLink("공유…", item: url)
                         }
                         Divider()
-                        Button("삭제…", role: .destructive) { deleting = recording }
+                        Button("휴지통으로 이동…", role: .destructive) { deleting = recording }
                     }
                 }
             }
@@ -96,15 +96,15 @@ struct RecordingListView: View {
             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
             titleVisibility: .visible
         ) {
-            Button("삭제", role: .destructive) {
+            Button("휴지통으로 이동", role: .destructive) {
                 if let recording = deleting {
                     if playback.current === recording { playback.select(nil) }
-                    perform { try manager.delete(recording) }
+                    perform { try manager.trash(recording) }
                 }
             }
             Button("취소", role: .cancel) {}
         } message: {
-            Text("녹음 파일이 함께 지워지고 되돌릴 수 없습니다.")
+            Text("녹음 파일이 휴지통으로 이동합니다. 휴지통에서 되돌릴 수 있습니다.")
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if playback.current != nil { PlaybackBar(playback: playback) }

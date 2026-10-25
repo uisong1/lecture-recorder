@@ -6,6 +6,8 @@ public protocol FileStoring: Sendable {
     func createDirectory(at url: URL) throws
     func moveItem(at source: URL, to destination: URL) throws
     func removeItem(at url: URL) throws
+    /// `url`을 영구 삭제하지 않고 휴지통으로 보낸다. 실패하면 파일은 그대로다.
+    func trashItem(at url: URL) throws
     /// `source`를 `destination`으로 복사한다. 이미 있으면 새 파일로 바꾼다 (복사에 실패하면 기존 파일은 그대로 둔다).
     func copyItem(at source: URL, to destination: URL) throws
     /// 폴더인지. 심볼릭 링크는 따라가지 않는다 (링크는 폴더가 아닌 항목으로 본다).
@@ -40,6 +42,15 @@ public struct LocalFileStore: FileStoring {
 
     public func removeItem(at url: URL) throws {
         try FileManager.default.removeItem(at: url)
+    }
+
+    public func trashItem(at url: URL) throws {
+        #if os(macOS)
+        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        #else
+        // Linux(CI)에는 휴지통이 없다. 앱은 macOS에서만 돈다.
+        throw CocoaError(.featureUnsupported)
+        #endif
     }
 
     public func copyItem(at source: URL, to destination: URL) throws {

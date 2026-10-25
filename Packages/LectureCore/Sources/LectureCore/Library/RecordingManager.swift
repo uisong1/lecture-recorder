@@ -125,10 +125,21 @@ public final class RecordingManager {
         }
     }
 
-    /// 파일과 DB 기록을 모두 지운다. 파일을 지우지 못하면 기록도 남겨 둔다.
+    /// 파일을 영구 삭제하고 DB 기록도 지운다. 파일을 지우지 못하면 기록도 남겨 둔다.
+    /// 너무 짧아 버리는 녹음처럼 되돌릴 필요가 없을 때 쓴다.
     public func delete(_ recording: Recording) throws {
+        try remove(recording) { try storage.removeFile(at: $0) }
+    }
+
+    /// 파일을 휴지통으로 보내고 DB 기록을 지운다. 휴지통으로 보내지 못하면 파일도 기록도 그대로 둔다.
+    /// 휴지통에서 되돌린 파일은 폴더 다시 읽기(3-35)로 목록에 되살릴 수 있다.
+    public func trash(_ recording: Recording) throws {
+        try remove(recording) { try storage.trashFile(at: $0) }
+    }
+
+    private func remove(_ recording: Recording, removingFile: (String) throws -> Void) throws {
         do {
-            try storage.removeFile(at: recording.relativePath)
+            try removingFile(recording.relativePath)
         } catch {
             Log.storage.error("녹음 삭제 실패 \(recording.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw fail(.fileFailed(error.localizedDescription))

@@ -250,4 +250,11 @@ public struct RecordingStorage: Sendable {
         guard files.fileExists(at: target) else { return }
         try files.removeItem(at: target)
     }
+
+    /// 파일을 휴지통으로 보낸다. 이미 없으면 보낼 것이 없으므로 넘어간다.
+    public func trashFile(at relativePath: String) throws {
+        let target = url(for: relativePath)
+        guard files.fileExists(at: target) else { return }
+        try files.trashItem(at: target)
+    }
 }
