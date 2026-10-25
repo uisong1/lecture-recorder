@@ -94,14 +94,14 @@ final class LibraryFlowUITests: XCTestCase {
         XCTAssertTrue(app.textFields["subjectName-자료구조"].waitForExistence(timeout: 5))
         app.typeKey("w", modifierFlags: .command)
 
-        // 하나는 미분류로 두고, 다른 하나는 저장 직후 과목을 자료구조로 바꾼다.
+        // 하나는 미분류로 두고, 다른 하나는 녹음을 시작하기 전에 과목을 자료구조로 고른다
+        // (시뮬레이션 녹음기는 파일을 만들지 않아 저장 뒤 과목 이동은 쓸 수 없다).
         record(in: app)
-        record(in: app)
-        app.buttons["editLastSaved"].click()
-        let subjectMenu = app.descendants(matching: .any)["lastSavedSubjectMenu"].firstMatch
-        XCTAssertTrue(subjectMenu.waitForExistence(timeout: 5))
-        subjectMenu.click()
+        let choice = app.popUpButtons["subjectChoice"]
+        XCTAssertTrue(choice.waitForExistence(timeout: 5))
+        choice.click()
         app.menuItems["자료구조"].click()
+        record(in: app)
 
         // 모든 녹음에는 두 과목의 녹음이 섞여 있고, 과목별로 보면 각각 하나씩이다.
         openSidebar("sidebar-all", in: app)
