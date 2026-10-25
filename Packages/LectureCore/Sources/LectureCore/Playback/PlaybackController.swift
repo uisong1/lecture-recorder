@@ -85,6 +85,22 @@ public final class PlaybackController {
         player.rate = newRate.rawValue
     }
 
+    /// 불러온 녹음의 북마크. 시점 순서.
+    public var bookmarks: [Bookmark] { current?.sortedBookmarks ?? [] }
+
+    /// 슬라이더 위에 표시할 북마크 위치(0~1). 길이를 모르면 비어 있다.
+    public var bookmarkMarkers: [Double] {
+        guard duration > 0 else { return [] }
+        return bookmarks.map { min(max($0.time / duration, 0), 1) }
+    }
+
+    /// 북마크 시점으로 이동해 그곳부터 재생한다.
+    public func play(from bookmark: Bookmark) {
+        guard current != nil else { return }
+        seek(to: bookmark.time)
+        play()
+    }
+
     /// 재생이 끝났는지 화면 갱신 때 확인한다.
     public func refresh() {
         isPlaying = player.isPlaying
