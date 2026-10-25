@@ -232,7 +232,7 @@ public final class RecordingController {
         sleepPreventer?.begin(reason: "수업 녹음 중")
         onStarted?()
         do {
-            try journal?.save(PendingRecording(relativePath: relativePath, subjectName: subject?.name, startedAt: startedAt))
+            try journal?.save(pendingRecording(bookmarkTimes: []))
         } catch {
             // 녹음은 계속한다. 복구만 안 될 뿐이다.
             Log.recording.error("녹음 저널 기록 실패: \(error.localizedDescription, privacy: .public)")
@@ -299,6 +299,21 @@ public final class RecordingController {
     public func addBookmark() {
         guard isRecording else { return }
         bookmarkTimes.append(elapsed)
+        // 앱이 꺼져도 북마크 시점을 되살릴 수 있게 저널에 함께 남긴다. 실패해도 녹음은 계속한다.
+        do {
+            try journal?.save(pendingRecording(bookmarkTimes: bookmarkTimes))
+        } catch {
+            Log.recording.error("북마크 저널 기록 실패: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func pendingRecording(bookmarkTimes: [TimeInterval]) -> PendingRecording {
+        PendingRecording(
+            relativePath: currentRelativePath ?? "",
+            subjectName: currentSubject?.name,
+            startedAt: state.startedAt ?? now(),
+            bookmarkTimes: bookmarkTimes
+        )
     }
 
     /// 녹음을 잠시 멈춘다. 이미 멈춘 상태면 아무 일도 하지 않는다.

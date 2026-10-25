@@ -1,5 +1,8 @@
 # PROGRESS
 
+## 2026-10-25 2-4 강제 종료 시 북마크 시점 복구
+- 한 일: `PendingRecording.bookmarkTimes`(없으면 빈 배열로 읽음)를 추가하고, 북마크를 찍을 때마다 저널에 기록. `RecordingRecovery`가 복구한 녹음에 북마크를 되살린다. 테스트 5개.
+
 ## 2026-10-25 3-27 재생 바를 녹음 화면에도, 녹음 시작 시 재생 정지
 - 한 일: 녹음 화면 아래에도 `PlaybackBar`(슬라이더·배속·북마크)를 표시. `RecordingController.onStarted` 콜백을 추가하고 앱에서 `playback.pause()`를 연결해 녹음을 시작하면 재생이 멈춘다. 녹음 쪽은 콜백 한 줄만 건드렸다. 테스트 3개.
 
