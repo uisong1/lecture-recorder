@@ -19,6 +19,7 @@ import Testing
 
     let journal = InMemoryRecordingJournal()
     let sleep = FakeSleepPreventer()
+    let lifecycle = FakeLifecycleEvents()
 
     func makeController(at time: Date) -> RecordingController {
         RecordingController(
@@ -29,6 +30,7 @@ import Testing
             permission: permission,
             journal: journal,
             sleepPreventer: sleep,
+            lifecycle: lifecycle,
             calendar: seoulCalendar,
             now: { time }
         )
@@ -66,6 +68,49 @@ import Testing
         await #expect(throws: RecordingError.self) { try await controller.start() }
         #expect(!sleep.isActive)
         #expect(sleep.beginCount == 0)
+    }
+
+    @Test func 잠자기_직전에_녹음을_저장하고_안내한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 600
+
+        lifecycle.send(.willSleep)
+
+        #expect(!controller.isRecording)
+        #expect(!recorder.isRecording)
+        #expect(!sleep.isActive)
+        let recordings = try container.mainContext.fetch(FetchDescriptor<Recording>())
+        #expect(recordings.count == 1)
+        #expect(recordings.first?.duration == 600)
+        #expect(journal.load() == nil)
+        #expect(controller.interruptionNotice?.contains("잠자기") == true)
+
+        lifecycle.send(.didWake)
+        #expect(!controller.isRecording)
+        #expect(controller.interruptionNotice != nil)
+    }
+
+    @Test func 일시정지_중_종료_직전에도_저장한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        try controller.pause()
+
+        lifecycle.send(.willTerminate)
+
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
+        #expect(controller.interruptionNotice?.contains("종료") == true)
+    }
+
+    @Test func 녹음_중이_아니면_잠자기_이벤트를_무시한다() throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+
+        lifecycle.send(.willSleep)
+        lifecycle.send(.willTerminate)
+
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 0)
+        #expect(controller.interruptionNotice == nil)
+        #expect(controller.errorMessage == nil)
     }
 
     @Test func 시작하고_정지하면_Recording이_저장된다() async throws {

@@ -45,7 +45,8 @@ final class AppDependencies {
                 storage: storage,
                 permission: SystemMicrophonePermission(),
                 journal: journal,
-                sleepPreventer: SystemSleepPreventer()
+                sleepPreventer: SystemSleepPreventer(),
+                lifecycle: SystemLifecycleEvents()
             )
         }
         library = RecordingLibrary(context: container.mainContext)

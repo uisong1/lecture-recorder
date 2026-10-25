@@ -55,6 +55,8 @@ public final class RecordingController {
     /// 마지막으로 저장된 녹음.
     public private(set) var lastSaved: Recording?
     public var errorMessage: String?
+    /// 잠자기나 종료 때문에 녹음이 중단되어 저장됐을 때 보여줄 안내.
+    public var interruptionNotice: String?
     /// 마지막으로 확인한 마이크 권한. 거부 상태면 화면이 녹음 버튼 대신 안내를 보여준다.
     public private(set) var permissionStatus: MicrophonePermissionStatus
 
@@ -76,6 +78,7 @@ public final class RecordingController {
         permission: any MicrophonePermissionProviding,
         journal: (any RecordingJournaling)? = nil,
         sleepPreventer: (any SleepPreventing)? = nil,
+        lifecycle: (any LifecycleEventSource)? = nil,
         calendar: Calendar = .current,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
@@ -89,6 +92,26 @@ public final class RecordingController {
         self.sleepPreventer = sleepPreventer
         self.calendar = calendar
         self.now = now
+        lifecycle?.observe { [weak self] event in self?.handle(event) }
+    }
+
+    /// 잠자기나 종료 직전이면 그때까지의 녹음을 정상 파일로 닫아 저장한다.
+    /// 깨어난 뒤에는 자동으로 이어 녹음하지 않고, 사용자가 다시 시작하도록 안내만 남긴다.
+    func handle(_ event: LifecycleEvent) {
+        switch event {
+        case .willSleep, .willTerminate:
+            guard isRecording else { return }
+            let reason = event == .willSleep ? "맥이 잠자기에 들어가서" : "앱이 종료되어서"
+            Log.recording.notice("\(reason, privacy: .public) 녹음을 저장")
+            do {
+                let saved = try stop()
+                interruptionNotice = "\(reason) '\(saved.title)' 녹음을 여기까지 저장했습니다. 이어서 녹음하려면 녹음을 다시 시작하세요."
+            } catch {
+                errorMessage = error.errorDescription
+            }
+        case .didWake:
+            break
+        }
     }
 
     /// 마이크 권한이 거부되어 녹음할 수 없는 상태인지.
@@ -152,6 +175,7 @@ public final class RecordingController {
         currentSubject = subject
         currentRelativePath = relativePath
         state = .recording(startedAt: startedAt)
+        interruptionNotice = nil
         sleepPreventer?.begin(reason: "수업 녹음 중")
         do {
             try journal?.save(PendingRecording(relativePath: relativePath, subjectName: subject?.name, startedAt: startedAt))
