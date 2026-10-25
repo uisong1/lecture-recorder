@@ -39,9 +39,9 @@ public final class SystemAudioRecorder: NSObject, AudioRecording {
 
     public static let settings: [String: Any] = [
         AVFormatIDKey: kAudioFormatLinearPCM,
-        AVSampleRateKey: 16_000,
+        AVSampleRateKey: RecordingFormat.workingSampleRate,
         AVNumberOfChannelsKey: 1,
-        AVLinearPCMBitDepthKey: 16,
+        AVLinearPCMBitDepthKey: RecordingFormat.workingBitDepth,
         AVLinearPCMIsFloatKey: false,
         AVLinearPCMIsBigEndianKey: false,
     ]

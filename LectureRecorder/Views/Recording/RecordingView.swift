@@ -69,6 +69,13 @@ struct RecordingView: View {
                     .accessibilityIdentifier("recordingError")
             }
 
+            if let warning = recording.storageWarning, recording.isRecording {
+                Label(warning, systemImage: "externaldrive.badge.exclamationmark")
+                    .designText(.caption)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("storageWarning")
+            }
+
             if let notice = recording.interruptionNotice, !recording.isRecording {
                 Label(notice, systemImage: "moon.zzz")
                     .designText(.caption)
