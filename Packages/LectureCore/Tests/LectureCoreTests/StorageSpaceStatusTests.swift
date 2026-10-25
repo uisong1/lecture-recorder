@@ -26,7 +26,7 @@ import Testing
     }
 
 #if canImport(SwiftData)
-    @Test func 컨트롤러의_기준값은_같은_값을_쓴다() {
+    @MainActor @Test func 컨트롤러의_기준값은_같은_값을_쓴다() {
         #expect(RecordingController.storageWarningBytes == StorageSpaceStatus.warningBytes)
         #expect(RecordingController.storageCriticalBytes == StorageSpaceStatus.criticalBytes)
     }
