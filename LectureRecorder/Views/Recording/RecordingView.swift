@@ -114,6 +114,9 @@ struct RecordingView: View {
         .padding(Design.Spacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .designCanvas(Design.Palette.parchment)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if playback.current != nil { PlaybackBar(playback: playback) }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             recording.refreshPermission()
         }

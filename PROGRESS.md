@@ -1,5 +1,8 @@
 # PROGRESS
 
+## 2026-10-25 3-27 재생 바를 녹음 화면에도, 녹음 시작 시 재생 정지
+- 한 일: 녹음 화면 아래에도 `PlaybackBar`(슬라이더·배속·북마크)를 표시. `RecordingController.onStarted` 콜백을 추가하고 앱에서 `playback.pause()`를 연결해 녹음을 시작하면 재생이 멈춘다. 녹음 쪽은 콜백 한 줄만 건드렸다. 테스트 3개.
+
 ## 2026-10-25 2-3 재생 화면에서 북마크로 이동
 - 한 일: `PlaybackController.bookmarks/bookmarkMarkers/play(from:)`, 재생 막대의 슬라이더 위 북마크 표시와 북마크 버튼(누르면 그 시점부터 재생). 단위 테스트 5개.
 - 확인 필요: 슬라이더 위 표시 위치와 버튼 모양은 Mac에서 직접 봐 주세요. 재생 중 북마크 추가·삭제 화면은 아직 없다(모델은 `BookmarkManager`에 있음).

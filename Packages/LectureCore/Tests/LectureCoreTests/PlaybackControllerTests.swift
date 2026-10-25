@@ -169,5 +169,15 @@ import Testing
         #expect(controller.bookmarks.isEmpty)
         #expect(controller.bookmarkMarkers.isEmpty)
     }
+
+    @Test func 녹음_시작_알림으로_재생을_멈출_수_있다() async throws {
+        let controller = makeController()
+        controller.select(makeRecording())
+        controller.play()
+        #expect(controller.isPlaying)
+        controller.pause()
+        #expect(!controller.isPlaying)
+        #expect(!player.isPlaying)
+    }
 }
 #endif
