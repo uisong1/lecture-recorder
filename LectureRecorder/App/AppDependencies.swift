@@ -11,6 +11,8 @@ final class AppDependencies {
     let container: ModelContainer
     /// 저장소나 녹음 폴더를 열지 못해 임시로 대신 실행 중이면 그 이유.
     let startupError: String?
+    /// 앱이 녹음 중에 꺼졌다가 되살린 녹음이 있으면 그 안내.
+    let recoveryNotice: String?
     let subjects: SubjectManager
     let schedule: ScheduleManager
     let recording: RecordingController
@@ -21,6 +23,9 @@ final class AppDependencies {
         let container = Self.makeContainer(problems: &problems)
         let storage = RecordingStorage(root: Self.makeRecordingsRoot(problems: &problems))
 
+        let journal: any RecordingJournaling = Self.isUITesting
+            ? InMemoryRecordingJournal()
+            : FileRecordingJournal(url: storage.root.deletingLastPathComponent().appending(path: "pending-recording.json"))
         self.container = container
         subjects = SubjectManager(context: container.mainContext)
         schedule = ScheduleManager(context: container.mainContext)
@@ -29,17 +34,29 @@ final class AppDependencies {
                 context: container.mainContext,
                 recorder: SimulatedAudioRecorder(),
                 storage: storage,
-                permission: GrantedMicrophonePermission()
+                permission: GrantedMicrophonePermission(),
+                journal: journal
             )
         } else {
             recording = RecordingController(
                 context: container.mainContext,
                 recorder: SystemAudioRecorder(),
                 storage: storage,
-                permission: SystemMicrophonePermission()
+                permission: SystemMicrophonePermission(),
+                journal: journal
             )
         }
         playback = PlaybackController(player: SystemAudioPlayer(), storage: storage)
+        do {
+            let recovery = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal)
+            recoveryNotice = try recovery.recoverIfNeeded().map {
+                "이전에 녹음 중 앱이 꺼져서 '\($0.title)'을 되살렸습니다. 끝부분이 없을 수 있습니다."
+            }
+        } catch {
+            Log.recording.error("녹음 복구 실패: \(error.localizedDescription, privacy: .public)")
+            problems.append("꺼진 녹음을 되살리지 못했습니다: \(error.localizedDescription)")
+            recoveryNotice = nil
+        }
         startupError = problems.isEmpty ? nil : problems.joined(separator: "\n")
     }
 

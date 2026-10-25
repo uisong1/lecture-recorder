@@ -63,6 +63,7 @@ public final class RecordingController {
     private let storage: RecordingStorage
     private let files: any FileStoring
     private let permission: any MicrophonePermissionProviding
+    private let journal: (any RecordingJournaling)?
     private let calendar: Calendar
     private let now: @MainActor () -> Date
 
@@ -72,6 +73,7 @@ public final class RecordingController {
         storage: RecordingStorage,
         files: any FileStoring = LocalFileStore(),
         permission: any MicrophonePermissionProviding,
+        journal: (any RecordingJournaling)? = nil,
         calendar: Calendar = .current,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
@@ -81,6 +83,7 @@ public final class RecordingController {
         self.files = files
         self.permission = permission
         self.permissionStatus = permission.currentStatus()
+        self.journal = journal
         self.calendar = calendar
         self.now = now
     }
@@ -146,6 +149,12 @@ public final class RecordingController {
         currentSubject = subject
         currentRelativePath = relativePath
         state = .recording(startedAt: startedAt)
+        do {
+            try journal?.save(PendingRecording(relativePath: relativePath, subjectName: subject?.name, startedAt: startedAt))
+        } catch {
+            // 녹음은 계속한다. 복구만 안 될 뿐이다.
+            Log.recording.error("녹음 저널 기록 실패: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     @discardableResult
@@ -173,6 +182,7 @@ public final class RecordingController {
             Log.recording.fault("녹음 메타데이터 저장 실패 \(relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw .saveFailed(error.localizedDescription)
         }
+        journal?.clear()
         lastSaved = recording
         return recording
     }

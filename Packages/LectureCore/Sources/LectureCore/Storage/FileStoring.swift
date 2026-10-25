@@ -6,6 +6,8 @@ public protocol FileStoring: Sendable {
     func createDirectory(at url: URL) throws
     func moveItem(at source: URL, to destination: URL) throws
     func removeItem(at url: URL) throws
+    /// 파일 크기(바이트). 없거나 알 수 없으면 nil.
+    func fileSize(at url: URL) -> Int64?
     /// 남은 저장 공간(바이트). 알 수 없으면 nil.
     func availableCapacity(at url: URL) -> Int64?
 }
@@ -28,6 +30,11 @@ public struct LocalFileStore: FileStoring {
 
     public func removeItem(at url: URL) throws {
         try FileManager.default.removeItem(at: url)
+    }
+
+    public func fileSize(at url: URL) -> Int64? {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path(percentEncoded: false))
+        return (attributes?[.size] as? NSNumber)?.int64Value
     }
 
     public func availableCapacity(at url: URL) -> Int64? {

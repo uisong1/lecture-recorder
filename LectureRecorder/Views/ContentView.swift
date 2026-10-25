@@ -11,6 +11,12 @@ struct ContentView: View {
                     .foregroundStyle(.orange)
                     .padding(8)
             }
+            if let notice = dependencies.recoveryNotice {
+                Label(notice, systemImage: "arrow.counterclockwise")
+                    .foregroundStyle(.blue)
+                    .padding(8)
+                    .accessibilityIdentifier("recoveryNotice")
+            }
             RecordingView(recording: dependencies.recording, playback: dependencies.playback)
         }
         .frame(minWidth: 600, minHeight: 400)

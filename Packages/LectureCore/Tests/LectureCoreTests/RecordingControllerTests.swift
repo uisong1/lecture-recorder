@@ -17,6 +17,8 @@ import Testing
         container = try LectureModelContainer.make(inMemory: true)
     }
 
+    let journal = InMemoryRecordingJournal()
+
     func makeController(at time: Date) -> RecordingController {
         RecordingController(
             context: container.mainContext,
@@ -24,6 +26,7 @@ import Testing
             storage: RecordingStorage(root: root, files: files),
             files: files,
             permission: permission,
+            journal: journal,
             calendar: seoulCalendar,
             now: { time }
         )
@@ -183,6 +186,15 @@ import Testing
         controller.togglePause()
         #expect(controller.isPaused)
         #expect(controller.errorMessage?.hasPrefix("녹음을 다시 시작하지 못했습니다") == true)
+    }
+
+    @Test func 녹음_중에는_저널에_남고_정상_저장되면_지워진다() async throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        #expect(journal.load() == PendingRecording(relativePath: "자료구조/2026-03-02_1000.m4a", subjectName: "자료구조", startedAt: date(2026, 3, 2, 10, 0)))
+        try controller.stop()
+        #expect(journal.load() == nil)
     }
 
     @Test func 같은_분에_두_번_녹음하면_파일_이름이_겹치지_않는다() async throws {

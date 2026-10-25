@@ -7,6 +7,7 @@ final class FakeFileStore: FileStoring, @unchecked Sendable {
     private var paths: Set<String> = []
     var capacity: Int64? = 10_000_000_000
     var failNextMove = false
+    var sizes: [String: Int64] = [:]
 
     init(files: [URL] = []) {
         paths = Set(files.map(\.standardizedFileURL.path))
@@ -42,6 +43,10 @@ final class FakeFileStore: FileStoring, @unchecked Sendable {
         try lock.withLock {
             guard paths.remove(url.standardizedFileURL.path) != nil else { throw CocoaError(.fileNoSuchFile) }
         }
+    }
+
+    func fileSize(at url: URL) -> Int64? {
+        lock.withLock { sizes[url.standardizedFileURL.path] }
     }
 
     func availableCapacity(at url: URL) -> Int64? { capacity }
