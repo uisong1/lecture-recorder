@@ -124,7 +124,7 @@ struct RecordingListView: View {
                     .accessibilityIdentifier("unplayedOnly")
             }
             ToolbarItem {
-                Picker("기간", selection: Binding(get: { library.filter.period }, set: selectPeriod)) {
+                Picker("기간", selection: Binding(get: { library.filter.period }, set: { selectPeriod($0) })) {
                     ForEach(RecordingPeriod.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
