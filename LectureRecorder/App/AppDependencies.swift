@@ -52,6 +52,7 @@ final class AppDependencies {
                 permission: SystemMicrophonePermission(),
                 journal: journal,
                 sleepPreventer: SystemSleepPreventer(),
+                powerStatus: SystemPowerStatus(),
                 lifecycle: SystemLifecycleEvents(),
                 compressor: compressor
             )

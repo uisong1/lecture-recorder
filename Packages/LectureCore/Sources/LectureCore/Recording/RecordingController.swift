@@ -85,6 +85,7 @@ public final class RecordingController {
     private let permission: any MicrophonePermissionProviding
     private let journal: (any RecordingJournaling)?
     private let sleepPreventer: (any SleepPreventing)?
+    private let powerStatus: (any PowerStatusProviding)?
     private let compressor: RecordingCompressor?
     private var compressionTask: Task<Void, Never>?
     private var storageMonitor: Task<Void, Never>?
@@ -104,6 +105,7 @@ public final class RecordingController {
         permission: any MicrophonePermissionProviding,
         journal: (any RecordingJournaling)? = nil,
         sleepPreventer: (any SleepPreventing)? = nil,
+        powerStatus: (any PowerStatusProviding)? = nil,
         lifecycle: (any LifecycleEventSource)? = nil,
         compressor: RecordingCompressor? = nil,
         storageCheckInterval: Duration? = .seconds(10),
@@ -119,6 +121,7 @@ public final class RecordingController {
         self.permissionStatus = permission.currentStatus()
         self.journal = journal
         self.sleepPreventer = sleepPreventer
+        self.powerStatus = powerStatus
         self.compressor = compressor
         self.storageCheckInterval = storageCheckInterval
         self.levelCheckInterval = levelCheckInterval
@@ -209,6 +212,19 @@ public final class RecordingController {
                 self?.checkStorage()
             }
         }
+    }
+
+    /// 녹음 중 화면에 보일 배터리 경고. 전원이 연결되어 있거나 20% 이상이면 nil.
+    /// 화면이 주기적으로 다시 읽으므로 충전기를 꽂거나 뽑으면 바로 바뀐다.
+    public var batteryWarning: String? {
+        guard isRecording else { return nil }
+        return BatteryAdvice.recordingWarning(for: powerStatus?.current())
+    }
+
+    /// 녹음 시작 전 화면에 보일 충전 권장. 녹음 중이거나 충전기가 연결되어 있으면 nil.
+    public var preRecordingAdvice: String? {
+        guard !isRecording else { return nil }
+        return BatteryAdvice.preRecordingAdvice(for: powerStatus?.current())
     }
 
     /// 마이크 권한이 거부되어 녹음할 수 없는 상태인지.
