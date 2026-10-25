@@ -9,6 +9,9 @@ public final class Subject {
     public var colorRawValue: String
     @Relationship(deleteRule: .cascade, inverse: \TimeSlot.subject)
     public var timeSlots: [TimeSlot] = []
+    /// 과목을 지워도 녹음은 남기고 미분류로 바꾼다.
+    @Relationship(deleteRule: .nullify, inverse: \Recording.subject)
+    public var recordings: [Recording] = []
 
     public init(name: String, color: SubjectColor = .blue) {
         self.name = name
