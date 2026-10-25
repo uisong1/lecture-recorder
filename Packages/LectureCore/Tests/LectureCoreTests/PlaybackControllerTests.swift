@@ -75,5 +75,47 @@ import Testing
         controller.refresh()
         #expect(!controller.isPlaying)
     }
+
+    @Test func 슬라이더로_원하는_위치로_이동한다() {
+        let controller = makeController()
+        controller.select(makeRecording())
+        controller.seek(to: 30)
+        #expect(controller.currentTime == 30)
+    }
+
+    @Test func 이동_위치는_0에서_길이_사이로_맞춘다() {
+        let controller = makeController()
+        controller.select(makeRecording())
+        controller.seek(to: -5)
+        #expect(controller.currentTime == 0)
+        controller.seek(to: 999)
+        #expect(controller.currentTime == 60)
+    }
+
+    @Test func 불러온_녹음이_없으면_이동하지_않는다() {
+        let controller = makeController()
+        controller.seek(to: 10)
+        #expect(player.currentTime == 0)
+    }
+
+    @Test func 배속은_네_단계를_고를_수_있다() {
+        #expect(PlaybackRate.allCases.map(\.rawValue) == [1.0, 1.25, 1.5, 2.0])
+        let controller = makeController()
+        controller.select(makeRecording())
+        for rate in PlaybackRate.allCases {
+            controller.setRate(rate)
+            #expect(controller.rate == rate)
+            #expect(player.rate == rate.rawValue)
+        }
+    }
+
+    @Test func 고른_배속은_다른_녹음을_골라도_유지된다() {
+        let controller = makeController()
+        controller.select(makeRecording("a/1.m4a"))
+        controller.setRate(.x150)
+        controller.select(makeRecording("a/2.m4a"))
+        #expect(controller.rate == .x150)
+        #expect(player.rate == 1.5)
+    }
 }
 #endif

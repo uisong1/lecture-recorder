@@ -7,6 +7,12 @@ final class FakeAudioPlayer: AudioPlaying {
     var currentTime: TimeInterval = 0
     var duration: TimeInterval = 0
     private(set) var loadedURLs: [URL] = []
+    var rate: Float = 1
+
+    func seek(to time: TimeInterval) {
+        currentTime = min(max(time, 0), duration)
+    }
+
     var loadError: Error?
     var durationForNextLoad: TimeInterval = 60
 

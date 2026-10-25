@@ -9,7 +9,11 @@ public protocol AudioPlaying: AnyObject {
     /// 전체 길이(초). 불러온 파일이 없으면 0.
     var duration: TimeInterval { get }
     /// 파일을 불러온다. 재생은 시작하지 않는다.
+    /// 재생 속도. 1.0이 보통 속도.
+    var rate: Float { get set }
     func load(_ url: URL) throws
+    /// 재생 위치를 옮긴다. 범위를 넘으면 0~길이로 맞춘다.
+    func seek(to time: TimeInterval)
     func play()
     func pause()
     func stop()
@@ -35,13 +39,23 @@ public final class SystemAudioPlayer: NSObject, AudioPlaying {
     public var currentTime: TimeInterval { player?.currentTime ?? 0 }
     public var duration: TimeInterval { player?.duration ?? 0 }
 
+    public var rate: Float = 1 {
+        didSet { player?.rate = rate }
+    }
+
+    public func seek(to time: TimeInterval) {
+        player?.currentTime = min(max(time, 0), duration)
+    }
+
     public func load(_ url: URL) throws {
         player?.stop()
         let player = try AVAudioPlayer(contentsOf: url)
+        player.enableRate = true
         guard player.prepareToPlay() else {
             Log.playback.error("재생 준비 실패: \(url.lastPathComponent, privacy: .public)")
             throw PlayerError.couldNotPlay
         }
+        player.rate = rate
         self.player = player
     }
 
