@@ -41,6 +41,13 @@ struct RecordingView: View {
                 }
             }
 
+            if let advice = recording.preRecordingAdvice {
+                Label(advice, systemImage: "battery.100percent.bolt")
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.inkMuted)
+                    .accessibilityIdentifier("chargeAdvice")
+            }
+
             if recording.isPermissionDenied && !recording.isRecording {
                 VStack(spacing: Design.Spacing.xs) {
                     Label("마이크 권한이 꺼져 있어 녹음할 수 없습니다.", systemImage: "mic.slash")
@@ -90,6 +97,16 @@ struct RecordingView: View {
             }
 
             if recording.isRecording {
+                Text(BatteryAdvice.lidNotice)
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.inkMuted)
+                    .accessibilityIdentifier("lidNotice")
+                if let warning = recording.batteryWarning {
+                    Label(warning, systemImage: "battery.25percent")
+                        .designText(.caption)
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier("batteryWarning")
+                }
                 Text("창을 닫아도 녹음은 계속됩니다. Dock 아이콘을 누르면 창이 다시 열립니다.")
                     .designText(.caption)
                     .foregroundStyle(Design.Palette.inkMuted)
