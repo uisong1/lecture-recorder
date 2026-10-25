@@ -53,12 +53,13 @@ public struct RecordingRecovery {
         let bytes = files.fileSize(at: url) ?? 0
         let name = subject?.name ?? SubjectManager.unclassifiedName
         let recording = Recording(
-            title: RecordingController.defaultTitle(subjectName: name, startedAt: pending.startedAt, calendar: calendar) + " (복구됨)",
+            title: RecordingController.defaultTitle(subjectName: name, startedAt: pending.startedAt, calendar: calendar),
             subject: subject,
             startedAt: pending.startedAt,
             duration: Double(bytes) * 8 / (RecordingStorage.isWorkingPath(pending.relativePath) ? Self.workingBitsPerSecond : Self.bitsPerSecond),
             relativePath: pending.relativePath
         )
+        recording.wasRecovered = true
         context.insert(recording)
         // 녹음이 끊긴 지점보다 뒤의 북마크는 길이 어림값 안으로 맞춘다.
         for time in pending.bookmarkTimes {

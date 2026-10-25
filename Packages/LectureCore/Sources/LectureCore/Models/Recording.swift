@@ -18,6 +18,8 @@ public final class Recording {
     public var bookmarks: [Bookmark] = []
     /// 마지막으로 듣던 위치(초). 0이면 처음부터 듣는다.
     public var lastPlayedPosition: TimeInterval = 0
+    /// 녹음 중 앱이 꺼져서 남은 파일로 되살린 녹음이면 true.
+    public var wasRecovered: Bool = false
 
     public init(title: String, subject: Subject?, startedAt: Date, duration: TimeInterval, relativePath: String) {
         self.title = title
@@ -29,6 +31,14 @@ public final class Recording {
 }
 
 extension Recording {
+    /// 예전 버전은 되살린 녹음의 제목 끝에 이 표시를 붙였다.
+    static let legacyRecoveredSuffix = " (복구됨)"
+
+    /// 되살린 녹음인지. 표시가 제목에 붙은 예전 기록도 포함한다.
+    public var isRecovered: Bool {
+        wasRecovered || title.hasSuffix(Self.legacyRecoveredSuffix)
+    }
+
     /// 시점 순서로 정렬한 북마크.
     public var sortedBookmarks: [Bookmark] {
         bookmarks.sorted { $0.time < $1.time }
