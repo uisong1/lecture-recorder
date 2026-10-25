@@ -18,12 +18,20 @@ public final class RecordingLibrary {
     public private(set) var recordings: [Recording] = []
     public private(set) var selection: LibrarySelection?
     public var errorMessage: String?
+    /// 제목 검색어와 기간. 바꾸면 목록이 바로 다시 걸러진다.
+    public var filter = RecordingFilter() {
+        didSet { recordings = filtered(by: selection) }
+    }
 
     private var all: [Recording] = []
     private let context: ModelContext
+    private let now: @MainActor () -> Date
+    private let calendar: Calendar
 
-    public init(context: ModelContext) {
+    public init(context: ModelContext, now: @escaping @MainActor () -> Date = { Date() }, calendar: Calendar = .current) {
         self.context = context
+        self.now = now
+        self.calendar = calendar
         reload()
     }
 
@@ -51,16 +59,23 @@ public final class RecordingLibrary {
         recordings = filtered(by: selection)
     }
 
-    /// 분류에 들어 있는 녹음 수.
+    /// 분류에 들어 있는 녹음 수. 검색·기간 조건과 상관없는 전체 수다.
     public func count(for selection: LibrarySelection) -> Int {
-        filtered(by: selection).count
+        inCategory(selection).count
     }
 
-    private func filtered(by selection: LibrarySelection?) -> [Recording] {
+    private func inCategory(_ selection: LibrarySelection?) -> [Recording] {
         switch selection {
         case nil: []
         case .unclassified: all.filter { $0.subject == nil }
         case .subject(let id): all.filter { $0.subject?.persistentModelID == id }
+        }
+    }
+
+    private func filtered(by selection: LibrarySelection?) -> [Recording] {
+        let current = now()
+        return inCategory(selection).filter {
+            filter.matches(title: $0.title, startedAt: $0.startedAt, now: current, calendar: calendar)
         }
     }
 }
