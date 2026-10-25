@@ -1,3 +1,4 @@
+import LectureCore
 import SwiftUI
 
 struct ContentView: View {
@@ -5,6 +6,7 @@ struct ContentView: View {
         Text("수업 녹음")
             .frame(minWidth: 600, minHeight: 400)
             .accessibilityIdentifier("mainWindowContent")
+            .help(LectureCore.appName)
     }
 }
 
