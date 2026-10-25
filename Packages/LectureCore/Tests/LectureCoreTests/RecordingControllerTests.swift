@@ -78,7 +78,7 @@ final class TestClock {
         clock.advance(by: 1)  // 11:25:00
         controller.checkOverrun()
         controller.checkOverrun()
-        await Task.yield()
+        try await Task.sleep(for: .milliseconds(50))
         #expect(controller.overrunNotice?.contains("자료구조 수업이 10분 전에 끝났습니다") == true)
         #expect(overrunNotifier.notified.count == 1)
     }
