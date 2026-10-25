@@ -8,6 +8,8 @@ report() {
   grep -E "error:|warning: .*Swift 6|FAILED|failed|✘|Fatal|fatal" "$log" | awk '!seen[$0]++' | head -40 | while IFS= read -r line; do
     echo "::error::${line//$'\n'/ }"
   done
+  # 크래시처럼 오류 줄이 없을 때를 위해 마지막 몇 줄도 남긴다.
+  tail -8 "$log" | while IFS= read -r line; do echo "::warning::tail: ${line}"; done
 }
 
 run() {

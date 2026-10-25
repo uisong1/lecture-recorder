@@ -81,13 +81,16 @@ import Testing
         let url = directory.appending(path: "test.store")
 
         do {
-            let first = SubjectManager(context: try LectureModelContainer.make(url: url).mainContext)
+            // ModelContext는 컨테이너를 붙잡지 않으므로 컨테이너를 변수로 들고 있어야 한다.
+            let firstContainer = try LectureModelContainer.make(url: url)
+            let first = SubjectManager(context: firstContainer.mainContext)
             let subject = try first.add(name: "자료구조", color: .green)
             try first.add(name: "운영체제", color: .red)
             try first.rename(subject, to: "자료구조론")
         }
 
-        let second = SubjectManager(context: try LectureModelContainer.make(url: url).mainContext)
+        let secondContainer = try LectureModelContainer.make(url: url)
+        let second = SubjectManager(context: secondContainer.mainContext)
         #expect(second.subjects.map(\.name) == ["운영체제", "자료구조론"])
         #expect(second.subjects.last?.color == .green)
     }
