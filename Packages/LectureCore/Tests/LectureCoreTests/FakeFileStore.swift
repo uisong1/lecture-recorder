@@ -60,7 +60,31 @@ final class FakeFileStore: FileStoring, @unchecked Sendable {
 
     func removeItem(at url: URL) throws {
         try lock.withLock {
-            guard paths.remove(url.standardizedFileURL.path) != nil else { throw CocoaError(.fileNoSuchFile) }
+            let path = url.standardizedFileURL.path
+            let children = paths.filter { $0.hasPrefix(path + "/") }
+            guard paths.remove(path) != nil || !children.isEmpty else { throw CocoaError(.fileNoSuchFile) }
+            // 폴더를 지우면 그 안의 항목도 함께 사라진다.
+            paths.subtract(children)
+            for child in children { sizes[child] = nil }
+        }
+    }
+
+    var failNextListing = false
+
+    func contentsOfDirectory(at url: URL) throws -> [URL] {
+        try lock.withLock {
+            if failNextListing {
+                failNextListing = false
+                throw CocoaError(.fileReadNoPermission)
+            }
+            let directory = url.standardizedFileURL.path
+            let prefix = directory + "/"
+            var names: Set<String> = []
+            for path in paths where path.hasPrefix(prefix) {
+                if let first = path.dropFirst(prefix.count).split(separator: "/", maxSplits: 1).first { names.insert(String(first)) }
+            }
+            guard paths.contains(directory) || !names.isEmpty else { throw CocoaError(.fileReadNoSuchFile) }
+            return names.sorted().map { url.appending(path: $0) }
         }
     }
 
