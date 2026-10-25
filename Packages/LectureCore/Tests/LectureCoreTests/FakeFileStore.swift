@@ -64,9 +64,19 @@ final class FakeFileStore: FileStoring, @unchecked Sendable {
             }
             let from = source.standardizedFileURL.path
             let to = destination.standardizedFileURL.path
-            guard paths.remove(from) != nil else { throw CocoaError(.fileNoSuchFile) }
+            let children = paths.filter { $0.hasPrefix(from + "/") }
+            guard paths.contains(from) || !children.isEmpty else { throw CocoaError(.fileNoSuchFile) }
             guard !paths.contains(to) else { throw CocoaError(.fileWriteFileExists) }
+            paths.remove(from)
             paths.insert(to)
+            // 폴더를 옮기면 안의 항목도 함께 옮겨진다.
+            for child in children {
+                let moved = to + child.dropFirst(from.count)
+                paths.remove(child)
+                paths.insert(moved)
+                if let size = sizes.removeValue(forKey: child) { sizes[moved] = size }
+            }
+            if directories.remove(from) != nil { directories.insert(to) }
         }
     }
 
