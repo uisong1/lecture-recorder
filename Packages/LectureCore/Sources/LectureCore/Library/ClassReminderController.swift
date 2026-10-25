@@ -128,24 +128,32 @@ import UserNotifications
 /// `UNUserNotificationCenter`로 매주 되풀이되는 알림을 예약한다. 알림을 누르면 앱이 열린다.
 @MainActor
 public final class SystemNotificationScheduler: NSObject, NotificationScheduling, UNUserNotificationCenterDelegate {
-    private let center = UNUserNotificationCenter.current()
-
     public override init() {
         super.init()
         // 앱이 앞에 있을 때도 알림을 보여 준다.
-        center.delegate = self
+        UNUserNotificationCenter.current().delegate = self
     }
 
     public func requestAuthorization() async -> Bool {
+        await Self.authorize()
+    }
+
+    public func replaceAll(with notifications: [ScheduledNotification]) async {
+        await Self.replace(with: notifications)
+    }
+
+    // 알림 센터는 메인 액터 밖에서 쓴다 (센터 객체를 액터 사이로 넘기지 않는다).
+    nonisolated private static func authorize() async -> Bool {
         do {
-            return try await center.requestAuthorization(options: [.alert, .sound])
+            return try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
         } catch {
             Log.data.error("알림 권한 요청 실패: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }
 
-    public func replaceAll(with notifications: [ScheduledNotification]) async {
+    nonisolated private static func replace(with notifications: [ScheduledNotification]) async {
+        let center = UNUserNotificationCenter.current()
         center.removeAllPendingNotificationRequests()
         for notification in notifications {
             let content = UNMutableNotificationContent()
