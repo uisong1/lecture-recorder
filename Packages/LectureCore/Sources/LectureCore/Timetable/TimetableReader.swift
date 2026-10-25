@@ -61,7 +61,7 @@ public struct TimetableRow: Equatable, Sendable {
     public var end: TimeOfDay
     /// 칸 안에 강의실 글자가 있었는지.
     public var hasRoom: Bool
-    /// 저장할지 여부. 강의실이 없거나 짧은 칸은 처음에 꺼 둔다.
+    /// 저장할지 여부. 강의실이 없거나 채플 같은 칸은 처음에 꺼 둔다.
     public var include: Bool
 
     public init(name: String, weekday: Weekday, start: TimeOfDay, end: TimeOfDay, hasRoom: Bool, include: Bool) {
@@ -114,8 +114,8 @@ public enum TimetableReadError: Error, Equatable, LocalizedError {
 public enum TimetableReader {
     /// 시간 눈금 간격 안에서 칸 시각을 맞출 단위(분).
     public static let snapMinutes = 5
-    /// 이 길이(분) 이하이거나 강의실이 없는 칸은 처음에 저장 대상에서 뺀다.
-    public static let shortClassMinutes = 60
+    /// 이 글자가 이름에 들어간 칸은 녹음할 수업이 아니라고 보고 처음에 저장 대상에서 뺀다 (강의실이 없는 칸도 뺀다).
+    public static let excludedNameKeywords = ["채플"]
 
     // MARK: 1단계: 요일 칸
 
@@ -186,14 +186,13 @@ public enum TimetableReader {
                     .filter { $0.centerX >= column.left && $0.centerX < column.right && $0.centerY >= Double(block.start) && $0.centerY < Double(block.end) }
                     .sorted { $0.y < $1.y }
                 let (name, hasRoom) = nameAndRoom(from: inside.map(\.text))
-                let minutesLong = end.minutesSinceMidnight - start.minutesSinceMidnight
                 rows.append(TimetableRow(
                     name: name,
                     weekday: column.weekday,
                     start: start,
                     end: end,
                     hasRoom: hasRoom,
-                    include: !name.isEmpty && hasRoom && minutesLong > shortClassMinutes
+                    include: !name.isEmpty && hasRoom && !excludedNameKeywords.contains { name.contains($0) }
                 ))
             }
         }

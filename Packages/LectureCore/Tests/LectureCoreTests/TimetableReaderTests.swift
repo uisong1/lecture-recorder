@@ -210,6 +210,32 @@ enum EverytimeFixture {
         #expect(monday[0].start == hm(10, 30))
     }
 
+    // MARK: 기본 제외
+
+    @Test func 강의실_없는_칸과_채플만_처음에_제외한다() throws {
+        let excluded = try readFixture().rows.filter { !$0.include }.map(\.name)
+        #expect(excluded == ["탐테", "탐테", "비전채플", "복지일"])
+    }
+
+    @Test func 강의실이_있는_50분_수업은_포함한다() throws {
+        // 수요일 15:00~15:50 칸에 채플 대신 일반 과목 이름이 있어도 시간이 짧다는 이유로 빠지지 않는다.
+        let renamed = EverytimeFixture.all.map { $0.text == "비전채플" ? EverytimeFixture.obs("글쓰기", $0.x, $0.y, $0.width, $0.height) : $0 }
+        let columns = try TimetableReader.columns(from: renamed)
+        let draft = try TimetableReader.read(
+            observations: renamed,
+            columns: columns,
+            strips: EverytimeFixture.strips(for: columns),
+            lineRows: EverytimeFixture.lineRows
+        )
+        let writing = try #require(draft.rows.first { $0.name == "글쓰기" })
+        #expect(writing.end.minutesSinceMidnight - writing.start.minutesSinceMidnight == 50)
+        #expect(writing.include)
+    }
+
+    @Test func 이름에_채플이_들어가면_강의실이_있어도_제외한다() {
+        #expect(TimetableReader.excludedNameKeywords == ["채플"])
+    }
+
     // MARK: 오류
 
     @Test func 눈금줄이_없으면_오류다() throws {
