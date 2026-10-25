@@ -83,9 +83,18 @@ public final class PlaybackController {
     }
 
     public func play() {
-        guard current != nil else { return }
+        guard let current else { return }
         player.play()
         isPlaying = player.isPlaying
+        if isPlaying { markPlayed(current) }
+    }
+
+    /// 재생을 시작한 시각을 녹음에 적는다. 처음 듣는 것이면 목록의 "안 들음" 표시가 바로 사라지도록 곧장 저장하고,
+    /// 이미 들은 녹음의 시각 갱신은 다음 저장 때 함께 저장한다.
+    private func markPlayed(_ recording: Recording) {
+        let wasUnplayed = recording.lastPlayedAt == nil
+        recording.lastPlayedAt = now()
+        if wasUnplayed { savePosition() }
     }
 
     public func pause() {

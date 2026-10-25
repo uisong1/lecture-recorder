@@ -71,4 +71,39 @@ import Testing
         #expect(!matches(filter, at: date(2026, 3, 1, 10, 0)))
         #expect(!matches(filter, title: "알고리즘", at: date(2026, 3, 29, 10, 0)))
     }
+
+    // MARK: 안 들은 것만
+
+    @Test func 안_들은_것만_켜면_조건이_걸린_것으로_본다() {
+        #expect(RecordingFilter(unplayedOnly: true).isActive)
+        #expect(!RecordingFilter(unplayedOnly: false).isActive)
+    }
+
+    @Test func 안_들은_것만_켜면_들은_녹음은_빠진다() {
+        let filter = RecordingFilter(unplayedOnly: true)
+        #expect(filter.matches(title: "녹음", startedAt: now, isUnplayed: true, now: now, calendar: seoulCalendar))
+        #expect(!filter.matches(title: "녹음", startedAt: now, isUnplayed: false, now: now, calendar: seoulCalendar))
+    }
+
+    @Test func 안_들은_것만을_끄면_들은_녹음도_나온다() {
+        let filter = RecordingFilter()
+        #expect(filter.matches(title: "녹음", startedAt: now, isUnplayed: false, now: now, calendar: seoulCalendar))
+    }
+
+    @Test func 안_들은_것만은_검색어와_기간과_함께_적용된다() {
+        let filter = RecordingFilter(query: "자료", period: .last7Days, unplayedOnly: true)
+        let recent = date(2026, 3, 29, 10, 0)
+        let old = date(2026, 3, 1, 10, 0)
+        #expect(filter.matches(title: "자료구조", startedAt: recent, isUnplayed: true, now: now, calendar: seoulCalendar))
+        #expect(!filter.matches(title: "운영체제", startedAt: recent, isUnplayed: true, now: now, calendar: seoulCalendar))
+        #expect(!filter.matches(title: "자료구조", startedAt: old, isUnplayed: true, now: now, calendar: seoulCalendar))
+        #expect(!filter.matches(title: "자료구조", startedAt: recent, isUnplayed: false, now: now, calendar: seoulCalendar))
+    }
+
+    @Test func 정렬_방향_이름과_저장값() {
+        #expect(RecordingSortOrder.newestFirst.label == "최신순")
+        #expect(RecordingSortOrder.oldestFirst.label == "오래된 순")
+        #expect(RecordingSortOrder(rawValue: RecordingSortOrder.oldestFirst.rawValue) == .oldestFirst)
+        #expect(RecordingSortOrder(rawValue: "엉뚱한 값") == nil)
+    }
 }

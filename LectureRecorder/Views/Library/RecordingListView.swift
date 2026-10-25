@@ -2,7 +2,7 @@ import AppKit
 import LectureCore
 import SwiftUI
 
-/// 고른 과목의 녹음을 최신순으로 보여주고, 눌러서 재생한다.
+/// 고른 과목의 녹음을 고른 순서(기본 최신순)로 보여주고, 눌러서 재생한다.
 struct RecordingListView: View {
     let library: RecordingLibrary
     let playback: PlaybackController
@@ -28,6 +28,13 @@ struct RecordingListView: View {
                 List(library.recordings) { recording in
                     let status = manager.status(for: recording)
                     HStack {
+                        if recording.isUnplayed {
+                            Circle()
+                                .fill(Design.Palette.primary)
+                                .frame(width: 8, height: 8)
+                                .accessibilityLabel("안 들음")
+                                .accessibilityIdentifier("unplayedDot")
+                        }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(recording.title)
                                 .designText(.bodyStrong)
@@ -36,7 +43,7 @@ struct RecordingListView: View {
                             Text((library.showsSubjectName ? "\(library.subjectName(of: recording)) · " : "") + "\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(RecordingController.format(recording.duration))")
                                 .designText(.caption)
                                 .foregroundStyle(Design.Palette.inkMuted)
-                            let extras = (RecordingRowStatus.bookmarkLabel(count: recording.bookmarks.count).map { [$0] } ?? []) + status.labels
+                            let extras = (recording.isUnplayed ? ["안 들음"] : []) + (RecordingRowStatus.bookmarkLabel(count: recording.bookmarks.count).map { [$0] } ?? []) + status.labels
                             if !extras.isEmpty {
                                 Text(extras.joined(separator: " · "))
                                     .designText(.caption)
@@ -85,6 +92,20 @@ struct RecordingListView: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("listModePicker")
+            }
+            ToolbarItem {
+                Picker("정렬", selection: Binding(get: { library.sortOrder }, set: { library.sortOrder = $0 })) {
+                    ForEach(RecordingSortOrder.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .disabled(showsBookmarks)
+                .accessibilityIdentifier("sortOrder")
+            }
+            ToolbarItem {
+                Toggle("안 들은 것만", isOn: Binding(get: { library.filter.unplayedOnly }, set: { library.filter.unplayedOnly = $0 }))
+                    .toggleStyle(.button)
+                    .disabled(showsBookmarks)
+                    .accessibilityIdentifier("unplayedOnly")
             }
             ToolbarItem {
                 Picker("기간", selection: Binding(get: { library.filter.period }, set: { library.filter.period = $0 })) {

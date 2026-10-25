@@ -67,5 +67,29 @@ import Testing
 
         #expect(try context.fetchCount(FetchDescriptor<TimeSlot>()) == 0)
     }
+
+    @Test func 재생_시각은_저장하고_다시_불러와도_유지된다() throws {
+        let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appending(path: "test.store")
+        let playedAt = Date(timeIntervalSince1970: 1_772_500_000)
+
+        do {
+            let container = try LectureModelContainer.make(url: url)
+            let context = ModelContext(container)
+            let played = Recording(title: "들은 것", subject: nil, startedAt: playedAt, duration: 60, relativePath: "a.m4a")
+            played.lastPlayedAt = playedAt
+            context.insert(played)
+            context.insert(Recording(title: "안 들은 것", subject: nil, startedAt: playedAt, duration: 60, relativePath: "b.m4a"))
+            try context.save()
+        }
+
+        let container = try LectureModelContainer.make(url: url)
+        let recordings = try ModelContext(container).fetch(FetchDescriptor<Recording>())
+        #expect(recordings.first { $0.title == "들은 것" }?.lastPlayedAt == playedAt)
+        #expect(recordings.first { $0.title == "안 들은 것" }?.lastPlayedAt == nil)
+        #expect(recordings.first { $0.title == "안 들은 것" }?.isUnplayed == true)
+    }
 }
 #endif
