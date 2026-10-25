@@ -7,6 +7,8 @@ import SwiftData
 public final class Subject {
     public var name: String
     public var colorRawValue: String
+    /// 이 과목이 속한 학기 ("2026년 2학기"). 시간표 이미지를 가져올 때 정해지고, 직접 만든 과목은 비어 있다.
+    public var semester: String = ""
     @Relationship(deleteRule: .cascade, inverse: \TimeSlot.subject)
     public var timeSlots: [TimeSlot] = []
     /// 과목을 지워도 녹음은 남기고 미분류로 바꾼다.
