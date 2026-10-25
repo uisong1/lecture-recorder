@@ -191,7 +191,7 @@ final class FakeNotificationScheduler: NotificationScheduling {
         #expect(notifications.scheduled.count == 1)
     }
 
-    @Test func 켜 둔_설정은_다시_실행해도_유지된다() async throws {
+    @Test func 켜둔_설정은_다시_실행해도_유지된다() async throws {
         await controller.setEnabled(true)
         let again = ClassReminderController(context: container.mainContext, notifications: notifications, defaults: defaults)
         #expect(again.isEnabled)
