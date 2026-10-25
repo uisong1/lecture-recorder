@@ -123,13 +123,17 @@ final class AppDependencies {
     }
 
     private static func makeContainer(problems: inout [String]) -> ModelContainer {
+        // 저장소를 열기 전에 하루 한 번 복사해 둔다. 실패해도 앱은 켠다.
+        if !isUITesting, let backupsRoot = try? StoreBackup.defaultRoot() {
+            StoreBackup(storeURL: LectureModelContainer.defaultStoreURL(), backupsRoot: backupsRoot).backupIfNeeded()
+        }
         do {
             return try LectureModelContainer.make(inMemory: isUITesting)
         } catch {
             Log.data.fault("저장소 열기 실패: \(error.localizedDescription, privacy: .public)")
         }
         do {
-            problems.append("저장소를 열지 못해 임시로 실행 중입니다. 지금 입력한 내용은 앱을 끄면 사라집니다.")
+            problems.append(LectureModelContainer.openFailureNotice)
             return try LectureModelContainer.make(inMemory: true)
         } catch {
             // 메모리 저장소조차 만들 수 없으면 앱을 계속할 방법이 없다.
