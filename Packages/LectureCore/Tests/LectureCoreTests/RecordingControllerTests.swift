@@ -289,6 +289,16 @@ final class TestClock {
         #expect(recording.relativePath == "미분류/2026-03-02_1230.caf")
     }
 
+    @Test func 수업_시작_5분_전에_누른_녹음은_그_수업으로_저장된다() async throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 9, 55))
+        try await controller.start()
+        #expect(controller.currentSubjectName == "자료구조")
+        let recording = try controller.stop()
+        #expect(recording.subject?.name == "자료구조")
+        #expect(recording.relativePath == "자료구조/2026-03-02_0955.caf")
+    }
+
     @Test func 권한이_없으면_시작하지_않는다() async throws {
         permission.status = .denied
         let controller = makeController(at: clock)
