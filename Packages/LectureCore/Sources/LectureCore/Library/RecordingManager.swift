@@ -5,12 +5,16 @@ import SwiftData
 
 public enum RecordingManagerError: Error, Equatable, LocalizedError {
     case emptyTitle
+    case fileMissing
+    case exportFailed(String)
     case fileFailed(String)
     case saveFailed(String)
 
     public var errorDescription: String? {
         switch self {
         case .emptyTitle: "제목을 입력하세요."
+        case .fileMissing: "녹음 파일을 찾을 수 없습니다."
+        case .exportFailed(let reason): "녹음을 저장하지 못했습니다: \(reason)"
         case .fileFailed(let reason): "녹음 파일을 처리하지 못했습니다: \(reason)"
         case .saveFailed(let reason): "저장하지 못했습니다: \(reason)"
         }
@@ -74,6 +78,31 @@ public final class RecordingManager {
             recording.relativePath = oldPath
             try? storage.moveFile(from: newPath, to: oldPath)
             throw fail(.saveFailed(error.localizedDescription))
+        }
+    }
+
+    /// 녹음 파일의 실제 위치. Finder에서 보여 주거나 공유할 때 쓴다.
+    public func fileURL(for recording: Recording) -> URL {
+        storage.url(for: recording.relativePath)
+    }
+
+    /// "다른 곳에 저장…" 대화상자에 미리 채워 둘 파일 이름 (제목 + 확장자).
+    public func suggestedExportName(for recording: Recording) -> String {
+        let ext = (recording.relativePath as NSString).pathExtension
+        let base = RecordingStorage.folderName(for: recording.title)
+        return ext.isEmpty ? base : "\(base).\(ext)"
+    }
+
+    /// 녹음 파일을 `destination`으로 복사한다. 원본은 그대로 둔다.
+    public func export(_ recording: Recording, to destination: URL) throws {
+        let source = fileURL(for: recording)
+        guard storage.fileExists(at: source) else { throw fail(.fileMissing) }
+        do {
+            try storage.copyFile(at: source, to: destination)
+            errorMessage = nil
+        } catch {
+            Log.storage.error("녹음 내보내기 실패 \(recording.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw fail(.exportFailed(error.localizedDescription))
         }
     }
 

@@ -39,6 +39,19 @@ final class FakeFileStore: FileStoring, @unchecked Sendable {
         }
     }
 
+    var failNextCopy = false
+
+    func copyItem(at source: URL, to destination: URL) throws {
+        try lock.withLock {
+            if failNextCopy {
+                failNextCopy = false
+                throw CocoaError(.fileWriteOutOfSpace)
+            }
+            guard paths.contains(source.standardizedFileURL.path) else { throw CocoaError(.fileNoSuchFile) }
+            paths.insert(destination.standardizedFileURL.path)
+        }
+    }
+
     func removeItem(at url: URL) throws {
         try lock.withLock {
             guard paths.remove(url.standardizedFileURL.path) != nil else { throw CocoaError(.fileNoSuchFile) }

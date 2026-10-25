@@ -110,6 +110,15 @@ public struct RecordingStorage: Sendable {
         try files.moveItem(at: url(for: oldPath), to: url(for: newPath))
     }
 
+    public func fileExists(at url: URL) -> Bool {
+        files.fileExists(at: url)
+    }
+
+    /// 앱 밖의 `destination`으로 복사한다.
+    public func copyFile(at source: URL, to destination: URL) throws {
+        try files.copyItem(at: source, to: destination)
+    }
+
     /// 파일을 지운다. 이미 없으면 지울 것이 없으므로 넘어간다.
     public func removeFile(at relativePath: String) throws {
         let target = url(for: relativePath)
