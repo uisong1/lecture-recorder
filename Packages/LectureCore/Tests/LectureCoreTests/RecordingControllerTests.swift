@@ -18,6 +18,7 @@ import Testing
     }
 
     let journal = InMemoryRecordingJournal()
+    let sleep = FakeSleepPreventer()
 
     func makeController(at time: Date) -> RecordingController {
         RecordingController(
@@ -27,6 +28,7 @@ import Testing
             files: files,
             permission: permission,
             journal: journal,
+            sleepPreventer: sleep,
             calendar: seoulCalendar,
             now: { time }
         )
@@ -38,6 +40,32 @@ import Testing
         try ScheduleManager(context: container.mainContext)
             .add(subject: subject, weekday: .monday, start: TimeOfDay(hour: 10), end: TimeOfDay(hour: 11, minute: 15))
         return subject
+    }
+
+    @Test func 녹음하는_동안만_잠자기를_막는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        #expect(!sleep.isActive)
+
+        try await controller.start()
+        #expect(sleep.isActive)
+
+        try controller.pause()
+        #expect(sleep.isActive)
+        try controller.resume()
+        #expect(sleep.isActive)
+
+        try controller.stop()
+        #expect(!sleep.isActive)
+        #expect(sleep.beginCount == 1)
+    }
+
+    @Test func 녹음을_시작하지_못하면_잠자기를_막지_않는다() async throws {
+        recorder.startError = RecordingError.insufficientStorage
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+
+        await #expect(throws: RecordingError.self) { try await controller.start() }
+        #expect(!sleep.isActive)
+        #expect(sleep.beginCount == 0)
     }
 
     @Test func 시작하고_정지하면_Recording이_저장된다() async throws {
