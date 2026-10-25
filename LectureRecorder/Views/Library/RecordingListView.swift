@@ -55,6 +55,9 @@ struct RecordingListView: View {
                             NSWorkspace.shared.activateFileViewerSelecting([manager.fileURL(for: recording)])
                         }
                         Button("다른 곳에 저장…") { export(recording) }
+                        if let url = manager.shareURL(for: recording) {
+                            ShareLink("공유…", item: url)
+                        }
                         Divider()
                         Button("삭제…", role: .destructive) { deleting = recording }
                     }

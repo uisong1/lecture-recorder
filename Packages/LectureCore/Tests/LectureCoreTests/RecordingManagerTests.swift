@@ -93,6 +93,17 @@ import Testing
         #expect(makeManager().suggestedExportName(for: working) == "작업 중.caf")
     }
 
+    @Test func 파일이_있으면_공유할_위치를_돌려준다() throws {
+        let recording = addRecording("자료구조/a.m4a")
+        #expect(makeManager().shareURL(for: recording) == storage.url(for: "자료구조/a.m4a"))
+    }
+
+    @Test func 파일이_없으면_공유하지_않는다() throws {
+        let recording = addRecording("자료구조/a.m4a")
+        try files.removeItem(at: storage.url(for: "자료구조/a.m4a"))
+        #expect(makeManager().shareURL(for: recording) == nil)
+    }
+
     @Test func 파일_위치를_돌려준다() throws {
         let recording = addRecording("자료구조/a.m4a")
         #expect(makeManager().fileURL(for: recording) == storage.url(for: "자료구조/a.m4a"))
