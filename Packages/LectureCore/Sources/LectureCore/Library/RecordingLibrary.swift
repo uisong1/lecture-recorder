@@ -16,6 +16,11 @@ public struct BookmarkEntry: Identifiable {
     public let bookmark: Bookmark
     public let recording: Recording
     public var id: PersistentIdentifier { bookmark.persistentModelID }
+
+    public init(bookmark: Bookmark, recording: Recording) {
+        self.bookmark = bookmark
+        self.recording = recording
+    }
 }
 
 /// 과목별 녹음 목록을 보여주는 뷰모델.

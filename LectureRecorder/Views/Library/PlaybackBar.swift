@@ -78,6 +78,40 @@ struct PlaybackBar: View {
                     .help("지금 위치에 북마크 추가 (⇧⌘B)")
                     .accessibilityIdentifier("addPlaybackBookmark")
                 }
+                if let position = playback.tourPositionText {
+                    HStack(spacing: Design.Spacing.sm) {
+                        Button {
+                            playback.previousTourStop()
+                        } label: {
+                            Label("이전 북마크", systemImage: "backward.end")
+                        }
+                        .buttonStyle(.pillSecondary)
+                        .accessibilityIdentifier("previousTourStop")
+                        Text(position)
+                            .designText(.captionStrong)
+                            .foregroundStyle(Design.Palette.primary)
+                            .monospacedDigit()
+                            .accessibilityIdentifier("tourPosition")
+                        Button {
+                            playback.nextTourStop()
+                        } label: {
+                            Label("다음 북마크", systemImage: "forward.end")
+                        }
+                        .buttonStyle(.pillSecondary)
+                        .accessibilityIdentifier("nextTourStop")
+                        Button("이어 듣기 끝내기") { playback.stopBookmarkTour() }
+                            .buttonStyle(.textLink)
+                            .accessibilityIdentifier("stopBookmarkTour")
+                    }
+                } else if let current = playback.current, !current.bookmarks.isEmpty {
+                    Button {
+                        playback.startBookmarkTour(entries: current.sortedBookmarks.map { BookmarkEntry(bookmark: $0, recording: current) })
+                    } label: {
+                        Label("이 녹음 북마크만 이어 듣기", systemImage: "play.circle")
+                    }
+                    .buttonStyle(.pillSecondary)
+                    .accessibilityIdentifier("startRecordingBookmarkTour")
+                }
                 if !playback.bookmarks.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: Design.Spacing.xs) {

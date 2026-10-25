@@ -88,6 +88,21 @@ public final class RecordingController {
     }
     /// 지금 입력 크기 (0...1). 녹음 중이 아니거나 일시정지 중이면 0.
     public private(set) var inputLevel: Float = 0
+    /// 마이크 확인에 걸리는 시간(초).
+    public static let previewDuration: TimeInterval = 5
+    /// 마이크 확인 결과.
+    public enum PreviewOutcome: Equatable {
+        /// 소리가 들어옴.
+        case heard
+        /// 확인하는 동안 소리가 거의 안 들어옴.
+        case quiet
+    }
+    /// 마이크 확인 중인 입력 크기 (0...1). 확인 중이 아니면 0.
+    public private(set) var previewLevel: Float = 0
+    /// 마이크 확인이 진행 중인지.
+    public private(set) var isPreviewing = false
+    /// 방금 끝난 마이크 확인의 결과. 다시 확인하거나 녹음을 시작하면 지워진다.
+    public private(set) var previewOutcome: PreviewOutcome?
     /// 10초 넘게 거의 무음이면 true. 화면이 "소리가 거의 들어오지 않습니다"를 보인다.
     public private(set) var isInputSilent = false
     /// 지금 녹음에 찍은 북마크 시점(초). 정지하면 `Recording`의 북마크로 저장된다.
@@ -108,6 +123,10 @@ public final class RecordingController {
     private let sleepPreventer: (any SleepPreventing)?
     private let powerStatus: (any PowerStatusProviding)?
     private let inputMonitor: (any AudioInputMonitoring)?
+    private let levelPreview: (any AudioLevelPreviewing)?
+    private var previewMonitor: Task<Void, Never>?
+    private var previewStartedAt: Date?
+    private var previewPeak: Float = 0
     private let overrunNotifier: (any NotificationScheduling)?
     private var classEnd: Date?
     private var overrunNotified = false
@@ -141,6 +160,7 @@ public final class RecordingController {
         sleepPreventer: (any SleepPreventing)? = nil,
         powerStatus: (any PowerStatusProviding)? = nil,
         inputMonitor: (any AudioInputMonitoring)? = nil,
+        levelPreview: (any AudioLevelPreviewing)? = nil,
         overrunNotifier: (any NotificationScheduling)? = nil,
         lifecycle: (any LifecycleEventSource)? = nil,
         compressor: RecordingCompressor? = nil,
@@ -159,6 +179,7 @@ public final class RecordingController {
         self.sleepPreventer = sleepPreventer
         self.powerStatus = powerStatus
         self.inputMonitor = inputMonitor
+        self.levelPreview = levelPreview
         self.overrunNotifier = overrunNotifier
         alertRaiser = RecordingAlertRaiser(notifier: overrunNotifier)
         self.compressor = compressor
@@ -268,6 +289,60 @@ public final class RecordingController {
         inputLevel = recorder.inputLevel
         isInputSilent = silenceDetector.update(level: inputLevel, at: now())
         if isInputSilent { raise(.inputSilent) }
+    }
+
+    /// "마이크 확인"을 누르면 불린다. `previewDuration`초 동안 마이크 소리 크기를 보여 주고 스스로 끝난다.
+    /// 녹음 중이면 아무 일도 하지 않는다. 아직 권한을 묻지 않았으면 이때 묻고, 거부돼 있으면 켜지 않는다
+    /// (화면이 기존 권한 안내를 보인다). 켜지 못해도 녹음에는 영향이 없다.
+    public func startPreview() async {
+        guard let levelPreview, !isRecording, !isPreviewing else { return }
+        permissionStatus = await permission.requestIfNeeded()
+        guard permissionStatus == .granted, !isRecording, !isPreviewing else { return }
+        do {
+            try levelPreview.start()
+        } catch {
+            Log.recording.error("마이크 확인 실패: \(error.localizedDescription, privacy: .public)")
+            errorMessage = "마이크 소리를 확인하지 못했습니다. 입력 장치를 확인해 주세요."
+            return
+        }
+        isPreviewing = true
+        previewOutcome = nil
+        previewPeak = 0
+        previewStartedAt = now()
+        guard let interval = levelCheckInterval else { return }
+        previewMonitor = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled else { return }
+                self?.samplePreviewLevel()
+            }
+        }
+    }
+
+    /// 확인을 바로 끝낸다. 결과는 남기지 않는다.
+    public func stopPreview() {
+        endPreview()
+        previewOutcome = nil
+    }
+
+    private func endPreview() {
+        previewMonitor?.cancel()
+        previewMonitor = nil
+        levelPreview?.stop()
+        isPreviewing = false
+        previewLevel = 0
+        previewStartedAt = nil
+    }
+
+    /// 확인 중 입력 크기를 읽어 막대를 갱신하고, `previewDuration`초가 지나면 끝내며 결과를 정한다.
+    /// 확인하는 동안 한 번이라도 무음 기준을 넘는 소리가 있었으면 `.heard`, 아니면 `.quiet`.
+    public func samplePreviewLevel() {
+        guard isPreviewing, let levelPreview, let startedAt = previewStartedAt else { return }
+        previewLevel = levelPreview.level
+        previewPeak = max(previewPeak, previewLevel)
+        guard now().timeIntervalSince(startedAt) >= Self.previewDuration else { return }
+        previewOutcome = previewPeak >= InputLevel.silenceThreshold ? .heard : .quiet
+        endPreview()
     }
 
     private func raise(_ alert: RecordingAlert, body: String? = nil) {
@@ -443,6 +518,7 @@ public final class RecordingController {
         }
 
         shortRecordingPrompt = nil
+        stopPreview()
         let startedAt = now()
         try beginRecording(subject: resolvedSubject(at: startedAt), startedAt: startedAt, isContinuation: false)
     }
