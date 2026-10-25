@@ -107,9 +107,13 @@ final class FakeNotificationScheduler: NotificationScheduling {
     private(set) var scheduled: [ScheduledNotification] = []
     private(set) var replaceCount = 0
     private(set) var notified: [(title: String, body: String)] = []
+    private(set) var notifiedIdentifiers: [String] = []
 
-    func notify(title: String, body: String) async {
+    /// 권한을 허용하지 않았으면 실제 구현처럼 조용히 아무것도 보내지 않는다.
+    func notify(title: String, body: String, identifier: String) async {
+        guard authorized else { return }
         notified.append((title, body))
+        notifiedIdentifiers.append(identifier)
     }
 
     func requestAuthorization() async -> Bool {

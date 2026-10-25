@@ -85,3 +85,6 @@
 ## 2026-10-25 3-41 남은 .red 정리
 - 한 일: 배터리 경고(`RecordingView`)와 알림 오류(`NotificationSettingsView`)를 `Design.Palette.danger`로 바꿈. `scripts/check-design-colors.sh`가 과목 색 변환 밖의 `.red`/`.orange`를 찾아 CI(Linux)에서 막는다.
 - Mac에서 확인 필요: 없음 (색만 바뀜, 위험 색은 기존 danger와 같음).
+## 2026-10-25 3-34 중요 경고 시스템 알림
+- 한 일: `RecordingAlert`와 컨트롤러의 `raise`(상황마다 한 번, 허용 안 했으면 조용히), `NotificationScheduling.notify`에 식별자 추가. 단위 테스트 12개 (macOS CI에서 컨트롤러 테스트 실행).
+- Mac에서 확인 필요: 알림을 허용한 상태에서 녹음 중 마이크를 뽑거나 맥을 잠자기시켜 알림이 뜨고, 눌렀을 때 앱이 열리는지. 설정에서 알림을 허용하지 않았다면 알림은 오지 않고 화면 경고만 나옵니다.

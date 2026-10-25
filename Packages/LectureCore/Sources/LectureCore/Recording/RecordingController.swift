@@ -107,6 +107,7 @@ public final class RecordingController {
     private let overrunNotifier: (any NotificationScheduling)?
     private var classEnd: Date?
     private var overrunNotified = false
+    private var alertsSent: Set<RecordingAlert> = []
     private var recordingInputDevice: AudioInputDevice?
     private let compressor: RecordingCompressor?
     private var compressionTask: Task<Void, Never>?
@@ -166,14 +167,16 @@ public final class RecordingController {
             guard isRecording else { return }
             let reason = event == .willSleep ? "맥이 잠자기에 들어가서" : "앱이 종료되어서"
             Log.recording.notice("\(reason, privacy: .public) 녹음을 저장")
-            stopAndNotify(because: reason, advice: "이어서 녹음하려면 녹음을 다시 시작하세요.")
+            stopAndNotify(because: reason, advice: "이어서 녹음하려면 녹음을 다시 시작하세요.", alert: event == .willSleep ? .savedBeforeSleep : .savedBeforeQuit)
         case .didWake:
             break
         }
     }
 
     /// 녹음을 정상 정지해 저장하고, 왜 멈췄는지 안내를 남긴다.
-    private func stopAndNotify(because reason: String, advice: String, recorderStalled: Bool = false) {
+    private func stopAndNotify(because reason: String, advice: String, alert: RecordingAlert, recorderStalled: Bool = false) {
+        // 저장이 실패해도 멈춘 사실은 알린다.
+        raise(alert)
         do {
             let saved = try finishRecording(recorderStalled: recorderStalled)
             interruptionNotice = "\(reason) '\(saved.title)' 녹음을 여기까지 저장했습니다. \(advice)"
@@ -188,7 +191,7 @@ public final class RecordingController {
         guard isRecording, let free = files.availableCapacity(at: storage.root) else { return }
         if free < Self.storageCriticalBytes {
             Log.recording.error("저장 공간 바닥, 자동 정지: \(free, privacy: .public) bytes")
-            stopAndNotify(because: "저장 공간이 거의 없어서", advice: "공간을 비운 뒤 다시 녹음하세요.")
+            stopAndNotify(because: "저장 공간이 거의 없어서", advice: "공간을 비운 뒤 다시 녹음하세요.", alert: .storageFull)
         } else if free < Self.storageWarningBytes {
             let minutes = Int(free / RecordingFormat.workingBytesPerSecond / 60)
             storageWarning = "저장 공간이 부족합니다. 약 \(minutes)분 더 녹음할 수 있어요. 공간을 비워 주세요."
@@ -206,7 +209,7 @@ public final class RecordingController {
         let verdict = stallDetector.update(elapsed: recorder.currentTime, isPaused: isPaused, recorderEnded: recorder.hasEnded)
         guard case .stalled(let reason) = verdict else { return }
         Log.recording.fault("녹음기가 멈춤 (\(String(describing: reason), privacy: .public)), 지금까지 녹음을 저장")
-        stopAndNotify(because: "녹음기가 멈춰서", advice: "녹음을 다시 시작하세요.", recorderStalled: true)
+        stopAndNotify(because: "녹음기가 멈춰서", advice: "녹음을 다시 시작하세요.", alert: .recorderStalled, recorderStalled: true)
         if recorderStallNotice == nil {
             // 저장 자체가 실패한 경우에도 멈춘 사실은 크게 보인다. 이유는 errorMessage에 있다.
             recorderStallNotice = "녹음이 멈춘 것 같습니다. 녹음을 다시 시작하세요."
@@ -224,6 +227,15 @@ public final class RecordingController {
         }
         inputLevel = recorder.inputLevel
         isInputSilent = silenceDetector.update(level: inputLevel, at: now())
+        if isInputSilent { raise(.inputSilent) }
+    }
+
+    /// 앱이 뒤에 있어도 알 수 있게 시스템 알림을 보낸다. 같은 녹음에서 종류마다 한 번만, 이미 알림을 허용한 경우에만
+    /// (권한을 새로 묻지 않는다). 화면 경고는 따로 있으므로 알림이 없어도 알 수 있다.
+    private func raise(_ alert: RecordingAlert, body: String? = nil) {
+        guard alertsSent.insert(alert).inserted, let notifier = overrunNotifier else { return }
+        let text = body ?? alert.body
+        Task { await notifier.notify(title: alert.title, body: text, identifier: alert.identifier) }
     }
 
     /// 녹음 중인 수업이 끝난 지 10분이 지났을 때 화면에 보일 안내. 아직이거나 수업을 모르면 nil.
@@ -250,6 +262,7 @@ public final class RecordingController {
     public func checkInputDevice() {
         guard isRecording else { return }
         inputDeviceWarning = InputDeviceAdvice.warning(started: recordingInputDevice, current: inputMonitor?.currentDevice())
+        if inputDeviceWarning != nil { raise(.inputDeviceChanged) }
     }
 
     private func startLevelMonitor() {
@@ -366,6 +379,7 @@ public final class RecordingController {
         interruptionNotice = nil
         recorderStallNotice = nil
         stallDetector.reset()
+        alertsSent = []
         storageWarning = nil
         startStorageMonitor()
         silenceDetector.reset()
