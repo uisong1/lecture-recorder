@@ -12,11 +12,13 @@ struct SubjectSettingsView: View {
                     .accessibilityIdentifier("newSubjectName")
                 ColorPicker(selection: $manager.draftColor)
                 Button("추가", action: manager.addDraft)
+                    .buttonStyle(.pill)
                     .accessibilityIdentifier("addSubject")
             }
 
             if let message = manager.errorMessage {
                 Text(message)
+                    .designText(.caption)
                     .foregroundStyle(.red)
                     .accessibilityIdentifier("subjectError")
             }
@@ -37,6 +39,7 @@ struct SubjectSettingsView: View {
             }
         }
         .padding()
+        .designCanvas()
     }
 }
 

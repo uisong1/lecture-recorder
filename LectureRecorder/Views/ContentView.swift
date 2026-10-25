@@ -35,12 +35,14 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 if let startupError = dependencies.startupError {
                     Label(startupError, systemImage: "exclamationmark.triangle")
+                        .designText(.caption)
                         .foregroundStyle(.orange)
                         .padding(8)
                 }
                 if let notice = dependencies.recoveryNotice {
                     Label(notice, systemImage: "arrow.counterclockwise")
-                        .foregroundStyle(.blue)
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.primary)
                         .padding(8)
                         .accessibilityIdentifier("recoveryNotice")
                 }

@@ -16,25 +16,30 @@ struct RecordingListView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(recording.title)
-                                .font(.headline)
+                                .designText(.bodyStrong)
+                                .foregroundStyle(Design.Palette.ink)
                                 .accessibilityIdentifier("recordingRow")
                             Text("\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(RecordingController.format(recording.duration))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .designText(.caption)
+                                .foregroundStyle(Design.Palette.inkMuted)
                         }
                         Spacer()
                         Button(playback.current === recording && playback.isPlaying ? "일시정지" : "듣기") {
                             playback.select(recording)
                             playback.togglePlayPause()
                         }
+                        .buttonStyle(.textLink)
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .scrollContentBackground(.hidden)
+        .designCanvas()
         .overlay(alignment: .bottom) {
             if let message = library.errorMessage ?? playback.errorMessage {
                 Label(message, systemImage: "exclamationmark.triangle")
+                    .designText(.caption)
                     .foregroundStyle(.red)
                     .padding(8)
             }

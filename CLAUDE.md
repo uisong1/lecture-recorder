@@ -99,4 +99,5 @@ open "$(xcodebuild -scheme LectureRecorder -showBuildSettings | awk '/ BUILT_PRO
 - 실패 상황을 무시하지 않는다: 마이크 권한 거부, 저장 공간 부족, 녹음 중 앱 종료. 사용자에게 알리고 로그를 남긴다.
 - 강제 언래핑(`!`)과 `try!`는 테스트 코드 밖에서 쓰지 않는다.
 - UI 문구는 한국어로 쓴다.
+- 모든 화면 작업은 `DESIGN.md`를 따른다. 색·글자·모서리는 `LectureRecorder/Views/Design/DesignSystem.swift`의 토큰만 쓰고, 강조색은 Action Blue 하나, 그림자는 쓰지 않는다.
 - API 키 같은 비밀값은 코드나 저장소에 넣지 않고 Keychain에 저장한다.
