@@ -21,11 +21,15 @@ struct SubjectSettingsView: View {
                     .accessibilityIdentifier("subjectError")
             }
 
-            List {
-                ForEach(manager.subjects) { subject in
-                    SubjectRow(subject: subject, manager: manager)
+            // List 행 안의 텍스트 필드는 클릭해도 행 선택만 되고 포커스를 받지 않아 ScrollView를 쓴다.
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach(manager.subjects) { subject in
+                        SubjectRow(subject: subject, manager: manager)
+                    }
                 }
             }
+            .frame(maxHeight: .infinity)
             .overlay {
                 if manager.subjects.isEmpty {
                     ContentUnavailableView("과목이 없습니다", systemImage: "books.vertical", description: Text("위에서 과목을 추가하세요."))
@@ -48,7 +52,7 @@ private struct SubjectRow: View {
                 set: { color in manager.perform { try manager.setColor(color, for: subject) } }
             ))
             TextField("과목 이름", text: $name)
-                .textFieldStyle(.plain)
+                .textFieldStyle(.roundedBorder)
                 .onSubmit { manager.perform { try manager.rename(subject, to: name) } }
                 .accessibilityIdentifier("subjectName-\(subject.name)")
             Spacer()

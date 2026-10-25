@@ -24,7 +24,7 @@ final class SubjectSettingsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["subjectError"].waitForExistence(timeout: 5))
 
         let row = app.textFields["subjectName-자료구조"]
-        row.doubleClick()
+        row.click()
         row.typeKey("a", modifierFlags: .command)
         row.typeText("자료구조론\r")
         XCTAssertTrue(app.textFields["subjectName-자료구조론"].waitForExistence(timeout: 5))
