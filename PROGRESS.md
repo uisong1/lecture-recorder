@@ -1,5 +1,9 @@
 # PROGRESS
 
+## 2026-10-25 1-15 탐색 슬라이더와 배속
+- 한 일: `AudioPlaying`에 `rate`·`seek(to:)` 추가, `PlaybackController.seek/setRate`와 `PlaybackRate`(1.0/1.25/1.5/2.0), 목록 아래 `PlaybackBar`(슬라이더 + 배속 선택, DESIGN.md 토큰 사용). 단위 테스트 5개 추가.
+- 확인 필요: 실제 소리 속도와 슬라이더 드래그는 Mac에서 직접 확인해 주세요 (CI는 빌드·단위 테스트만).
+
 ## 2026-10-25 1-14 재생 서비스
 - 한 일: `AudioPlaying`·`SystemAudioPlayer`·`PlaybackController`와 목록의 재생/일시정지 버튼은 1-9 때 이미 구현돼 있어 완료 기준을 확인하고 1-14를 체크. 재생 종료 갱신 테스트 1개 추가.
 - 다음: 1-15 탐색 슬라이더와 배속.

@@ -36,6 +36,9 @@ struct RecordingListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .scrollContentBackground(.hidden)
         .designCanvas()
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if playback.current != nil { PlaybackBar(playback: playback) }
+        }
         .overlay(alignment: .bottom) {
             if let message = library.errorMessage ?? playback.errorMessage {
                 Label(message, systemImage: "exclamationmark.triangle")
