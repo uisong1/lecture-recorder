@@ -11,9 +11,10 @@ import AVFoundation
 
 /// `AVAudioFile`로 읽고 써서 AAC(모노 64kbps)로 압축한다. 90분에 약 43MB, 3시간에 약 86MB.
 public struct SystemAudioConverter: AudioConverting {
-    public static var outputSettings: [String: Any] { [
+    /// 입력과 같은 샘플레이트로 쓴다. 다르게 쓰면 길이가 어긋난다.
+    public static func outputSettings(sampleRate: Double) -> [String: Any] { [
         AVFormatIDKey: kAudioFormatMPEG4AAC,
-        AVSampleRateKey: 44_100,
+        AVSampleRateKey: sampleRate,
         AVNumberOfChannelsKey: 1,
         AVEncoderBitRateKey: 64_000,
         AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
@@ -37,7 +38,7 @@ public struct SystemAudioConverter: AudioConverting {
         // 변환이 끝나 변수 범위를 벗어나야 파일이 닫히고 m4a 끝부분이 쓰인다.
         var output: AVAudioFile? = try AVAudioFile(
             forWriting: destination,
-            settings: Self.outputSettings,
+            settings: Self.outputSettings(sampleRate: format.sampleRate),
             commonFormat: format.commonFormat,
             interleaved: format.isInterleaved
         )
