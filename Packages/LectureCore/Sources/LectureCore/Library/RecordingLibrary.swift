@@ -43,6 +43,16 @@ public final class RecordingLibrary {
     static let sortOrderKey = "recordingSortOrder"
 
     private var all: [Recording] = []
+    /// 분류마다 녹음 수. `reload`에서 한 번 세어 두고, 사이드바를 그릴 때마다 다시 세지 않는다.
+    private var counts = Counts()
+    /// 목록 행의 상태(파일 존재 확인) 결과. 보이는 행만 채워지고 `reload`에서 비운다.
+    @ObservationIgnored private var statusCache: [PersistentIdentifier: (path: String, status: RecordingRowStatus)] = [:]
+
+    private struct Counts {
+        var all = 0
+        var unclassified = 0
+        var bySubject: [PersistentIdentifier: Int] = [:]
+    }
     private let context: ModelContext
     private let now: @MainActor () -> Date
     private let calendar: Calendar
@@ -78,7 +88,22 @@ public final class RecordingLibrary {
         if case .subject(let id) = selection, !subjects.contains(where: { $0.persistentModelID == id }) {
             selection = nil
         }
+        counts = Self.count(all)
+        statusCache = [:]
         recordings = filtered(by: selection)
+    }
+
+    private static func count(_ recordings: [Recording]) -> Counts {
+        var counts = Counts()
+        counts.all = recordings.count
+        for recording in recordings {
+            if let id = recording.subject?.persistentModelID {
+                counts.bySubject[id, default: 0] += 1
+            } else {
+                counts.unclassified += 1
+            }
+        }
+        return counts
     }
 
     public func select(_ selection: LibrarySelection?) {
@@ -87,8 +112,23 @@ public final class RecordingLibrary {
     }
 
     /// 분류에 들어 있는 녹음 수. 검색·기간 조건과 상관없는 전체 수다.
+    /// `reload` 때 세어 둔 값이라, 녹음을 바꾼 뒤에는 `reload`를 불러야 맞게 갱신된다.
     public func count(for selection: LibrarySelection) -> Int {
-        inCategory(selection).count
+        switch selection {
+        case .all: counts.all
+        case .unclassified: counts.unclassified
+        case .subject(let id): counts.bySubject[id] ?? 0
+        }
+    }
+
+    /// 목록 행에 보일 상태. 파일 존재 확인은 행이 처음 그려질 때 한 번만 하고 `reload`까지 같은 결과를 쓴다
+    /// (경로가 바뀐 녹음은 다시 확인한다). 재생 가능 여부는 이 값이 아니라 `RecordingManager.canPlay`가 그때그때 확인한다.
+    public func rowStatus(for recording: Recording, using manager: RecordingManager) -> RecordingRowStatus {
+        let id = recording.persistentModelID
+        if let cached = statusCache[id], cached.path == recording.relativePath { return cached.status }
+        let status = manager.status(for: recording)
+        statusCache[id] = (recording.relativePath, status)
+        return status
     }
 
     /// 고른 분류의 북마크를 모아 본 목록. 최근 녹음부터, 같은 녹음 안에서는 시점 순서다.
