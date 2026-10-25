@@ -82,20 +82,21 @@ import Testing
         #expect(exists("2026-10-26/default.store"))
     }
 
-    @Test func 세_개를_넘으면_가장_오래된_백업부터_지운다() {
+    @Test func 세_개를_넘으면_그_주의_가장_오래된_것만_남기고_지운다() {
         addStore()
-        for day in ["2026-10-20", "2026-10-21", "2026-10-22"] { addOldBackup(day) }
+        for day in ["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22"] { addOldBackup(day) }
 
         let outcome = backup().backupIfNeeded()
 
         #expect(outcome == .created(day: "2026-10-25", removedOld: 1))
+        #expect(exists("2026-10-19/default.store"))
         #expect(!exists("2026-10-20/default.store"))
         #expect(exists("2026-10-21/default.store"))
         #expect(exists("2026-10-22/default.store"))
         #expect(exists("2026-10-25/default.store"))
     }
 
-    @Test func 한꺼번에_많이_쌓여_있어도_세_개만_남긴다() {
+    @Test func 한꺼번에_많이_쌓여_있어도_최근_세_개와_주마다_하나만_남긴다() {
         addStore()
         for day in ["2026-09-01", "2026-09-02", "2026-09-03", "2026-10-01", "2026-10-02"] { addOldBackup(day) }
 
@@ -107,7 +108,7 @@ import Testing
 
     @Test func 날짜_폴더가_아닌_항목은_건드리지_않는다() {
         addStore()
-        for day in ["2026-10-22", "2026-10-23", "2026-10-24"] { addOldBackup(day) }
+        for day in ["2026-09-01", "2026-09-02", "2026-09-03"] { addOldBackup(day) }
         files.add(backups.appending(path: "메모.txt"))
         files.add(backups.appending(path: "2026-10-2x/default.store"))
 
@@ -115,7 +116,7 @@ import Testing
 
         #expect(exists("메모.txt"))
         #expect(exists("2026-10-2x/default.store"))
-        #expect(!exists("2026-10-22/default.store"))
+        #expect(!exists("2026-09-01/default.store"))
     }
 
     @Test func 복사에_실패하면_앱은_계속_되고_예전_백업은_남는다() {
@@ -174,5 +175,52 @@ import Testing
     ])
     func 날짜_폴더_이름을_알아본다(name: String, expected: Bool) {
         #expect(StoreBackup.isDayName(name) == expected)
+    }
+
+    // MARK: - 보관 규칙 (순수 함수)
+
+    /// 2026-10-25(일)가 든 주는 10-19(월)~10-25(일). 이번 주 포함 4주 = 9-28부터.
+    func removed(_ names: [String], calendar: Calendar = seoulCalendar) -> [String] {
+        StoreBackup.daysToRemove(from: names, now: date(2026, 10, 25, 9, 0), calendar: calendar)
+    }
+
+    @Test func 세_개_이하면_아무것도_지우지_않는다() {
+        #expect(removed([]).isEmpty)
+        #expect(removed(["2026-10-25"]).isEmpty)
+        #expect(removed(["2026-08-01", "2026-09-01", "2026-10-25"]).isEmpty)
+    }
+
+    @Test func 지난_4주는_주마다_가장_오래된_하나를_남긴다() {
+        let names = [
+            "2026-09-28", "2026-09-29", "2026-10-05", "2026-10-06", "2026-10-12", "2026-10-13",
+            "2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-25",
+        ]
+        // 최근 3개(10-25, 10-22, 10-21)와 주마다 가장 오래된 것(9-28, 10-05, 10-12, 10-19)이 남는다.
+        #expect(removed(names) == ["2026-09-29", "2026-10-06", "2026-10-13", "2026-10-20"])
+    }
+
+    @Test func 다섯_주_전부터는_지운다() {
+        let names = ["2026-09-21", "2026-09-27", "2026-09-28", "2026-10-23", "2026-10-24", "2026-10-25"]
+        // 9-27(일)은 9-21 주라서 4주 밖이다. 9-28(월)은 4주 안이라 그 주의 하나로 남는다.
+        #expect(removed(names) == ["2026-09-21", "2026-09-27"])
+    }
+
+    @Test func 한_주에_하나뿐이면_그_하나는_남는다() {
+        let names = ["2026-10-14", "2026-10-07", "2026-09-30", "2026-10-23", "2026-10-24", "2026-10-25"]
+        #expect(removed(names).isEmpty)
+    }
+
+    @Test func 날짜_형식이_아니거나_없는_날짜는_건드리지_않는다() {
+        let names = ["메모.txt", "2026-10-2x", "2026-13-45", "2026-02-30", "2026-1-5", "2026-01-01", "2026-01-02", "2026-01-03", "2026-10-25"]
+        #expect(removed(names) == ["2026-01-01"])
+    }
+
+    @Test func 사용자의_첫_요일_설정과_상관없이_같은_결과다() {
+        var sunday = seoulCalendar
+        sunday.firstWeekday = 1
+        var monday = seoulCalendar
+        monday.firstWeekday = 2
+        let names = ["2026-09-27", "2026-09-28", "2026-10-04", "2026-10-05", "2026-10-18", "2026-10-19", "2026-10-25"]
+        #expect(removed(names, calendar: sunday) == removed(names, calendar: monday))
     }
 }
