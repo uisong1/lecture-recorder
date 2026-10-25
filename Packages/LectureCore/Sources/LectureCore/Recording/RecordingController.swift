@@ -85,7 +85,7 @@ public final class RecordingController {
     /// "mm:ss". 한 시간이 넘으면 분이 60 이상으로 늘어난다 (예: 95:03).
     public var elapsedText: String { Self.format(elapsed) }
 
-    public static func format(_ seconds: TimeInterval) -> String {
+    nonisolated public static func format(_ seconds: TimeInterval) -> String {
         let total = max(0, Int(seconds))
         let minutes = total / 60
         let secs = total % 60
@@ -162,7 +162,7 @@ public final class RecordingController {
     }
 
     /// "자료구조 3월 2일 10:00"
-    public static func defaultTitle(subjectName: String, startedAt: Date, calendar: Calendar) -> String {
+    nonisolated public static func defaultTitle(subjectName: String, startedAt: Date, calendar: Calendar) -> String {
         let c = calendar.dateComponents([.month, .day, .hour, .minute], from: startedAt)
         let time = (try? TimeOfDay(hour: c.hour ?? 0, minute: c.minute ?? 0))?.description ?? ""
         return "\(subjectName) \(c.month ?? 0)월 \(c.day ?? 0)일 \(time)"
