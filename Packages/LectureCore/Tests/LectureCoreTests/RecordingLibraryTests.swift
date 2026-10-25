@@ -89,5 +89,74 @@ import Testing
         #expect(library.selection == nil)
         #expect(library.subjects.isEmpty)
     }
+
+    // MARK: 검색과 기간
+
+    func makeLibrary(now: Date = date(2026, 3, 30, 15, 0)) -> RecordingLibrary {
+        RecordingLibrary(context: context, now: { now }, calendar: seoulCalendar)
+    }
+
+    @Test func 검색어를_넣으면_제목으로_걸러진다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        addRecording("트리 복습", subject: ds, at: date(2026, 3, 29, 10, 0))
+        addRecording("그래프", subject: ds, at: date(2026, 3, 28, 10, 0))
+        let library = makeLibrary()
+        library.select(.subject(ds.persistentModelID))
+
+        library.filter.query = "트리"
+        #expect(library.recordings.map(\.title) == ["트리 복습"])
+
+        library.filter.query = ""
+        #expect(library.recordings.count == 2)
+    }
+
+    @Test func 기간을_고르면_오래된_녹음이_빠진다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        addRecording("이번 주", subject: ds, at: date(2026, 3, 28, 10, 0))
+        addRecording("지난달", subject: ds, at: date(2026, 2, 10, 10, 0))
+        let library = makeLibrary()
+        library.select(.subject(ds.persistentModelID))
+
+        library.filter.period = .last7Days
+        #expect(library.recordings.map(\.title) == ["이번 주"])
+        library.filter.period = .last30Days
+        #expect(library.recordings.map(\.title) == ["이번 주"])
+        library.filter.period = .all
+        #expect(library.recordings.count == 2)
+    }
+
+    @Test func 과목을_바꿔도_검색_조건은_유지된다() throws {
+        let subjects = SubjectManager(context: context)
+        let ds = try subjects.add(name: "자료구조", color: .green)
+        let os = try subjects.add(name: "운영체제", color: .blue)
+        addRecording("트리", subject: ds, at: date(2026, 3, 29, 10, 0))
+        addRecording("트리 구조", subject: os, at: date(2026, 3, 29, 11, 0))
+        addRecording("프로세스", subject: os, at: date(2026, 3, 29, 12, 0))
+        let library = makeLibrary()
+        library.filter.query = "트리"
+
+        library.select(.subject(os.persistentModelID))
+        #expect(library.recordings.map(\.title) == ["트리 구조"])
+    }
+
+    @Test func 사이드바_개수는_검색_조건과_상관없다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        addRecording("트리", subject: ds, at: date(2026, 3, 29, 10, 0))
+        addRecording("그래프", subject: ds, at: date(2026, 3, 28, 10, 0))
+        let library = makeLibrary()
+        library.filter.query = "트리"
+        #expect(library.count(for: .subject(ds.persistentModelID)) == 2)
+    }
+
+    @Test func 다시_읽어도_검색_조건이_적용된다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        addRecording("트리", subject: ds, at: date(2026, 3, 29, 10, 0))
+        let library = makeLibrary()
+        library.select(.subject(ds.persistentModelID))
+        library.filter.query = "그래프"
+        addRecording("그래프", subject: ds, at: date(2026, 3, 29, 11, 0))
+        library.reload()
+        #expect(library.recordings.map(\.title) == ["그래프"])
+    }
 }
 #endif

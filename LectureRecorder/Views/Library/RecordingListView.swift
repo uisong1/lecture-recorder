@@ -13,7 +13,10 @@ struct RecordingListView: View {
 
     var body: some View {
         Group {
-            if library.recordings.isEmpty {
+            if library.recordings.isEmpty && library.filter.isActive {
+                ContentUnavailableView("조건에 맞는 녹음이 없습니다", systemImage: "magnifyingglass", description: Text("검색어나 기간을 바꿔 보세요."))
+                    .accessibilityIdentifier("noMatchingRecordings")
+            } else if library.recordings.isEmpty {
                 ContentUnavailableView("녹음이 없습니다", systemImage: "waveform", description: Text("이 과목으로 녹음한 수업이 여기에 나타납니다."))
                     .accessibilityIdentifier("emptyRecordings")
             } else {
@@ -53,6 +56,16 @@ struct RecordingListView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .searchable(text: Binding(get: { library.filter.query }, set: { library.filter.query = $0 }), prompt: "제목 검색")
+        .toolbar {
+            ToolbarItem {
+                Picker("기간", selection: Binding(get: { library.filter.period }, set: { library.filter.period = $0 })) {
+                    ForEach(RecordingPeriod.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("periodFilter")
+            }
+        }
         .scrollContentBackground(.hidden)
         .designCanvas()
         .alert("이름 변경", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
