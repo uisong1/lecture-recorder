@@ -117,5 +117,57 @@ import Testing
         #expect(controller.rate == .x150)
         #expect(player.rate == 1.5)
     }
+
+    func addBookmarks(_ times: [TimeInterval], to recording: Recording) {
+        for time in times {
+            recording.bookmarks.append(Bookmark(time: time, createdAt: date(2026, 3, 2, 10, 30), recording: recording))
+        }
+    }
+
+    @Test func 북마크를_누르면_그_시점부터_재생한다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        addBookmarks([45], to: recording)
+        controller.select(recording)
+        controller.play(from: controller.bookmarks[0])
+        #expect(controller.currentTime == 45)
+        #expect(controller.isPlaying)
+    }
+
+    @Test func 일시정지_중에도_북마크로_이동하면_재생이_시작된다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        addBookmarks([10], to: recording)
+        controller.select(recording)
+        controller.play()
+        controller.pause()
+        controller.play(from: controller.bookmarks[0])
+        #expect(controller.isPlaying)
+        #expect(controller.currentTime == 10)
+    }
+
+    @Test func 길이를_넘는_북마크는_끝으로_맞춘다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        addBookmarks([999], to: recording)
+        controller.select(recording)
+        controller.play(from: controller.bookmarks[0])
+        #expect(controller.currentTime == 60)
+    }
+
+    @Test func 슬라이더_표시_위치는_길이_대비_비율이다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        addBookmarks([30, 15, 999], to: recording)
+        controller.select(recording)
+        #expect(controller.bookmarks.map(\.time) == [15, 30, 999])
+        #expect(controller.bookmarkMarkers == [0.25, 0.5, 1])
+    }
+
+    @Test func 불러온_녹음이_없으면_북마크_표시가_없다() {
+        let controller = makeController()
+        #expect(controller.bookmarks.isEmpty)
+        #expect(controller.bookmarkMarkers.isEmpty)
+    }
 }
 #endif
