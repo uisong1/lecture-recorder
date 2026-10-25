@@ -37,7 +37,12 @@ public struct LocalFileStore: FileStoring {
     }
 
     public func trashItem(at url: URL) throws {
+        #if os(macOS)
         try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        #else
+        // Linux(CI)에는 휴지통이 없다. 앱은 macOS에서만 돈다.
+        throw CocoaError(.featureUnsupported)
+        #endif
     }
 
     public func copyItem(at source: URL, to destination: URL) throws {
