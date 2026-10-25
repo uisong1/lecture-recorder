@@ -14,7 +14,10 @@ import Testing
             #expect(SubjectColor(rawValue: color.rawValue) == color)
         }
     }
+}
 
+#if canImport(SwiftData)
+@Suite struct SubjectColorStorageTests {
     @Test func 과목은_알_수_없는_저장값이면_회색으로_본다() {
         let subject = Subject(name: "자료구조", color: .red)
         #expect(subject.color == .red)
@@ -29,3 +32,4 @@ import Testing
         #expect(subject.colorRawValue == "teal")
     }
 }
+#endif
