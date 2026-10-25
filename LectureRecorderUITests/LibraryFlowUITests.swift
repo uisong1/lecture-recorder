@@ -103,13 +103,21 @@ final class LibraryFlowUITests: XCTestCase {
         subjectMenu.click()
         app.menuItems["자료구조"].click()
 
+        // 모든 녹음에는 두 과목의 녹음이 섞여 있고, 과목별로 보면 각각 하나씩이다.
         openSidebar("sidebar-all", in: app)
-
         XCTAssertTrue(app.staticTexts["recordingRow"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.staticTexts.matching(identifier: "recordingRow").count, 2)
-        let subjectNames = NSPredicate(format: "value BEGINSWITH %@", "자료구조 ·")
-        XCTAssertTrue(app.staticTexts.matching(subjectNames).firstMatch.waitForExistence(timeout: 5))
-        let unclassified = NSPredicate(format: "value BEGINSWITH %@", "미분류 ·")
-        XCTAssertTrue(app.staticTexts.matching(unclassified).firstMatch.waitForExistence(timeout: 5))
+
+        openSidebar("sidebar-subject-자료구조", in: app)
+        XCTAssertTrue(app.staticTexts["recordingRow"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts.matching(identifier: "recordingRow").count, 1)
+
+        openSidebar("sidebar-unclassified", in: app)
+        XCTAssertTrue(app.staticTexts["recordingRow"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts.matching(identifier: "recordingRow").count, 1)
+
+        openSidebar("sidebar-all", in: app)
+        XCTAssertTrue(app.staticTexts["recordingRow"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts.matching(identifier: "recordingRow").count, 2)
     }
 }
