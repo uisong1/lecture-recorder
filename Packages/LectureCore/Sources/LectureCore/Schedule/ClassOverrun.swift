@@ -23,10 +23,10 @@ extension ClassSchedule {
         let lead = max(leadMinutes, 0) * 60
 
         let mine = entries.filter { $0.subjectID == subjectID && $0.period.weekday == weekday }
-        guard var current = mine
-            .filter { $0.period.start.minutesSinceMidnight * 60 - lead <= seconds && seconds < $0.period.end.minutesSinceMidnight * 60 }
-            .min(by: { $0.period.start < $1.period.start })
-        else { return nil }
+        let candidates = mine.filter { entry in
+            entry.period.start.minutesSinceMidnight * 60 - lead <= seconds && seconds < entry.period.end.minutesSinceMidnight * 60
+        }
+        guard var current = candidates.min(by: { $0.period.start < $1.period.start }) else { return nil }
         while let next = mine.first(where: { $0.period.start == current.period.end }) {
             current = next
         }
