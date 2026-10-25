@@ -1,5 +1,6 @@
 import LectureCore
 import AppKit
+import SwiftData
 import SwiftUI
 
 /// 녹음 버튼 하나로 시작·정지하는 화면.
@@ -22,6 +23,16 @@ struct RecordingView: View {
                             .designText(.caption)
                             .foregroundStyle(Design.Palette.inkMuted)
                             .accessibilityIdentifier("expectedSubject")
+                        Picker("과목", selection: Bindable(recording).subjectChoice) {
+                            Text("자동 (시간표)").tag(SubjectChoice.automatic)
+                            ForEach(recording.availableSubjects()) { subject in
+                                Text(subject.name).tag(SubjectChoice.subject(subject.persistentModelID))
+                            }
+                            Text("미분류").tag(SubjectChoice.unclassified)
+                        }
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .accessibilityIdentifier("subjectChoice")
                     }
                     Text(recording.elapsedText)
                         .designText(.hero)
