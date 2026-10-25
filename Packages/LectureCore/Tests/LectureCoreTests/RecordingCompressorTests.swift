@@ -46,6 +46,21 @@ import Testing
         #expect(!files.fileExists(at: root.appending(path: "자료구조/a.converting.m4a")))
     }
 
+    @Test func 압축하는_동안_다른_과목으로_옮겨도_옮긴_폴더에_m4a를_둔다() async throws {
+        let other = try SubjectManager(context: container.mainContext).add(name: "선형대수", color: .blue)
+        let recording = try addRecording("자료구조/a.caf")
+        let manager = RecordingManager(context: container.mainContext, storage: RecordingStorage(root: root, files: files))
+        converter.whileConverting = { try? manager.move(recording, to: other) }
+
+        #expect(await compressor.compress(recording))
+
+        #expect(recording.relativePath == "선형대수/a.m4a")
+        #expect(files.fileExists(at: root.appending(path: "선형대수/a.m4a")))
+        #expect(!files.fileExists(at: root.appending(path: "선형대수/a.caf")))
+        #expect(!files.fileExists(at: root.appending(path: "자료구조/a.caf")))
+        #expect(!files.fileExists(at: root.appending(path: "자료구조/a.converting.m4a")))
+    }
+
     @Test func 변환에_실패하면_CAF와_경로를_그대로_둔다() async throws {
         converter.error = CocoaError(.fileWriteUnknown)
         let recording = try addRecording("자료구조/a.caf")

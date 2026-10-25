@@ -50,7 +50,7 @@ struct ContentView: View {
                 case .library:
                     RecordingListView(library: dependencies.library, playback: dependencies.playback, manager: dependencies.manager)
                 default:
-                    RecordingView(recording: dependencies.recording, playback: dependencies.playback)
+                    RecordingView(recording: dependencies.recording, playback: dependencies.playback, manager: dependencies.manager)
                 }
             }
         }
