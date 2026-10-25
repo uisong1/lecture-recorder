@@ -51,7 +51,7 @@ import Testing
         #expect(spans.map(\.end) == [180, 225])
     }
 
-    @Test func 1초라도_떨어지면_나눈다() {
+    @Test func 일_초라도_떨어지면_나눈다() {
         let spans = BookmarkTour.spans(bookmarkTimes: [10, 41], duration: 600)
         #expect(spans.count == 2)
     }
