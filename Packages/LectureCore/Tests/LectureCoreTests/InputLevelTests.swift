@@ -90,7 +90,7 @@ import SwiftData
         #expect(!controller.isInputSilent)
     }
 
-    @Test func 10초_넘게_무음이면_경고하고_소리가_나면_사라진다() async throws {
+    @Test func 십_초_넘게_무음이면_경고하고_소리가_나면_사라진다() async throws {
         try await controller.start()
         recorder.inputLevel = 0
         controller.sampleInputLevel()
