@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  linux-core:
+    name: LectureCore (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.1-noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift test
+        run: |
+          if [ -d Packages/LectureCore ]; then
+            swift test --package-path Packages/LectureCore
+          else
+            echo "패키지 없음, 건너뜀"
+          fi
+
+  macos:
+    name: macOS 빌드와 테스트
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode 버전
+        run: xcodebuild -version && swift --version
+      - name: 빌드·테스트·실행 확인
+        run: scripts/ci.sh
