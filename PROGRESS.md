@@ -97,3 +97,7 @@
 ## 2026-10-25 3-28 '모든 녹음' 보기
 - 한 일: `LibrarySelection.all`, 사이드바 "모든 녹음"(개수 표시), 이 보기에서만 행에 과목 이름 표시(`showsSubjectName`). 검색·기간 필터는 그대로 동작. 단위 테스트 4개.
 - Mac에서 확인 필요: 사이드바 맨 위 "모든 녹음"을 눌러 과목이 섞여 최신순으로 나오고 행에 과목 이름이 보이는지, 검색이 되는지.
+
+## 2026-10-25 3-38 북마크 모아보기
+- 한 일: `RecordingLibrary.bookmarkEntries`·`bookmarkCount`, `RecordingFilter.matches(title:note:...)`(제목 또는 메모 검색), 녹음 목록의 "녹음 | 북마크" 전환과 `BookmarkOverviewView`. 단위 테스트 5개.
+- Mac에서 확인 필요: 목록 도구 모음에서 "북마크"로 바꿔 북마크가 모이는지, 검색창에 메모 일부를 쳐 걸러지는지, 누르면 그 시점부터 재생되는지.

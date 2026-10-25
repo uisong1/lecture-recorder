@@ -11,10 +11,14 @@ struct RecordingListView: View {
     @State private var renaming: Recording?
     @State private var renameText = ""
     @State private var deleting: Recording?
+    /// 녹음 목록 대신 북마크를 모아 본다.
+    @State private var showsBookmarks = false
 
     var body: some View {
         Group {
-            if library.recordings.isEmpty && library.filter.isActive {
+            if showsBookmarks {
+                BookmarkOverviewView(library: library, playback: playback)
+            } else if library.recordings.isEmpty && library.filter.isActive {
                 ContentUnavailableView("조건에 맞는 녹음이 없습니다", systemImage: "magnifyingglass", description: Text("검색어나 기간을 바꿔 보세요."))
                     .accessibilityIdentifier("noMatchingRecordings")
             } else if library.recordings.isEmpty {
@@ -65,8 +69,16 @@ struct RecordingListView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .searchable(text: Binding(get: { library.filter.query }, set: { library.filter.query = $0 }), prompt: "제목 검색")
+        .searchable(text: Binding(get: { library.filter.query }, set: { library.filter.query = $0 }), prompt: showsBookmarks ? "메모·제목 검색" : "제목 검색")
         .toolbar {
+            ToolbarItem {
+                Picker("보기", selection: $showsBookmarks) {
+                    Text("녹음").tag(false)
+                    Text("북마크").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("listModePicker")
+            }
             ToolbarItem {
                 Picker("기간", selection: Binding(get: { library.filter.period }, set: { library.filter.period = $0 })) {
                     ForEach(RecordingPeriod.allCases, id: \.self) { Text($0.label).tag($0) }

@@ -99,6 +99,89 @@ import Testing
         #expect(!library.showsSubjectName)
     }
 
+    @Test func 북마크를_녹음_최신순_시점순으로_모아_보고_북마크_없는_녹음은_뺀다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let monday = addRecording("월요일", subject: ds, at: date(2026, 3, 2, 10, 0))
+        let wednesday = addRecording("수요일", subject: ds, at: date(2026, 3, 4, 10, 0))
+        addRecording("북마크 없음", subject: ds, at: date(2026, 3, 3, 10, 0))
+        let at = date(2026, 3, 5, 0, 0)
+        context.insert(Bookmark(time: 300, note: "정리", createdAt: at, recording: monday))
+        context.insert(Bookmark(time: 60, note: "시험 범위", createdAt: at, recording: monday))
+        context.insert(Bookmark(time: 90, note: "", createdAt: at, recording: wednesday))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+
+        #expect(library.bookmarkEntries.map(\.recording.title) == ["수요일", "월요일", "월요일"])
+        #expect(library.bookmarkEntries.map(\.bookmark.time) == [90, 60, 300])
+        #expect(library.bookmarkCount(for: .all) == 3)
+    }
+
+    @Test func 북마크_검색은_메모와_녹음_제목을_함께_찾는다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let monday = addRecording("중간고사 대비", subject: ds, at: date(2026, 3, 2, 10, 0))
+        let wednesday = addRecording("수요일", subject: ds, at: date(2026, 3, 4, 10, 0))
+        let at = date(2026, 3, 5, 0, 0)
+        context.insert(Bookmark(time: 10, note: "별건", createdAt: at, recording: monday))
+        context.insert(Bookmark(time: 20, note: "시험에 나온다고 함", createdAt: at, recording: wednesday))
+        context.insert(Bookmark(time: 30, note: "다른 이야기", createdAt: at, recording: wednesday))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        library.filter.query = "시험"
+        #expect(library.bookmarkEntries.map(\.bookmark.time) == [20])
+
+        library.filter.query = "중간고사"
+        #expect(library.bookmarkEntries.map(\.bookmark.time) == [10])
+
+        library.filter.query = "없는말"
+        #expect(library.bookmarkEntries.isEmpty)
+        // 분류 전체 수는 검색과 상관없다.
+        #expect(library.bookmarkCount(for: .all) == 3)
+    }
+
+    @Test func 북마크는_고른_과목만_모아_본다() throws {
+        let subjects = SubjectManager(context: context)
+        let ds = try subjects.add(name: "자료구조", color: .green)
+        let os = try subjects.add(name: "운영체제", color: .blue)
+        let a = addRecording("a", subject: ds, at: date(2026, 3, 2, 10, 0))
+        let b = addRecording("b", subject: os, at: date(2026, 3, 3, 10, 0))
+        let at = date(2026, 3, 5, 0, 0)
+        context.insert(Bookmark(time: 10, createdAt: at, recording: a))
+        context.insert(Bookmark(time: 20, createdAt: at, recording: b))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.subject(os.persistentModelID))
+        #expect(library.bookmarkEntries.map(\.bookmark.time) == [20])
+        #expect(library.bookmarkCount(for: .subject(ds.persistentModelID)) == 1)
+    }
+
+    @Test func 북마크_모아보기에도_기간_필터가_녹음_날짜로_적용된다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let old = addRecording("오래된", subject: ds, at: date(2026, 1, 5, 10, 0))
+        let recent = addRecording("최근", subject: ds, at: date(2026, 3, 1, 10, 0))
+        let at = date(2026, 3, 5, 0, 0)
+        context.insert(Bookmark(time: 10, createdAt: at, recording: old))
+        context.insert(Bookmark(time: 20, createdAt: at, recording: recent))
+        try context.save()
+
+        let library = RecordingLibrary(context: context, now: { date(2026, 3, 5, 12, 0) }, calendar: seoulCalendar)
+        library.select(.all)
+        library.filter.period = .last7Days
+        #expect(library.bookmarkEntries.map(\.bookmark.time) == [20])
+    }
+
+    @Test func 북마크가_하나도_없으면_모아보기가_비어_있다() throws {
+        addRecording("a", subject: nil, at: date(2026, 3, 2, 10, 0))
+        try context.save()
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        #expect(library.bookmarkEntries.isEmpty)
+    }
+
     @Test func 아무것도_고르지_않으면_목록이_비어_있다() throws {
         addRecording("a", subject: nil, at: date(2026, 3, 2, 10, 0))
         try context.save()

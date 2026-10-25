@@ -11,6 +11,13 @@ public enum LibrarySelection: Hashable, Sendable {
     case unclassified
 }
 
+/// 북마크 모아보기의 한 줄: 북마크와 그것이 속한 녹음.
+public struct BookmarkEntry: Identifiable {
+    public let bookmark: Bookmark
+    public let recording: Recording
+    public var id: PersistentIdentifier { bookmark.persistentModelID }
+}
+
 /// 과목별 녹음 목록을 보여주는 뷰모델.
 @MainActor
 @Observable
@@ -64,6 +71,22 @@ public final class RecordingLibrary {
     /// 분류에 들어 있는 녹음 수. 검색·기간 조건과 상관없는 전체 수다.
     public func count(for selection: LibrarySelection) -> Int {
         inCategory(selection).count
+    }
+
+    /// 고른 분류의 북마크를 모아 본 목록. 최근 녹음부터, 같은 녹음 안에서는 시점 순서다.
+    /// 북마크가 없는 녹음은 나오지 않는다. 검색어는 녹음 제목과 북마크 메모를 함께 찾고 기간은 녹음 날짜 기준이다.
+    public var bookmarkEntries: [BookmarkEntry] {
+        let current = now()
+        return inCategory(selection).flatMap { recording in
+            recording.sortedBookmarks
+                .filter { filter.matches(title: recording.title, note: $0.note, startedAt: recording.startedAt, now: current, calendar: calendar) }
+                .map { BookmarkEntry(bookmark: $0, recording: recording) }
+        }
+    }
+
+    /// 분류에 있는 북마크 수. 검색·기간 조건과 상관없는 전체 수다.
+    public func bookmarkCount(for selection: LibrarySelection) -> Int {
+        inCategory(selection).reduce(0) { $0 + $1.bookmarks.count }
     }
 
     /// 목록 행에 과목 이름을 함께 보여야 하는지. "모든 녹음"에서는 어느 과목인지 알 수 있어야 한다.

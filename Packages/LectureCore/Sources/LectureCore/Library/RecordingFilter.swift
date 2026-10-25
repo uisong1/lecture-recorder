@@ -47,6 +47,11 @@ public struct RecordingFilter: Equatable, Sendable {
         matchesQuery(title) && matchesPeriod(startedAt, now: now, calendar: calendar)
     }
 
+    /// 북마크용: 녹음 제목이나 북마크 메모 중 하나라도 검색어를 담으면 맞는다. 기간은 녹음 시작 시각으로 본다.
+    public func matches(title: String, note: String, startedAt: Date, now: Date, calendar: Calendar) -> Bool {
+        (matchesQuery(title) || matchesQuery(note)) && matchesPeriod(startedAt, now: now, calendar: calendar)
+    }
+
     private func matchesQuery(_ title: String) -> Bool {
         let query = normalizedQuery
         if query.isEmpty { return true }
