@@ -30,10 +30,12 @@ final class RecordingUITests: XCTestCase {
     }
 
     /// macOS에서 `Text`의 문구는 label이 아니라 value에 들어 있다.
+    @MainActor
     private func text(of element: XCUIElement) -> String {
         (element.value as? String) ?? element.label
     }
 
+    @MainActor
     private func wait(for element: XCUIElement, matching predicate: NSPredicate, timeout: TimeInterval = 5) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
