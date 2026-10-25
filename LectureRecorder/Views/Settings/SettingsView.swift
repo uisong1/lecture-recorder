@@ -7,9 +7,12 @@ struct SettingsView: View {
     let reminders: ClassReminderController
     let rescan: RecordingRescanModel
     let recording: RecordingController
+    let launchAtLogin: LaunchAtLoginModel
 
     var body: some View {
         TabView {
+            GeneralSettingsView(launchAtLogin: launchAtLogin)
+                .tabItem { Label("일반", systemImage: "gearshape") }
             SubjectSettingsView(manager: subjects)
                 .tabItem { Label("과목", systemImage: "books.vertical") }
             ScheduleSettingsView(subjects: subjects, manager: schedule)

@@ -22,6 +22,7 @@ final class AppDependencies {
     let manager: RecordingManager
     let timetableImport: TimetableImportModel
     let rescan: RecordingRescanModel
+    let launchAtLogin: LaunchAtLoginModel
 
     init() {
         var problems: [String] = []
@@ -74,6 +75,7 @@ final class AppDependencies {
         schedule.onChange = { Task { await reminders.reschedule() } }
         subjects.onChange = { Task { await reminders.reschedule() } }
         Task { await reminders.reschedule() }
+        launchAtLogin = LaunchAtLoginModel(controller: SystemLoginItem())
         library = RecordingLibrary(context: container.mainContext)
         manager = RecordingManager(context: container.mainContext, storage: storage)
         let context = container.mainContext

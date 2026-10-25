@@ -9,6 +9,8 @@ public final class Subject {
     public var colorRawValue: String
     /// 이 과목이 속한 학기 ("2026년 2학기"). 시간표 이미지를 가져올 때 정해지고, 직접 만든 과목은 비어 있다.
     public var semester: String = ""
+    /// 이 과목 녹음을 마지막으로 들은 재생 속도(`PlaybackRate.rawValue`). 0이면 정한 적 없다.
+    public var playbackRateRawValue: Float = 0
     @Relationship(deleteRule: .cascade, inverse: \TimeSlot.subject)
     public var timeSlots: [TimeSlot] = []
     /// 과목을 지워도 녹음은 남기고 미분류로 바꾼다.
@@ -18,6 +20,12 @@ public final class Subject {
     public init(name: String, color: SubjectColor = .blue) {
         self.name = name
         self.colorRawValue = color.rawValue
+    }
+
+    /// 이 과목에서 기억해 둔 재생 속도. 정한 적 없거나 알 수 없는 값이면 nil.
+    public var playbackRate: PlaybackRate? {
+        get { PlaybackRate(rawValue: playbackRateRawValue) }
+        set { playbackRateRawValue = newValue?.rawValue ?? 0 }
     }
 
     public var color: SubjectColor {
