@@ -37,6 +37,7 @@ struct ScheduleSettingsView: View {
                         TimePicker(label: "종료", time: $manager.draftEnd)
                         Spacer()
                         Button("추가", action: manager.addDraft)
+                            .buttonStyle(.pill)
                             .accessibilityIdentifier("addSlot")
                     }
                 }
@@ -44,6 +45,7 @@ struct ScheduleSettingsView: View {
 
             if let message = manager.errorMessage {
                 Text(message)
+                    .designText(.caption)
                     .foregroundStyle(.red)
                     .accessibilityIdentifier("slotError")
             }
@@ -77,6 +79,7 @@ struct ScheduleSettingsView: View {
             }
         }
         .padding()
+        .designCanvas()
         .onAppear {
             subjects.reload()
             manager.reload()
