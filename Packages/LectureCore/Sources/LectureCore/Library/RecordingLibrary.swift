@@ -181,6 +181,18 @@ public final class RecordingLibrary {
         recording.subject?.name ?? SubjectManager.unclassifiedName
     }
 
+    /// 지금 목록을 묶어 내보낼 때 쓸 이름: 고른 분류 + 기간 (예: "자료구조", "모든 녹음 최근 7일").
+    public var exportLabel: String {
+        var name: String
+        switch selection {
+        case nil, .all: name = "모든 녹음"
+        case .unclassified: name = SubjectManager.unclassifiedName
+        case .subject(let id): name = subjects.first { $0.persistentModelID == id }?.name ?? "모든 녹음"
+        }
+        if filter.period != .all { name += " \(filter.period.label)" }
+        return name
+    }
+
     private func inCategory(_ selection: LibrarySelection?) -> [Recording] {
         switch selection {
         case nil: []

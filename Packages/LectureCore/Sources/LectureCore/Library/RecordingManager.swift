@@ -125,6 +125,32 @@ public final class RecordingManager {
         }
     }
 
+    /// 녹음들을 파일과 북마크·메모 글이 든 한 폴더로 묶어 `parent` 안에 만든다. 원본은 그대로 둔다.
+    /// 사용자가 이 폴더를 직접 Claude 같은 곳에 올려 쓴다. 앱이 어디로 보내지는 않는다.
+    public func exportBundle(_ recordings: [Recording], label: String, to parent: URL, now: Date, calendar: Calendar = .current) throws -> RecordingBundleResult {
+        let items = recordings.map { recording in
+            BundleRecording(
+                title: recording.title,
+                subjectName: recording.subject?.name,
+                semester: recording.subject?.semester,
+                startedAt: recording.startedAt,
+                duration: recording.duration,
+                relativePath: recording.relativePath,
+                bookmarks: recording.sortedBookmarks.map { BundleBookmark(time: $0.time, note: $0.note) },
+                isRecovered: recording.isRecovered
+            )
+        }
+        do {
+            let result = try storage.bundleExporter(calendar: calendar).export(items, label: label, to: parent, now: now)
+            errorMessage = nil
+            return result
+        } catch {
+            Log.storage.error("묶음 내보내기 실패 \(label, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            errorMessage = error.localizedDescription
+            throw error
+        }
+    }
+
     /// 파일을 영구 삭제하고 DB 기록도 지운다. 파일을 지우지 못하면 기록도 남겨 둔다.
     /// 너무 짧아 버리는 녹음처럼 되돌릴 필요가 없을 때 쓴다.
     public func delete(_ recording: Recording) throws {

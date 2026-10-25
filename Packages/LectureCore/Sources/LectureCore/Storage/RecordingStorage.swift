@@ -244,6 +244,11 @@ public struct RecordingStorage: Sendable {
         try files.copyItem(at: source, to: destination)
     }
 
+    /// 이 저장소의 파일 시스템을 그대로 쓰는 묶음 내보내기.
+    public func bundleExporter(calendar: Calendar = .current) -> RecordingBundleExporter {
+        RecordingBundleExporter(storage: self, files: files, calendar: calendar)
+    }
+
     /// 파일을 지운다. 이미 없으면 지울 것이 없으므로 넘어간다.
     public func removeFile(at relativePath: String) throws {
         let target = url(for: relativePath)

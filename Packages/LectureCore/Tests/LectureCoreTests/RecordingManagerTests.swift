@@ -66,6 +66,33 @@ import Testing
         #expect(files.fileExists(at: storage.url(for: "자료구조/a.m4a")))
     }
 
+    @Test func 묶음으로_내보내면_북마크와_과목이_글에_담긴다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let recording = addRecording("자료구조/a.m4a", subject: ds)
+        context.insert(Bookmark(time: 90, note: "중요", createdAt: date(2026, 3, 2, 10, 2), recording: recording))
+        try context.save()
+        let parent = URL(filePath: "/tmp/내보내기", directoryHint: .isDirectory)
+        let manager = makeManager()
+        let result = try manager.exportBundle([recording], label: "자료구조", to: parent, now: date(2026, 10, 25, 9, 0), calendar: seoulCalendar)
+        #expect(result.exportedCount == 1)
+        let summary = result.folder.appending(path: RecordingBundleExporter.summaryFileName)
+        let text = String(decoding: files.written[summary.standardizedFileURL.path] ?? Data(), as: UTF8.self)
+        #expect(text.contains("01:30 — 중요"))
+        #expect(text.contains("## 자료구조"))
+        #expect(files.fileExists(at: storage.url(for: "자료구조/a.m4a")))
+        #expect(manager.errorMessage == nil)
+    }
+
+    @Test func 묶음_내보내기가_실패하면_이유를_알린다() throws {
+        let recording = addRecording("자료구조/a.m4a")
+        files.failNextCopy = true
+        let manager = makeManager()
+        #expect(throws: RecordingBundleError.self) {
+            try manager.exportBundle([recording], label: "자료구조", to: URL(filePath: "/tmp/내보내기"), now: date(2026, 10, 25, 9, 0))
+        }
+        #expect(manager.errorMessage?.hasPrefix("묶음을 만들지 못했습니다") == true)
+    }
+
     @Test func 원본이_없으면_내보내지_않고_안내한다() throws {
         let recording = addRecording("자료구조/a.m4a")
         try files.removeItem(at: storage.url(for: "자료구조/a.m4a"))
