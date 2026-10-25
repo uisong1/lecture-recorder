@@ -48,6 +48,77 @@ import Testing
         #expect(library.exportLabel == "모든 녹음 최근 7일")
     }
 
+    @Test func 고른_녹음은_목록_순서로_나오고_내보낼_대상은_선택분뿐이다() throws {
+        let a = addRecording("1주차", subject: nil, at: date(2026, 3, 2, 10, 0))
+        let b = addRecording("2주차", subject: nil, at: date(2026, 3, 9, 10, 0))
+        addRecording("3주차", subject: nil, at: date(2026, 3, 16, 10, 0))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        #expect(library.exportRecordings.count == 3)
+        #expect(library.exportLabel == "모든 녹음")
+
+        library.selectedIDs = [a.persistentModelID, b.persistentModelID]
+        #expect(library.selectedRecordings.map(\.title) == ["2주차", "1주차"])
+        #expect(library.exportRecordings.map(\.title) == ["2주차", "1주차"])
+        #expect(library.exportLabel == "선택한 녹음 2개")
+
+        library.clearSelection()
+        #expect(library.exportRecordings.count == 3)
+    }
+
+    @Test func 하나만_고른_것은_여러_건_동작의_대상이_아니다() throws {
+        let a = addRecording("1주차", subject: nil, at: date(2026, 3, 2, 10, 0))
+        addRecording("2주차", subject: nil, at: date(2026, 3, 9, 10, 0))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        library.selectedIDs = [a.persistentModelID]
+        #expect(!library.isMultiSelecting)
+        #expect(library.exportRecordings.count == 2)
+        #expect(library.exportLabel == "모든 녹음")
+    }
+
+    @Test func 과목을_바꾸면_선택이_비워진다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let a = addRecording("1주차", subject: ds, at: date(2026, 3, 2, 10, 0))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        library.selectedIDs = [a.persistentModelID]
+        library.select(.subject(ds.persistentModelID))
+        #expect(library.selectedIDs.isEmpty)
+    }
+
+    @Test func 필터로_목록에서_빠진_녹음은_선택에서도_빠진다() throws {
+        let a = addRecording("자료구조", subject: nil, at: date(2026, 3, 2, 10, 0))
+        let b = addRecording("운영체제", subject: nil, at: date(2026, 3, 3, 10, 0))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        library.selectedIDs = [a.persistentModelID, b.persistentModelID]
+        library.filter.query = "자료"
+        #expect(library.selectedRecordings.map(\.title) == ["자료구조"])
+        #expect(library.selectedIDs == [a.persistentModelID])
+    }
+
+    @Test func 지운_녹음은_다시_읽을_때_선택에서_빠진다() throws {
+        let a = addRecording("1주차", subject: nil, at: date(2026, 3, 2, 10, 0))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        library.selectedIDs = [a.persistentModelID]
+        context.delete(a)
+        try context.save()
+        library.reload()
+        #expect(library.selectedIDs.isEmpty)
+    }
+
     @Test func 직접_지정한_기간으로_목록이_걸러지고_내보내기_이름에_담긴다() throws {
         addRecording("3월 2일", subject: nil, at: date(2026, 3, 2, 10, 0))
         addRecording("3월 10일 밤", subject: nil, at: date(2026, 3, 10, 23, 59))
