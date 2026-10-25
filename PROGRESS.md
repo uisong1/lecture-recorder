@@ -1,5 +1,8 @@
 # PROGRESS
 
+## 2026-10-25 2-5 재생 중 북마크 추가·메모 수정·삭제
+- 한 일: `PlaybackController.addBookmarkAtCurrentTime/updateNote/delete`(저장은 `BookmarkManager`, 1초 이내 중복 추가 방지)와 재생 막대의 "지금 위치에 북마크" 버튼(⇧⌘B, 녹음 중 ⌘B와 겹치지 않게), 북마크 버튼 우클릭의 메모 수정·삭제(확인 창). 테스트 6개.
+
 ## 2026-10-25 2-4 강제 종료 시 북마크 시점 복구
 - 한 일: `PendingRecording.bookmarkTimes`(없으면 빈 배열로 읽음)를 추가하고, 북마크를 찍을 때마다 저널에 기록. `RecordingRecovery`가 복구한 녹음에 북마크를 되살린다. 테스트 5개.
 
