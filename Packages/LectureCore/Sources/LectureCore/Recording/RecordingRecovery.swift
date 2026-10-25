@@ -62,8 +62,9 @@ public struct RecordingRecovery {
         recording.wasRecovered = true
         context.insert(recording)
         // 녹음이 끊긴 지점보다 뒤의 북마크는 길이 어림값 안으로 맞춘다.
-        for time in pending.bookmarkTimes {
-            context.insert(Bookmark(time: min(max(time, 0), recording.duration), createdAt: pending.startedAt, recording: recording))
+        for (index, time) in pending.bookmarkTimes.enumerated() {
+            let note = pending.bookmarkNotes.indices.contains(index) ? pending.bookmarkNotes[index] : ""
+            context.insert(Bookmark(time: min(max(time, 0), recording.duration), note: note, createdAt: pending.startedAt, recording: recording))
         }
         try context.save()
         journal.clear()

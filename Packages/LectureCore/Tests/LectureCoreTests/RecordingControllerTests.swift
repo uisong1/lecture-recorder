@@ -956,6 +956,66 @@ final class TestClock {
         #expect(journal.load()?.relativePath == "미분류/03-02 월 10-00.caf")
     }
 
+    @Test func 방금_찍은_북마크에_메모를_붙이면_정지할_때_저장된다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 65
+        controller.addBookmark()
+        controller.setBookmarkNote("  시험에 나온대  ", at: 0)
+        #expect(controller.bookmarkNotes == ["시험에 나온대"])
+
+        recorder.currentTime = 900
+        let saved = try controller.stop()
+        #expect(saved.sortedBookmarks.map(\.note) == ["시험에 나온대"])
+        #expect(controller.bookmarkNotes.isEmpty)
+    }
+
+    @Test func 연속으로_찍은_북마크에_각각_메모를_붙인다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 10
+        controller.addBookmark()
+        recorder.currentTime = 20
+        controller.addBookmark()
+        controller.setBookmarkNote("둘째", at: 1)
+        controller.setBookmarkNote("첫째", at: 0)
+
+        recorder.currentTime = 30
+        let saved = try controller.stop()
+        #expect(saved.sortedBookmarks.map(\.note) == ["첫째", "둘째"])
+    }
+
+    @Test func 공백_메모와_없는_번호는_무시한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 10
+        controller.addBookmark()
+        controller.setBookmarkNote("첫 메모", at: 0)
+        controller.setBookmarkNote("   \n", at: 0)
+        controller.setBookmarkNote("없는 번호", at: 5)
+        controller.setBookmarkNote("음수", at: -1)
+        #expect(controller.bookmarkNotes == ["첫 메모"])
+    }
+
+    @Test func 메모를_안_붙인_북마크는_메모가_비어_있다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 10
+        controller.addBookmark()
+        recorder.currentTime = 20
+        let saved = try controller.stop()
+        #expect(saved.sortedBookmarks.map(\.note) == [""])
+    }
+
+    @Test func 메모도_저널에_남아_복구_뒤에도_유지된다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 10
+        controller.addBookmark()
+        controller.setBookmarkNote("복습하기", at: 0)
+        #expect(journal.load()?.bookmarkNotes == ["복습하기"])
+    }
+
     @Test func 정상_저장되면_저널이_지워진다() async throws {
         let controller = makeController(at: date(2026, 3, 2, 10, 0))
         try await controller.start()
