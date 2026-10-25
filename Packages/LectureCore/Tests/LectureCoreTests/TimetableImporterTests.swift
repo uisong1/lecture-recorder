@@ -116,6 +116,48 @@ import Testing
         #expect(existing.color == .teal)
     }
 
+    @Test func 새_학기로_바꿔도_지난_학기_녹음은_그대로_남는다() throws {
+        let kept = Subject(name: "지난학기만듣던과목", color: .red)
+        kept.semester = "2026년 1학기"
+        let shared = Subject(name: "알고리즘", color: .teal)
+        shared.semester = "2026년 1학기"
+        context.insert(kept)
+        context.insert(shared)
+        let keptRecording = Recording(title: "a", subject: kept, startedAt: date(2026, 4, 6, 10, 0), duration: 60, relativePath: "2026년 1학기/지난학기만듣던과목/04-06 월 10-00.m4a")
+        let sharedRecording = Recording(title: "b", subject: shared, startedAt: date(2026, 4, 7, 14, 0), duration: 60, relativePath: "2026년 1학기/알고리즘/04-07 화 14-00.m4a")
+        let unclassified = Recording(title: "c", subject: nil, startedAt: date(2026, 4, 8, 9, 0), duration: 60, relativePath: "미분류/04-08 수 09-00.m4a")
+        context.insert(keptRecording)
+        context.insert(sharedRecording)
+        context.insert(unclassified)
+        try context.save()
+
+        try importer.apply(fixtureEditor())
+
+        let recordings = try context.fetch(FetchDescriptor<Recording>())
+        #expect(recordings.count == 3)
+        // 새 시간표에 없는 과목은 학기도 녹음도 건드리지 않는다.
+        #expect(kept.semester == "2026년 1학기")
+        #expect(keptRecording.subject === kept)
+        #expect(keptRecording.relativePath == "2026년 1학기/지난학기만듣던과목/04-06 월 10-00.m4a")
+        // 다시 쓰는 과목은 학기만 바뀌고 녹음 파일 경로와 연결은 그대로다.
+        #expect(sharedRecording.subject === shared)
+        #expect(sharedRecording.relativePath == "2026년 1학기/알고리즘/04-07 화 14-00.m4a")
+        #expect(unclassified.subject == nil)
+        #expect(unclassified.relativePath == "미분류/04-08 수 09-00.m4a")
+    }
+
+    @Test func 시간표를_가져와도_과목의_옛_시간표_칸만_바뀐다() throws {
+        let kept = Subject(name: "지난학기만듣던과목", color: .red)
+        context.insert(kept)
+        context.insert(try TimeSlot(weekday: .monday, start: TimeOfDay(hour: 9), end: TimeOfDay(hour: 10), subject: kept))
+        try context.save()
+
+        try importer.apply(fixtureEditor())
+
+        #expect(kept.timeSlots.isEmpty)
+        #expect(try allSubjects().contains { $0 === kept })
+    }
+
     @Test func 대소문자가_달라도_같은_과목으로_본다() throws {
         context.insert(Subject(name: "ai데이터분석및실습", color: .blue))
         try context.save()

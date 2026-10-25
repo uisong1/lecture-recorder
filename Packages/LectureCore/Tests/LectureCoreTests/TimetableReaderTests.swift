@@ -159,6 +159,35 @@ enum EverytimeFixture {
         #expect(try readFixture().semester == "2026년 2학기")
     }
 
+    @Test func 계절학기_이름도_읽는다() throws {
+        for (label, expected) in [("2026년 여름학기", "2026년 여름학기"), ("2027년 겨울학기", "2027년 겨울학기"), ("2026년2학기", "2026년 2학기"), ("2026 년 1 학기", "2026년 1학기")] {
+            let observations = EverytimeFixture.all.map {
+                $0.text == "2026년 2학기" ? EverytimeFixture.obs(label, $0.x, $0.y, $0.width, $0.height) : $0
+            }
+            let columns = try TimetableReader.columns(from: observations)
+            let draft = try TimetableReader.read(
+                observations: observations,
+                columns: columns,
+                strips: EverytimeFixture.strips(for: columns),
+                lineRows: EverytimeFixture.lineRows
+            )
+            #expect(draft.semester == expected, "\(label)")
+        }
+    }
+
+    @Test func 학기_글자를_못_읽으면_학기는_비어_있고_칸은_그대로_읽는다() throws {
+        let observations = EverytimeFixture.all.filter { $0.text != "2026년 2학기" }
+        let columns = try TimetableReader.columns(from: observations)
+        let draft = try TimetableReader.read(
+            observations: observations,
+            columns: columns,
+            strips: EverytimeFixture.strips(for: columns),
+            lineRows: EverytimeFixture.lineRows
+        )
+        #expect(draft.semester == nil)
+        #expect(draft.rows.count == 14)
+    }
+
     @Test func 사진의_시간표를_열네_칸으로_읽는다() throws {
         let expected = [
             row("사용자인터페이스", .tuesday, (10, 30), (11, 45), room: true, include: true),
