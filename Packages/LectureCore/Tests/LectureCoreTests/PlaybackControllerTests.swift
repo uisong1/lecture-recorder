@@ -179,5 +179,96 @@ import Testing
         #expect(!controller.isPlaying)
         #expect(!player.isPlaying)
     }
+
+    // MARK: 마지막 재생 위치
+
+    @Test func 일시정지하면_그_위치를_녹음에_적어_둔다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        controller.select(recording)
+        controller.play()
+        player.currentTime = 25
+        controller.pause()
+        #expect(recording.lastPlayedPosition == 25)
+    }
+
+    @Test func 다시_고르면_적어_둔_위치에서_이어_듣는다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        recording.lastPlayedPosition = 40
+        controller.select(recording)
+        #expect(controller.currentTime == 40)
+    }
+
+    @Test func 다른_녹음으로_옮기면_듣던_위치를_적어_둔다() {
+        let controller = makeController()
+        let first = makeRecording("a/1.m4a")
+        controller.select(first)
+        controller.seek(to: 12)
+        controller.select(makeRecording("a/2.m4a"))
+        #expect(first.lastPlayedPosition == 12)
+    }
+
+    @Test func 끝에서_3초_안이면_다음에는_처음부터_듣는다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        recording.lastPlayedPosition = 30
+        controller.select(recording)
+        controller.play()
+        player.currentTime = 57
+        controller.pause()
+        #expect(recording.lastPlayedPosition == 0)
+        controller.select(nil)
+        controller.select(recording)
+        #expect(controller.currentTime == 0)
+    }
+
+    @Test func 끝에서_3초_밖이면_위치를_기억한다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        controller.select(recording)
+        controller.play()
+        player.currentTime = 56.9
+        controller.pause()
+        #expect(recording.lastPlayedPosition == 56.9)
+    }
+
+    @Test func 저장된_위치가_끝_근처면_처음부터_시작한다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        recording.lastPlayedPosition = 59
+        controller.select(recording)
+        #expect(controller.currentTime == 0)
+    }
+
+    @Test func 끝까지_들어서_재생이_멈추면_위치를_지운다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        recording.lastPlayedPosition = 20
+        controller.select(recording)
+        controller.play()
+        player.currentTime = 60
+        player.isPlaying = false
+        controller.refresh()
+        #expect(recording.lastPlayedPosition == 0)
+    }
+
+    @Test func 위치가_바뀔_때만_저장을_요청한다() {
+        var saved = 0
+        let controller = PlaybackController(
+            player: player,
+            storage: RecordingStorage(root: root, files: FakeFileStore()),
+            savePosition: { saved += 1 }
+        )
+        controller.select(makeRecording())
+        controller.play()
+        controller.pause()
+        #expect(saved == 0)
+        controller.play()
+        player.currentTime = 10
+        controller.pause()
+        controller.pause()
+        #expect(saved == 1)
+    }
 }
 #endif

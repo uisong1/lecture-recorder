@@ -67,7 +67,19 @@ final class AppDependencies {
         Task { await reminders.reschedule() }
         library = RecordingLibrary(context: container.mainContext)
         manager = RecordingManager(context: container.mainContext, storage: storage)
-        playback = PlaybackController(player: SystemAudioPlayer(), storage: storage, bookmarkManager: BookmarkManager(context: container.mainContext))
+        let context = container.mainContext
+        playback = PlaybackController(
+            player: SystemAudioPlayer(),
+            storage: storage,
+            bookmarkManager: BookmarkManager(context: context),
+            savePosition: {
+                do {
+                    try context.save()
+                } catch {
+                    Log.playback.error("재생 위치 저장 실패: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        )
         do {
             let recovery = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal)
             recoveryNotice = try recovery.recoverIfNeeded().map {
