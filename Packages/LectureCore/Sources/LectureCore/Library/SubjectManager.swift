@@ -108,11 +108,13 @@ public final class SubjectManager {
         let oldPrefix = oldFolder + "/"
         let inFolder = subject.recordings.filter { $0.relativePath.hasPrefix(oldPrefix) }
 
-        if !inFolder.isEmpty {
-            let active = activePaths()
-            guard !inFolder.contains(where: { RecordingStorage.isWorkingPath($0.relativePath) || active.contains($0.relativePath) }) else {
-                throw .recordingInProgress
-            }
+        // 녹음 중인 파일은 정지하기 전에는 DB에 없으므로 `inFolder`로는 알 수 없다. 경로로 직접 확인한다.
+        // 폴더를 옮기면 녹음기는 옮겨진 파일에 계속 쓰지만 저장될 기록은 옛 경로를 가리켜 녹음이 사라진 것처럼 된다.
+        let active = activePaths()
+        guard !active.contains(where: { $0.hasPrefix(oldPrefix) }),
+              !inFolder.contains(where: { RecordingStorage.isWorkingPath($0.relativePath) || active.contains($0.relativePath) })
+        else {
+            throw .recordingInProgress
         }
         guard oldFolder != newFolder else {
             subject.name = name

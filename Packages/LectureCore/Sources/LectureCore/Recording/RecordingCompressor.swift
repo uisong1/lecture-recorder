@@ -43,9 +43,16 @@ public struct RecordingCompressor {
         return done
     }
 
+    /// 기록이 지워졌는지. 지워진 모델의 속성을 읽거나 고치면 안 된다.
+    private static func isGone(_ recording: Recording) -> Bool {
+        recording.isDeleted || recording.modelContext == nil
+    }
+
     /// 녹음 하나를 압축한다. 실패하면 CAF를 그대로 두고 false를 돌려준다.
     @discardableResult
     public func compress(_ recording: Recording) async -> Bool {
+        // 압축을 기다리는 사이 사용자가 녹음을 지웠으면 삭제된 기록을 건드리지 않는다.
+        guard !Self.isGone(recording) else { return false }
         var workingPath = recording.relativePath
         guard RecordingStorage.isWorkingPath(workingPath) else { return true }
         var source = storage.url(for: workingPath)
@@ -63,6 +70,11 @@ public struct RecordingCompressor {
             do {
                 if files.fileExists(at: temporary) { try files.removeItem(at: temporary) }
                 duration = try await converter.compress(from: source, to: temporary)
+                // 변환하는 동안 사용자가 녹음을 지웠으면 결과 파일을 남기지 않는다 (기록 없는 m4a가 쌓이지 않게).
+                if Self.isGone(recording) {
+                    try? files.removeItem(at: temporary)
+                    return false
+                }
                 // 압축하는 동안 사용자가 녹음을 다른 과목으로 옮겼으면 CAF가 새 폴더에 있다. 거기에 m4a를 놓는다.
                 if recording.relativePath != workingPath {
                     workingPath = recording.relativePath
