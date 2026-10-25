@@ -8,7 +8,7 @@
   - 완료 기준: macOS 14+ SwiftUI 앱 `LectureRecorder`가 ⌘R로 실행되어 빈 창이 뜬다.
 - [x] **0-2. `LectureCore` 로컬 패키지 생성 및 연결**
   - 완료 기준: 앱에서 `import LectureCore`가 되고 `swift test --package-path Packages/LectureCore`로 샘플 테스트 1개가 통과한다.
-- [ ] **0-3. 마이크 권한과 샌드박스 설정**
+- [x] **0-3. 마이크 권한과 샌드박스 설정**
   - 완료 기준: `NSMicrophoneUsageDescription`과 오디오 입력 entitlement가 추가되어 첫 실행 시 마이크 권한 창이 뜬다.
 - [ ] **0-4. UI 테스트 타깃 추가**
   - 완료 기준: `xcodebuild ... test`에서 "앱이 실행되면 메인 창이 보인다" UI 테스트 1개가 통과한다.
