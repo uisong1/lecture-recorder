@@ -101,3 +101,7 @@
 ## 2026-10-25 3-28 '모든 녹음' 보기
 - 한 일: `LibrarySelection.all`, 사이드바 "모든 녹음"(개수 표시), 이 보기에서만 행에 과목 이름 표시(`showsSubjectName`). 검색·기간 필터는 그대로 동작. 단위 테스트 4개.
 - Mac에서 확인 필요: 사이드바 맨 위 "모든 녹음"을 눌러 과목이 섞여 최신순으로 나오고 행에 과목 이름이 보이는지, 검색이 되는지.
+## 2026-10-25 3-35 녹음 폴더 다시 읽기
+- 한 일: `RecordingRescanner`(목록에 없는 m4a·caf를 `Recording`으로 되살림), `RecordingFileName`(파일 이름에서 시작 시각), `AudioDurationReading`(파일을 열어 길이, 못 읽으면 크기로 어림), `RecordingStorage.audioFilePaths/removeEmptyFolders`, 설정의 "녹음 파일" 탭과 `RecordingRescanModel`. 폴더 옮기기 뒤에도 비어 남은 예전 과목 폴더를 정리한다.
+- Mac에서 확인 필요: 설정 → 녹음 파일 → "녹음 폴더 다시 읽기". 휴지통에서 되돌린 파일이나, 목록에서 일부러 지운 기록의 파일이 목록에 다시 나타나는지. 실제 m4a의 길이가 맞게 읽히는지.
+- 다음: 3-39 목록 줄 정리.
