@@ -17,6 +17,10 @@ struct ContentView: View {
                 Label("녹음", systemImage: "record.circle")
                     .tag(SidebarItem.recorder)
                     .accessibilityIdentifier("sidebar-recorder")
+                Label("모든 녹음", systemImage: "waveform")
+                    .badge(dependencies.library.count(for: .all))
+                    .tag(SidebarItem.library(.all))
+                    .accessibilityIdentifier("sidebar-all")
                 Section("과목") {
                     ForEach(dependencies.library.subjects) { subject in
                         Label(subject.name, systemImage: "book.closed")

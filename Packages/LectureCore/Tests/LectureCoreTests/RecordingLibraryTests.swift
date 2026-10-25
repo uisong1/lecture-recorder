@@ -47,6 +47,58 @@ import Testing
         #expect(library.recordings.map(\.title) == ["과목 없음"])
     }
 
+    @Test func 모든_녹음을_고르면_과목과_상관없이_최신순으로_나온다() throws {
+        let subjects = SubjectManager(context: context)
+        let ds = try subjects.add(name: "자료구조", color: .green)
+        let os = try subjects.add(name: "운영체제", color: .blue)
+        addRecording("월요일", subject: ds, at: date(2026, 3, 2, 10, 0))
+        addRecording("화요일", subject: os, at: date(2026, 3, 3, 13, 0))
+        addRecording("미분류", subject: nil, at: date(2026, 3, 4, 9, 0))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+
+        #expect(library.recordings.map(\.title) == ["미분류", "화요일", "월요일"])
+        #expect(library.count(for: .all) == 3)
+        #expect(library.showsSubjectName)
+    }
+
+    @Test func 모든_녹음에서도_검색과_기간_필터가_동작한다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        addRecording("중간고사 범위", subject: ds, at: date(2026, 3, 2, 10, 0))
+        addRecording("일반 수업", subject: nil, at: date(2026, 3, 3, 10, 0))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        library.filter.query = "중간"
+
+        #expect(library.recordings.map(\.title) == ["중간고사 범위"])
+        // 분류 수는 필터와 상관없는 전체 수다.
+        #expect(library.count(for: .all) == 2)
+    }
+
+    @Test func 녹음이_없으면_모든_녹음도_비어_있다() throws {
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        #expect(library.recordings.isEmpty)
+        #expect(library.count(for: .all) == 0)
+    }
+
+    @Test func 행에_보일_과목_이름은_과목이_없으면_미분류다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let a = addRecording("a", subject: ds, at: date(2026, 3, 2, 10, 0))
+        let b = addRecording("b", subject: nil, at: date(2026, 3, 2, 12, 0))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        #expect(library.subjectName(of: a) == "자료구조")
+        #expect(library.subjectName(of: b) == SubjectManager.unclassifiedName)
+        library.select(.unclassified)
+        #expect(!library.showsSubjectName)
+    }
+
     @Test func 아무것도_고르지_않으면_목록이_비어_있다() throws {
         addRecording("a", subject: nil, at: date(2026, 3, 2, 10, 0))
         try context.save()
