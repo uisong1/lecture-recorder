@@ -10,7 +10,7 @@
   - 완료 기준: 앱에서 `import LectureCore`가 되고 `swift test --package-path Packages/LectureCore`로 샘플 테스트 1개가 통과한다.
 - [x] **0-3. 마이크 권한과 샌드박스 설정**
   - 완료 기준: `NSMicrophoneUsageDescription`과 오디오 입력 entitlement가 추가되어 첫 실행 시 마이크 권한 창이 뜬다.
-- [ ] **0-4. UI 테스트 타깃 추가**
+- [x] **0-4. UI 테스트 타깃 추가**
   - 완료 기준: `xcodebuild ... test`에서 "앱이 실행되면 메인 창이 보인다" UI 테스트 1개가 통과한다.
 - [ ] **0-5. `.gitignore`와 README 정리**
   - 완료 기준: `xcuserdata`, `DerivedData`, `.build`가 무시되고 README에 빌드·실행 방법이 적혀 있다.
