@@ -23,7 +23,7 @@
 | 녹음 / 재생 | AVFoundation (`AVAudioRecorder`, `AVAudioPlayer`) | macOS 기본 프레임워크라 외부 의존성 없음 |
 | 오디오 포맷 | AAC `.m4a` | 용량 대비 음질이 좋음 (90분 수업 약 40MB) |
 | 메타데이터 저장 | SwiftData | 과목·시간표·녹음 정보를 로컬 DB에 저장. 서버 불필요 |
-| 파일 저장 | `~/Library/Application Support/LectureRecorder/Recordings/<과목>/` | 앱 샌드박스 안의 표준 위치 |
+| 파일 저장 | `~/Library/Application Support/LectureRecorder/Recordings/<학기>/<과목>/<날짜 요일 시작시각>.m4a` | 앱 샌드박스 안의 표준 위치 |
 | 테스트 | Swift Testing (`@Test`), UI는 XCTest | Xcode 기본 도구 |
 | 구조 | 앱 타깃 + 로컬 Swift 패키지 `LectureCore` | 핵심 로직을 UI 없이 `swift test`로 빠르게 테스트 |
 | STT (나중) | Apple `Speech` 프레임워크 → 필요하면 WhisperKit | 한국어 지원, 기기 안에서 처리 |
