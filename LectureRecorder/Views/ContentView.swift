@@ -11,9 +11,17 @@ struct ContentView: View {
 
     @State private var sidebar: SidebarItem? = .recorder
 
+    private func subjectRow(_ subject: Subject) -> some View {
+        Label(subject.name, systemImage: "book.closed")
+            .badge(dependencies.library.count(for: .subject(subject.persistentModelID)))
+            .tag(SidebarItem.library(.subject(subject.persistentModelID)))
+            .accessibilityIdentifier("sidebar-subject-\(subject.name)")
+    }
+
     var body: some View {
         NavigationSplitView {
-            List(selection: $sidebar) {
+            // 접힌 묶음 안의 과목을 고른 채로도 선택이 풀리지 않게, 목록이 보내는 "선택 없음"은 받지 않는다.
+            List(selection: Binding(get: { sidebar }, set: { if let item = $0 { sidebar = item } })) {
                 Label("녹음", systemImage: "record.circle")
                     .tag(SidebarItem.recorder)
                     .accessibilityIdentifier("sidebar-recorder")
@@ -22,11 +30,23 @@ struct ContentView: View {
                     .tag(SidebarItem.library(.all))
                     .accessibilityIdentifier("sidebar-all")
                 Section("과목") {
-                    ForEach(dependencies.library.subjects) { subject in
-                        Label(subject.name, systemImage: "book.closed")
-                            .badge(dependencies.library.count(for: .subject(subject.persistentModelID)))
-                            .tag(SidebarItem.library(.subject(subject.persistentModelID)))
-                            .accessibilityIdentifier("sidebar-subject-\(subject.name)")
+                    let library = dependencies.library
+                    if SemesterGrouping.showsHeaders(library.semesterSections) {
+                        ForEach(library.semesterSections) { section in
+                            DisclosureGroup(isExpanded: Binding(
+                                get: { library.isExpanded(section) },
+                                set: { library.setExpanded($0, for: section) }
+                            )) {
+                                ForEach(library.subjects(in: section)) { subject in subjectRow(subject) }
+                            } label: {
+                                Text(section.title)
+                                    .designText(.captionStrong)
+                                    .foregroundStyle(Design.Palette.inkMuted)
+                                    .accessibilityIdentifier("sidebar-semester-\(section.title)")
+                            }
+                        }
+                    } else {
+                        ForEach(library.subjects) { subject in subjectRow(subject) }
                     }
                     Label("미분류", systemImage: "tray")
                         .badge(dependencies.library.count(for: .unclassified))

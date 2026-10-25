@@ -41,6 +41,15 @@ public final class RecordingLibrary {
     }
 
     static let sortOrderKey = "recordingSortOrder"
+    static let semesterExpansionKey = "sidebarSemesterExpansion"
+
+    /// 사이드바 과목의 학기 묶음. `reload`에서 한 번 계산한다.
+    public private(set) var semesterSections: [SemesterGrouping.Section] = []
+
+    /// 학기 묶음을 펼쳤는지. 바꾸면 다음 실행에도 기억한다.
+    public private(set) var semesterExpansion = SemesterExpansion() {
+        didSet { defaults.set(semesterExpansion.json, forKey: Self.semesterExpansionKey) }
+    }
 
     private var all: [Recording] = []
     /// 분류마다 녹음 수. `reload`에서 한 번 세어 두고, 사이드바를 그릴 때마다 다시 세지 않는다.
@@ -69,6 +78,7 @@ public final class RecordingLibrary {
         self.calendar = calendar
         self.defaults = defaults
         sortOrder = defaults.string(forKey: Self.sortOrderKey).flatMap(RecordingSortOrder.init(rawValue:)) ?? .newestFirst
+        semesterExpansion = SemesterExpansion(json: defaults.string(forKey: Self.semesterExpansionKey) ?? "")
         reload()
     }
 
@@ -89,6 +99,9 @@ public final class RecordingLibrary {
             selection = nil
         }
         counts = Self.count(all)
+        semesterSections = SemesterGrouping.sections(for: subjects.map {
+            SemesterGrouping.Input(name: $0.name, semester: $0.semester, hasSchedule: !$0.timeSlots.isEmpty)
+        })
         statusCache = [:]
         recordings = filtered(by: selection)
     }
@@ -104,6 +117,19 @@ public final class RecordingLibrary {
             }
         }
         return counts
+    }
+
+    /// 학기 묶음에 속한 과목 (이름 순).
+    public func subjects(in section: SemesterGrouping.Section) -> [Subject] {
+        section.indices.compactMap { subjects.indices.contains($0) ? subjects[$0] : nil }
+    }
+
+    public func isExpanded(_ section: SemesterGrouping.Section) -> Bool {
+        semesterExpansion.isExpanded(section)
+    }
+
+    public func setExpanded(_ expanded: Bool, for section: SemesterGrouping.Section) {
+        semesterExpansion.set(expanded, for: section)
     }
 
     public func select(_ selection: LibrarySelection?) {
