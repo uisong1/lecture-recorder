@@ -8,6 +8,8 @@ public protocol AudioRecording: AnyObject {
     var isPaused: Bool { get }
     /// 녹음된 길이(초).
     var currentTime: TimeInterval { get }
+    /// 지금 입력 크기 (0...1, `InputLevel` 참고). 녹음 중이 아니면 0.
+    var inputLevel: Float { get }
     /// `url`에 새 파일로 녹음을 시작한다.
     func start(to url: URL) throws
     /// 녹음을 잠시 멈춘다. 같은 파일에 이어서 쓰며, 멈춘 동안 `currentTime`은 늘지 않는다.
@@ -16,6 +18,10 @@ public protocol AudioRecording: AnyObject {
     func resume() throws
     /// 녹음을 멈추고 파일을 닫는다. 녹음된 길이(초)를 돌려준다.
     func stop() -> TimeInterval
+}
+
+extension AudioRecording {
+    public var inputLevel: Float { 0 }
 }
 
 #if canImport(AVFoundation)
@@ -55,9 +61,16 @@ public final class SystemAudioRecorder: NSObject, AudioRecording {
     public var isPaused: Bool { paused }
     public var currentTime: TimeInterval { recorder?.currentTime ?? 0 }
 
+    public var inputLevel: Float {
+        guard let recorder, !paused else { return 0 }
+        recorder.updateMeters()
+        return InputLevel.normalize(decibels: recorder.averagePower(forChannel: 0))
+    }
+
     public func start(to url: URL) throws {
         let recorder = try AVAudioRecorder(url: url, settings: Self.settings)
         recorder.delegate = self
+        recorder.isMeteringEnabled = true
         guard recorder.prepareToRecord(), recorder.record() else {
             Log.recording.error("녹음 시작 실패: \(url.lastPathComponent, privacy: .public)")
             throw RecorderError.couldNotStart

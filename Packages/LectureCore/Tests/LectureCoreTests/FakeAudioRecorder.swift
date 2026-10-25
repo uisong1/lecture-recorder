@@ -7,6 +7,7 @@ final class FakeAudioRecorder: AudioRecording {
     private(set) var isPaused = false
     var resumeError: Error?
     var currentTime: TimeInterval = 0
+    var inputLevel: Float = 0
     private(set) var startedURLs: [URL] = []
     var startError: Error?
 

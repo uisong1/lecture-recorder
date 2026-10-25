@@ -47,6 +47,7 @@ final class TestClock {
                 ? RecordingCompressor(context: container.mainContext, storage: storage, files: files, converter: converter)
                 : nil,
             storageCheckInterval: nil,
+            levelCheckInterval: nil,
             calendar: seoulCalendar,
             now: { time }
         )
@@ -236,6 +237,7 @@ final class TestClock {
             permission: permission,
             journal: journal,
             storageCheckInterval: nil,
+            levelCheckInterval: nil,
             calendar: seoulCalendar,
             now: { clock.now }
         )

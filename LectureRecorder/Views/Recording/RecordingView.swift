@@ -24,6 +24,17 @@ struct RecordingView: View {
                 }
             }
 
+            if recording.isRecording {
+                InputLevelBar(level: recording.inputLevel)
+                    .accessibilityIdentifier("inputLevel")
+                if recording.isInputSilent {
+                    Label("소리가 거의 들어오지 않습니다", systemImage: "mic.slash")
+                        .designText(.caption)
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier("silenceWarning")
+                }
+            }
+
             if recording.isPermissionDenied && !recording.isRecording {
                 VStack(spacing: Design.Spacing.xs) {
                     Label("마이크 권한이 꺼져 있어 녹음할 수 없습니다.", systemImage: "mic.slash")
@@ -127,4 +138,23 @@ struct RecordingView: View {
     }
 
     private static let microphoneSettingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+}
+
+/// 입력 크기를 가로 막대로 보여준다.
+private struct InputLevelBar: View {
+    let level: Float
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Design.Palette.inkMuted.opacity(0.2))
+                Capsule()
+                    .fill(Design.Palette.primary)
+                    .frame(width: proxy.size.width * CGFloat(min(max(level, 0), 1)))
+            }
+        }
+        .frame(width: 200, height: 6)
+        .animation(.linear(duration: 0.1), value: level)
+        .accessibilityHidden(true)
+    }
 }
