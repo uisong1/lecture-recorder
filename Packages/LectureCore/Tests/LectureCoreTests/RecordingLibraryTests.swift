@@ -420,5 +420,73 @@ import Testing
         library.filter.unplayedOnly = true
         #expect(library.count(for: .subject(ds.persistentModelID)) == 2)
     }
+
+    // MARK: 학기별 묶음
+
+    func addSubject(_ name: String, semester: String, scheduled: Bool = true) throws -> Subject {
+        let subject = try SubjectManager(context: context).add(name: name, color: .blue)
+        subject.semester = semester
+        if scheduled {
+            context.insert(TimeSlot(try period(.monday, (9, 0), (10, 0)), subject: subject))
+        }
+        try context.save()
+        return subject
+    }
+
+    @Test func 과목을_학기별로_묶고_지난_학기는_접혀_있다() throws {
+        _ = try addSubject("자료구조", semester: "2026년 2학기")
+        _ = try addSubject("운영체제", semester: "2026년 2학기")
+        _ = try addSubject("미적분", semester: "2025년 2학기")
+        _ = try addSubject("직접 만듦", semester: "", scheduled: false)
+
+        let library = try makeLibrary()
+
+        #expect(library.semesterSections.map(\.title) == ["2026년 2학기", "2025년 2학기", "기타"])
+        #expect(library.subjects(in: library.semesterSections[0]).map(\.name) == ["운영체제", "자료구조"])
+        #expect(library.semesterSections.map { library.isExpanded($0) } == [true, false, true])
+    }
+
+    @Test func 펼침을_바꾸면_다음_실행에도_기억한다() throws {
+        _ = try addSubject("자료구조", semester: "2026년 2학기")
+        _ = try addSubject("미적분", semester: "2025년 2학기")
+        let defaults = try makeDefaults()
+        let library = try makeLibrary(defaults: defaults)
+        library.setExpanded(true, for: library.semesterSections[1])
+        library.setExpanded(false, for: library.semesterSections[0])
+
+        let reopened = try makeLibrary(defaults: defaults)
+
+        #expect(reopened.semesterSections.map { reopened.isExpanded($0) } == [false, true])
+    }
+
+    @Test func 접힌_학기의_과목을_고르거나_검색해도_선택은_풀리지_않는다() throws {
+        let old = try addSubject("미적분", semester: "2025년 2학기")
+        _ = try addSubject("자료구조", semester: "2026년 2학기")
+        addRecording("미적분 1주차", subject: old, at: date(2025, 9, 1, 10, 0))
+        try context.save()
+        let library = try makeLibrary()
+        let oldSection = try #require(library.semesterSections.last)
+        #expect(!library.isExpanded(oldSection))
+
+        library.select(.subject(old.persistentModelID))
+        library.filter.query = "1주차"
+        library.reload()
+
+        #expect(library.selection == .subject(old.persistentModelID))
+        #expect(library.recordings.map(\.title) == ["미적분 1주차"])
+    }
+
+    @Test func 시간표를_가져와_학기가_바뀌면_reload_뒤에_묶음도_바뀐다() throws {
+        let subject = try addSubject("자료구조", semester: "", scheduled: false)
+        let library = try makeLibrary()
+        #expect(library.semesterSections.map(\.title) == ["기타"])
+
+        subject.semester = "2026년 2학기"
+        try context.save()
+        library.reload()
+
+        #expect(library.semesterSections.map(\.title) == ["2026년 2학기"])
+        #expect(library.semesterSections.first?.isCurrent == true)
+    }
 }
 #endif
