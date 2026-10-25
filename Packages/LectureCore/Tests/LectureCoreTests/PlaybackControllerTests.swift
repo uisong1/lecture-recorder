@@ -130,8 +130,9 @@ import Testing
         addBookmarks([45], to: recording)
         controller.select(recording)
         controller.play(from: controller.bookmarks[0])
-        #expect(controller.currentTime == 45)
+        #expect(controller.currentTime == 40)
         #expect(controller.isPlaying)
+        #expect(controller.bookmarks[0].time == 45)
     }
 
     @Test func 일시정지_중에도_북마크로_이동하면_재생이_시작된다() {
@@ -143,7 +144,29 @@ import Testing
         controller.pause()
         controller.play(from: controller.bookmarks[0])
         #expect(controller.isPlaying)
-        #expect(controller.currentTime == 10)
+        #expect(controller.currentTime == 5)
+    }
+
+    @Test func 북마크가_5초_안쪽이면_처음부터_튼다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        addBookmarks([3], to: recording)
+        controller.select(recording)
+        controller.play(from: controller.bookmarks[0])
+        #expect(controller.currentTime == 0)
+        #expect(controller.bookmarks[0].time == 3)
+    }
+
+    @Test func 북마크가_정확히_5초면_0초에서_튼다() {
+        #expect(PlaybackController.playbackStart(forBookmarkAt: 5, duration: 60) == 0)
+        #expect(PlaybackController.playbackStart(forBookmarkAt: 5.5, duration: 60) == 0.5)
+        #expect(PlaybackController.playbackStart(forBookmarkAt: 0, duration: 60) == 0)
+    }
+
+    @Test func 길이를_넘는_시점은_앞당긴_뒤에도_끝을_넘지_않는다() {
+        #expect(PlaybackController.playbackStart(forBookmarkAt: 62, duration: 60) == 57)
+        #expect(PlaybackController.playbackStart(forBookmarkAt: 999, duration: 60) == 60)
+        #expect(PlaybackController.playbackStart(forBookmarkAt: 30, duration: 0) == 0)
     }
 
     @Test func 길이를_넘는_북마크는_끝으로_맞춘다() {
