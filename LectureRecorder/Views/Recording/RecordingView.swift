@@ -159,16 +159,16 @@ struct RecordingView: View {
                     .accessibilityIdentifier("openSystemSettings")
                 }
             } else {
-            Button {
-                Task { await recording.toggle() }
-            } label: {
-                Label(recording.isRecording ? "녹음 정지" : "녹음 시작", systemImage: recording.isRecording ? "stop.fill" : "mic.fill")
-            }
-            .buttonStyle(.pill)
-            .keyboardShortcut("r", modifiers: .command)
-            .help(recording.isRecording ? "녹음 정지 (⌘R)" : "녹음 시작 (⌘R)")
-            .accessibilityLabel(recording.isRecording ? "녹음 정지" : "녹음 시작")
-            .accessibilityIdentifier("recordButton")
+                Button {
+                    Task { await recording.toggle() }
+                } label: {
+                    Label(recording.isRecording ? "녹음 정지" : "녹음 시작", systemImage: recording.isRecording ? "stop.fill" : "mic.fill")
+                }
+                .buttonStyle(.pill)
+                .keyboardShortcut("r", modifiers: .command)
+                .help(recording.isRecording ? "녹음 정지 (⌘R)" : "녹음 시작 (⌘R)")
+                .accessibilityLabel(recording.isRecording ? "녹음 정지" : "녹음 시작")
+                .accessibilityIdentifier("recordButton")
             }
 
             if recording.isRecording {
