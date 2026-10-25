@@ -4,6 +4,14 @@ import SwiftData
 import Testing
 @testable import LectureCore
 
+/// 테스트에서 시간을 마음대로 흘리는 시계.
+@MainActor
+final class TestClock {
+    private(set) var now: Date
+    init(_ now: Date) { self.now = now }
+    func advance(by seconds: TimeInterval) { now = now.addingTimeInterval(seconds) }
+}
+
 @MainActor
 @Suite struct RecordingControllerTests {
     let container: ModelContainer
@@ -38,6 +46,7 @@ import Testing
             compressor: compressing
                 ? RecordingCompressor(context: container.mainContext, storage: storage, files: files, converter: converter)
                 : nil,
+            storageCheckInterval: nil,
             calendar: seoulCalendar,
             now: { time }
         )
@@ -150,6 +159,99 @@ import Testing
 
         #expect(saved.relativePath == "미분류/2026-03-02_1000.caf")
         #expect(files.fileExists(at: caf))
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
+    }
+
+    // MARK: 저장 공간 감시
+
+    @Test func 남은_공간이_1시간_분량_미만이면_경고한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+
+        files.capacity = 100_000_000 // 초당 32,000바이트 → 52분
+        controller.checkStorage()
+
+        #expect(controller.isRecording)
+        #expect(controller.storageWarning?.contains("약 52분") == true)
+    }
+
+    @Test func 공간이_충분하면_경고하지_않고_확보되면_경고가_사라진다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        controller.checkStorage()
+        #expect(controller.storageWarning == nil)
+
+        files.capacity = 100_000_000
+        controller.checkStorage()
+        #expect(controller.storageWarning != nil)
+
+        files.capacity = 10_000_000_000
+        controller.checkStorage()
+        #expect(controller.storageWarning == nil)
+    }
+
+    @Test func 공간이_바닥나기_전에_자동으로_정지하고_저장한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 7_200
+
+        files.capacity = 10_000_000 // 10분 분량(약 19MB) 미만
+        controller.checkStorage()
+
+        #expect(!controller.isRecording)
+        #expect(!recorder.isRecording)
+        #expect(!sleep.isActive)
+        let recordings = try container.mainContext.fetch(FetchDescriptor<Recording>())
+        #expect(recordings.count == 1)
+        #expect(recordings.first?.duration == 7_200)
+        #expect(controller.interruptionNotice?.contains("저장 공간") == true)
+        #expect(controller.storageWarning == nil)
+    }
+
+    @Test func 녹음_중이_아니거나_공간을_모르면_검사하지_않는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        files.capacity = 1
+        controller.checkStorage()
+        #expect(controller.storageWarning == nil)
+        #expect(controller.interruptionNotice == nil)
+
+        files.capacity = 10_000_000_000
+        try await controller.start()
+        files.capacity = nil
+        controller.checkStorage()
+        #expect(controller.isRecording)
+        #expect(controller.storageWarning == nil)
+    }
+
+    // MARK: 장시간 녹음
+
+    @Test func 세_시간_녹음의_경과_시간과_저장이_어긋나지_않는다() async throws {
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let simulated = SimulatedAudioRecorder(now: { clock.now })
+        let controller = RecordingController(
+            context: container.mainContext,
+            recorder: simulated,
+            storage: RecordingStorage(root: root, files: files),
+            files: files,
+            permission: permission,
+            journal: journal,
+            storageCheckInterval: nil,
+            calendar: seoulCalendar,
+            now: { clock.now }
+        )
+
+        try await controller.start()
+        clock.advance(by: 3_600)
+        try controller.pause()
+        clock.advance(by: 20 * 60) // 쉬는 시간은 길이에 들어가지 않는다
+        #expect(controller.elapsedText == "60:00")
+        try controller.resume()
+        clock.advance(by: 2 * 3_600)
+
+        #expect(controller.elapsedText == "180:00")
+        let saved = try controller.stop()
+        #expect(saved.duration == 10_800)
+        #expect(saved.startedAt == date(2026, 3, 2, 10, 0))
         #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
     }
 

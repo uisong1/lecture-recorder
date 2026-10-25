@@ -34,6 +34,10 @@ public enum RecordingError: Error, Equatable, LocalizedError {
 public final class RecordingController {
     /// 녹음을 시작하려면 남아 있어야 하는 공간. 3시간 CAF(약 346MB)와 압축한 m4a(약 43MB)가 함께 있어도 남는 크기.
     public static let minimumFreeBytes: Int64 = 600 * 1024 * 1024
+    /// 녹음 중 남은 공간이 이보다 적으면 경고한다 (1시간 분량).
+    public static let storageWarningBytes = RecordingFormat.workingBytes(for: 3_600)
+    /// 녹음 중 남은 공간이 이보다 적으면 바닥나기 전에 자동으로 정지·저장한다 (10분 분량).
+    public static let storageCriticalBytes = RecordingFormat.workingBytes(for: 600)
 
     public enum State: Equatable {
         case idle
@@ -57,6 +61,8 @@ public final class RecordingController {
     public var errorMessage: String?
     /// 잠자기나 종료 때문에 녹음이 중단되어 저장됐을 때 보여줄 안내.
     public var interruptionNotice: String?
+    /// 녹음 중 저장 공간이 부족해질 때 보여줄 경고. 문제가 없으면 nil.
+    public private(set) var storageWarning: String?
     /// 마지막으로 확인한 마이크 권한. 거부 상태면 화면이 녹음 버튼 대신 안내를 보여준다.
     public private(set) var permissionStatus: MicrophonePermissionStatus
 
@@ -69,6 +75,8 @@ public final class RecordingController {
     private let sleepPreventer: (any SleepPreventing)?
     private let compressor: RecordingCompressor?
     private var compressionTask: Task<Void, Never>?
+    private var storageMonitor: Task<Void, Never>?
+    private let storageCheckInterval: Duration?
     private let calendar: Calendar
     private let now: @MainActor () -> Date
 
@@ -82,6 +90,7 @@ public final class RecordingController {
         sleepPreventer: (any SleepPreventing)? = nil,
         lifecycle: (any LifecycleEventSource)? = nil,
         compressor: RecordingCompressor? = nil,
+        storageCheckInterval: Duration? = .seconds(10),
         calendar: Calendar = .current,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
@@ -94,6 +103,7 @@ public final class RecordingController {
         self.journal = journal
         self.sleepPreventer = sleepPreventer
         self.compressor = compressor
+        self.storageCheckInterval = storageCheckInterval
         self.calendar = calendar
         self.now = now
         lifecycle?.observe { [weak self] event in self?.handle(event) }
@@ -107,14 +117,46 @@ public final class RecordingController {
             guard isRecording else { return }
             let reason = event == .willSleep ? "맥이 잠자기에 들어가서" : "앱이 종료되어서"
             Log.recording.notice("\(reason, privacy: .public) 녹음을 저장")
-            do {
-                let saved = try stop()
-                interruptionNotice = "\(reason) '\(saved.title)' 녹음을 여기까지 저장했습니다. 이어서 녹음하려면 녹음을 다시 시작하세요."
-            } catch {
-                errorMessage = error.errorDescription
-            }
+            stopAndNotify(because: reason, advice: "이어서 녹음하려면 녹음을 다시 시작하세요.")
         case .didWake:
             break
+        }
+    }
+
+    /// 녹음을 정상 정지해 저장하고, 왜 멈췄는지 안내를 남긴다.
+    private func stopAndNotify(because reason: String, advice: String) {
+        do {
+            let saved = try stop()
+            interruptionNotice = "\(reason) '\(saved.title)' 녹음을 여기까지 저장했습니다. \(advice)"
+        } catch {
+            errorMessage = error.errorDescription
+        }
+    }
+
+    /// 녹음 중 남은 저장 공간을 확인한다. 1시간 분량 미만이면 경고하고, 10분 분량 미만이면 자동으로 정지·저장한다.
+    /// 녹음 중에는 주기적으로 불리고, 공간을 알 수 없으면 아무 일도 하지 않는다.
+    public func checkStorage() {
+        guard isRecording, let free = files.availableCapacity(at: storage.root) else { return }
+        if free < Self.storageCriticalBytes {
+            Log.recording.error("저장 공간 바닥, 자동 정지: \(free, privacy: .public) bytes")
+            stopAndNotify(because: "저장 공간이 거의 없어서", advice: "공간을 비운 뒤 다시 녹음하세요.")
+        } else if free < Self.storageWarningBytes {
+            let minutes = Int(free / RecordingFormat.workingBytesPerSecond / 60)
+            storageWarning = "저장 공간이 부족합니다. 약 \(minutes)분 더 녹음할 수 있어요. 공간을 비워 주세요."
+        } else {
+            storageWarning = nil
+        }
+    }
+
+    private func startStorageMonitor() {
+        guard let interval = storageCheckInterval else { return }
+        storageMonitor?.cancel()
+        storageMonitor = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled else { return }
+                self?.checkStorage()
+            }
         }
     }
 
@@ -180,6 +222,8 @@ public final class RecordingController {
         currentRelativePath = relativePath
         state = .recording(startedAt: startedAt)
         interruptionNotice = nil
+        storageWarning = nil
+        startStorageMonitor()
         sleepPreventer?.begin(reason: "수업 녹음 중")
         do {
             try journal?.save(PendingRecording(relativePath: relativePath, subjectName: subject?.name, startedAt: startedAt))
@@ -196,6 +240,9 @@ public final class RecordingController {
         }
         let duration = recorder.stop()
         sleepPreventer?.end()
+        storageMonitor?.cancel()
+        storageMonitor = nil
+        storageWarning = nil
         let recording = Recording(
             title: Self.defaultTitle(subjectName: currentSubjectName, startedAt: startedAt, calendar: calendar),
             subject: currentSubject,

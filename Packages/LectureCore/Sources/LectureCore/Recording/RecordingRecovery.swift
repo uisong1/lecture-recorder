@@ -6,9 +6,9 @@ import SwiftData
 @MainActor
 public struct RecordingRecovery {
     /// 압축된 녹음(AAC 32kbps)의 비트레이트. 길이를 파일 크기로 어림할 때 쓴다.
-    public static let bitsPerSecond: Double = 32_000
+    public static let bitsPerSecond = Double(RecordingFormat.compressedBitRate)
     /// 압축 전 녹음(PCM 16kHz 16비트 모노)의 비트레이트.
-    public static let workingBitsPerSecond: Double = 256_000
+    public static let workingBitsPerSecond = Double(RecordingFormat.workingBytesPerSecond * 8)
 
     private let context: ModelContext
     private let storage: RecordingStorage

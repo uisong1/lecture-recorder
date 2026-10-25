@@ -16,7 +16,7 @@ public struct SystemAudioConverter: AudioConverting {
         AVFormatIDKey: kAudioFormatMPEG4AAC,
         AVSampleRateKey: sampleRate,
         AVNumberOfChannelsKey: 1,
-        AVEncoderBitRateKey: 32_000,
+        AVEncoderBitRateKey: RecordingFormat.compressedBitRate,
         AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
     ] }
 
