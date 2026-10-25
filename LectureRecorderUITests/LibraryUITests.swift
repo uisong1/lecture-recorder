@@ -14,6 +14,7 @@ final class LibraryUITests: XCTestCase {
         button.click()
         XCTAssertTrue(app.staticTexts["recordingSubject"].waitForExistence(timeout: 5))
         button.click()
+        app.keepShortRecordingIfAsked()
         XCTAssertTrue(app.staticTexts["lastSavedTitle"].waitForExistence(timeout: 5))
 
         let unclassified = app.descendants(matching: .any)["sidebar-unclassified"].firstMatch
