@@ -9,14 +9,14 @@ public protocol AudioConverting: Sendable {
 #if canImport(AVFoundation)
 import AVFoundation
 
-/// `AVAudioFile`로 읽고 써서 AAC(모노 64kbps)로 압축한다. 90분에 약 43MB, 3시간에 약 86MB.
+/// `AVAudioFile`로 읽고 써서 AAC(16kHz 모노 32kbps)로 압축한다. 90분에 약 22MB, 3시간에 약 43MB.
 public struct SystemAudioConverter: AudioConverting {
-    /// 입력과 같은 샘플레이트로 쓴다. 다르게 쓰면 길이가 어긋난다.
+    /// 입력과 같은 샘플레이트로 쓴다. 다르게 쓰면 길이가 어긋난다. 16kHz 모노는 64kbps를 받지 않아 32kbps로 한다.
     public static func outputSettings(sampleRate: Double) -> [String: Any] { [
         AVFormatIDKey: kAudioFormatMPEG4AAC,
         AVSampleRateKey: sampleRate,
         AVNumberOfChannelsKey: 1,
-        AVEncoderBitRateKey: 64_000,
+        AVEncoderBitRateKey: 32_000,
         AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
     ] }
 

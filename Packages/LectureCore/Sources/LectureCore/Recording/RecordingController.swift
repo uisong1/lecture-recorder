@@ -32,7 +32,7 @@ public enum RecordingError: Error, Equatable, LocalizedError {
 @MainActor
 @Observable
 public final class RecordingController {
-    /// 녹음을 시작하려면 남아 있어야 하는 공간. 3시간 CAF(약 346MB)와 압축한 m4a(약 86MB)가 함께 있어도 남는 크기.
+    /// 녹음을 시작하려면 남아 있어야 하는 공간. 3시간 CAF(약 346MB)와 압축한 m4a(약 43MB)가 함께 있어도 남는 크기.
     public static let minimumFreeBytes: Int64 = 600 * 1024 * 1024
 
     public enum State: Equatable {

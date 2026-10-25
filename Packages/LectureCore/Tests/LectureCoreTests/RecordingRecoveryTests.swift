@@ -38,7 +38,7 @@ import Testing
     @Test func 남은_파일이_있으면_녹음을_되살린다() throws {
         let subject = try SubjectManager(context: container.mainContext).add(name: "자료구조", color: .green)
         let p = pending()
-        addFile(p, bytes: 480_000) // 64kbps = 초당 8,000바이트 → 60초
+        addFile(p, bytes: 240_000) // 32kbps = 초당 4,000바이트 → 60초
         let journal = InMemoryRecordingJournal(pending: p)
 
         let recovered = try #require(try makeRecovery(journal: journal).recoverIfNeeded())

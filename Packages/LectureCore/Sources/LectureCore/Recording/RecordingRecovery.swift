@@ -5,8 +5,8 @@ import SwiftData
 /// 녹음 중에 앱이 꺼졌다면, 남은 파일로 `Recording`을 만들어 목록에 되살린다.
 @MainActor
 public struct RecordingRecovery {
-    /// 압축된 녹음(AAC 64kbps)의 비트레이트. 길이를 파일 크기로 어림할 때 쓴다.
-    public static let bitsPerSecond: Double = 64_000
+    /// 압축된 녹음(AAC 32kbps)의 비트레이트. 길이를 파일 크기로 어림할 때 쓴다.
+    public static let bitsPerSecond: Double = 32_000
     /// 압축 전 녹음(PCM 16kHz 16비트 모노)의 비트레이트.
     public static let workingBitsPerSecond: Double = 256_000
 
