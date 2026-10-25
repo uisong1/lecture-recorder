@@ -66,5 +66,14 @@ import Testing
         #expect(controller.isPlaying)
         #expect(player.loadedURLs.count == 1)
     }
+
+    @Test func 재생이_끝나면_갱신_때_재생중_표시가_꺼진다() {
+        let controller = makeController()
+        controller.select(makeRecording())
+        controller.play()
+        player.isPlaying = false
+        controller.refresh()
+        #expect(!controller.isPlaying)
+    }
 }
 #endif
