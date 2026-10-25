@@ -7,11 +7,23 @@ public struct PendingRecording: Codable, Equatable, Sendable {
     /// nil이면 미분류.
     public var subjectName: String?
     public var startedAt: Date
+    /// 녹음 중 찍은 북마크 시점(초). 앱이 꺼져도 복구할 수 있게 찍을 때마다 함께 기록한다.
+    public var bookmarkTimes: [TimeInterval]
 
-    public init(relativePath: String, subjectName: String?, startedAt: Date) {
+    public init(relativePath: String, subjectName: String?, startedAt: Date, bookmarkTimes: [TimeInterval] = []) {
         self.relativePath = relativePath
         self.subjectName = subjectName
         self.startedAt = startedAt
+        self.bookmarkTimes = bookmarkTimes
+    }
+
+    /// 북마크가 없던 이전 버전의 저널도 읽을 수 있게 `bookmarkTimes`는 없으면 빈 배열로 읽는다.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        relativePath = try container.decode(String.self, forKey: .relativePath)
+        subjectName = try container.decodeIfPresent(String.self, forKey: .subjectName)
+        startedAt = try container.decode(Date.self, forKey: .startedAt)
+        bookmarkTimes = try container.decodeIfPresent([TimeInterval].self, forKey: .bookmarkTimes) ?? []
     }
 }
 

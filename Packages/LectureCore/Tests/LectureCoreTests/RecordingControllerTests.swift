@@ -494,6 +494,27 @@ final class TestClock {
         await #expect(throws: RecordingError.self) { try await controller.start() }
         #expect(calls == 0)
     }
+
+    @Test func 북마크를_찍을_때마다_저널에_시점이_남는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        #expect(journal.load()?.bookmarkTimes == [])
+        recorder.currentTime = 65
+        controller.addBookmark()
+        recorder.currentTime = 600
+        controller.addBookmark()
+        #expect(journal.load()?.bookmarkTimes == [65, 600])
+        #expect(journal.load()?.relativePath == "미분류/2026-03-02_1000.caf")
+    }
+
+    @Test func 정상_저장되면_저널이_지워진다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 10
+        controller.addBookmark()
+        try controller.stop()
+        #expect(journal.load() == nil)
+    }
 }
 
 @Suite struct ElapsedFormatTests {

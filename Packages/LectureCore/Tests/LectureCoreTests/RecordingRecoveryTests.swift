@@ -106,5 +106,28 @@ import Testing
         #expect(journal.load() == nil)
         journal.clear() // 없어도 오류 없이 지나간다
     }
+
+    @Test func 되살린_녹음에_북마크_시점도_되살린다() throws {
+        let p = PendingRecording(relativePath: "자료구조/2026-03-02_1000.caf", subjectName: nil, startedAt: startedAt, bookmarkTimes: [30, 45, 999])
+        addFile(p, bytes: 1_920_000) // 60초
+        let recovered = try #require(try makeRecovery(journal: InMemoryRecordingJournal(pending: p)).recoverIfNeeded())
+        #expect(recovered.sortedBookmarks.map(\.time) == [30, 45, 60])
+    }
+
+    @Test func 북마크가_없던_이전_저널도_읽는다() throws {
+        let json = #"{"relativePath":"a/b.m4a","startedAt":0}"#
+        let decoded = try JSONDecoder().decode(PendingRecording.self, from: Data(json.utf8))
+        #expect(decoded.bookmarkTimes.isEmpty)
+        #expect(decoded.subjectName == nil)
+    }
+
+    @Test func 북마크_시점이_저널_파일에_저장되고_다시_읽힌다() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "journal-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let journal = FileRecordingJournal(url: url)
+        let p = PendingRecording(relativePath: "a/b.caf", subjectName: "자료구조", startedAt: startedAt, bookmarkTimes: [12.5, 99])
+        try journal.save(p)
+        #expect(journal.load() == p)
+    }
 }
 #endif
