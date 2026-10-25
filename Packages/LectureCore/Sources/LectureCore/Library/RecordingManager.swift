@@ -86,6 +86,13 @@ public final class RecordingManager {
         storage.url(for: recording.relativePath)
     }
 
+    /// macOS 공유 메뉴에 넘길 파일. 파일이 없으면 nil이라 공유 메뉴를 보이지 않는다.
+    /// 어디에 올릴지는 사용자가 공유 메뉴에서 고르며, 앱이 먼저 올리는 일은 없다.
+    public func shareURL(for recording: Recording) -> URL? {
+        let url = fileURL(for: recording)
+        return storage.fileExists(at: url) ? url : nil
+    }
+
     /// "다른 곳에 저장…" 대화상자에 미리 채워 둘 파일 이름 (제목 + 확장자).
     public func suggestedExportName(for recording: Recording) -> String {
         let ext = (recording.relativePath as NSString).pathExtension
