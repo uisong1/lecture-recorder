@@ -36,7 +36,7 @@ final class AppDependencies {
             ? InMemoryRecordingJournal()
             : FileRecordingJournal(url: storage.root.deletingLastPathComponent().appending(path: "pending-recording.json"))
         self.container = container
-        subjects = SubjectManager(context: container.mainContext)
+        subjects = SubjectManager(context: container.mainContext, storage: storage)
         schedule = ScheduleManager(context: container.mainContext)
         let compressor = Self.isUITesting ? nil : RecordingCompressor(
             context: container.mainContext,
@@ -79,6 +79,7 @@ final class AppDependencies {
         let library = library
         let manager = manager
         let recording = recording
+        subjects.activePaths = { recording.currentRelativePath.map { [$0] } ?? [] }
         playback = PlaybackController(
             player: SystemAudioPlayer(),
             storage: storage,

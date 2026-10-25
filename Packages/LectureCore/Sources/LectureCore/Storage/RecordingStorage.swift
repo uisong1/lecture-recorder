@@ -146,6 +146,32 @@ public struct RecordingStorage: Sendable {
         files.fileExists(at: url)
     }
 
+    /// `Recordings/` 기준 폴더가 있는지.
+    public func folderExists(_ relativeFolder: String) -> Bool {
+        let url = root.appending(path: relativeFolder, directoryHint: .isDirectory)
+        return files.fileExists(at: url) || files.isDirectory(at: url)
+    }
+
+    /// 폴더를 통째로 다른 상대 경로로 옮긴다. 같은 볼륨 안의 이름 바꾸기라 파일을 복사하지 않고, 중간에 끊겨도 한쪽에 온전히 남는다.
+    /// 대상 폴더가 이미 있으면 실패한다. 이름의 대소문자만 바꿀 때는 임시 이름을 거친다 (대소문자를 구분하지 않는 디스크 대응).
+    public func moveFolder(from oldFolder: String, to newFolder: String) throws {
+        let source = root.appending(path: oldFolder, directoryHint: .isDirectory)
+        let destination = root.appending(path: newFolder, directoryHint: .isDirectory)
+        try files.createDirectory(at: destination.deletingLastPathComponent())
+        guard oldFolder.compare(newFolder, options: .caseInsensitive) == .orderedSame else {
+            try files.moveItem(at: source, to: destination)
+            return
+        }
+        let temporary = source.deletingLastPathComponent().appending(path: ".\(UUID().uuidString).renaming", directoryHint: .isDirectory)
+        try files.moveItem(at: source, to: temporary)
+        do {
+            try files.moveItem(at: temporary, to: destination)
+        } catch {
+            try? files.moveItem(at: temporary, to: source)
+            throw error
+        }
+    }
+
     /// 파일을 마지막으로 고친 시각. 알 수 없으면 nil.
     public func modificationDate(at relativePath: String) -> Date? {
         files.modificationDate(at: url(for: relativePath))

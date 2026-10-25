@@ -7,6 +7,9 @@ public enum SubjectError: Error, Equatable, LocalizedError {
     case emptyName
     case duplicateName(String)
     case reservedName(String)
+    case folderExists(String)
+    case recordingInProgress
+    case moveFailed(String)
     case saveFailed(String)
 
     public var errorDescription: String? {
@@ -14,6 +17,9 @@ public enum SubjectError: Error, Equatable, LocalizedError {
         case .emptyName: "과목 이름을 입력하세요."
         case .duplicateName(let name): "‘\(name)’ 과목이 이미 있습니다."
         case .reservedName(let name): "‘\(name)’은(는) 과목 이름으로 쓸 수 없습니다."
+        case .folderExists(let name): "‘\(name)’ 폴더가 이미 있어 이름을 바꾸지 않았습니다. 폴더를 먼저 정리하세요."
+        case .recordingInProgress: "녹음 중이거나 압축 중인 녹음이 있어 지금은 이름을 바꿀 수 없습니다. 끝난 뒤에 바꾸세요."
+        case .moveFailed(let reason): "녹음 폴더를 옮기지 못해 이름을 바꾸지 않았습니다: \(reason)"
         case .saveFailed(let reason): "저장하지 못했습니다: \(reason)"
         }
     }
@@ -39,9 +45,14 @@ public final class SubjectManager {
     public var draftColor: SubjectColor = .blue
 
     private let context: ModelContext
+    private let storage: RecordingStorage?
+    /// 지금 녹음 중인 파일의 상대 경로. 그 파일이 든 과목은 이름을 바꾸지 않는다.
+    public var activePaths: @MainActor () -> Set<String> = { [] }
 
-    public init(context: ModelContext) {
+    /// - Parameter storage: 주면 과목 이름을 바꿀 때 녹음 폴더와 녹음 경로도 함께 옮긴다.
+    public init(context: ModelContext, storage: RecordingStorage? = nil) {
         self.context = context
+        self.storage = storage
         reload()
     }
 
@@ -80,8 +91,73 @@ public final class SubjectManager {
     public func rename(_ subject: Subject, to newName: String) throws(SubjectError) {
         let name = try validated(newName, excluding: subject)
         guard name != subject.name else { return }
-        subject.name = name
-        try save()
+        guard let storage else {
+            subject.name = name
+            try save()
+            return
+        }
+        try renameMovingFolder(subject, to: name, storage: storage)
+    }
+
+    /// 이름과 함께 `Recordings/<학기>/<옛 이름>/`을 새 이름 폴더로 옮기고 녹음 경로를 고친다.
+    /// 폴더 이동이나 저장이 실패하면 이름·경로·폴더가 모두 이전 상태로 남는다.
+    private func renameMovingFolder(_ subject: Subject, to name: String, storage: RecordingStorage) throws(SubjectError) {
+        let oldName = subject.name
+        let oldFolder = RecordingStorage.folderPath(semester: subject.semester, subjectName: oldName)
+        let newFolder = RecordingStorage.folderPath(semester: subject.semester, subjectName: name)
+        let oldPrefix = oldFolder + "/"
+        let inFolder = subject.recordings.filter { $0.relativePath.hasPrefix(oldPrefix) }
+
+        if !inFolder.isEmpty {
+            let active = activePaths()
+            guard !inFolder.contains(where: { RecordingStorage.isWorkingPath($0.relativePath) || active.contains($0.relativePath) }) else {
+                throw .recordingInProgress
+            }
+        }
+        guard oldFolder != newFolder else {
+            subject.name = name
+            try save()
+            return
+        }
+        let isCaseOnly = oldFolder.compare(newFolder, options: .caseInsensitive) == .orderedSame
+        if !isCaseOnly, storage.folderExists(newFolder) { throw .folderExists(name) }
+
+        let oldPaths = inFolder.map { ($0, $0.relativePath) }
+        func apply(name: String, folder: String) {
+            subject.name = name
+            for (recording, path) in oldPaths { recording.relativePath = folder + "/" + path.dropFirst(oldPrefix.count) }
+        }
+
+        let moved = storage.folderExists(oldFolder)
+        if moved {
+            do {
+                try storage.moveFolder(from: oldFolder, to: newFolder)
+            } catch {
+                Log.storage.error("과목 폴더 이동 실패 \(oldFolder, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                throw .moveFailed(error.localizedDescription)
+            }
+        }
+        apply(name: name, folder: newFolder)
+        do {
+            try context.save()
+        } catch {
+            Log.data.error("과목 이름 저장 실패: \(error.localizedDescription, privacy: .public)")
+            context.rollback()
+            apply(name: oldName, folder: oldFolder)
+            if moved {
+                do {
+                    try storage.moveFolder(from: newFolder, to: oldFolder)
+                } catch {
+                    // 폴더를 되돌리지 못했으면 기록이 파일을 따라가게 한다. 녹음이 사라지는 것보다 새 이름으로 남는 편이 낫다.
+                    Log.storage.error("과목 폴더를 되돌리지 못함 \(newFolder, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    apply(name: name, folder: newFolder)
+                    try? context.save()
+                }
+            }
+            reload()
+            throw .saveFailed(error.localizedDescription)
+        }
+        reload()
     }
 
     public func setColor(_ color: SubjectColor, for subject: Subject) throws(SubjectError) {

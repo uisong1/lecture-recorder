@@ -233,3 +233,8 @@
 ## 2026-10-25. 녹음 컨트롤러에서 판정 로직을 작은 타입으로 뺀다 (3-49)
 - 결정: 630줄 `RecordingController`에서 (1) 상황마다 한 번만 보내는 경고 알림(`RecordingAlertRaiser`), (2) 녹음기 멈춤 확인(`RecorderHealthMonitor`), (3) 남은 저장 공간 판정과 경고 문구(`StorageSpaceStatus`, 값만 보는 enum)를 각각 뺐다. 컨트롤러는 이 타입들을 불러 화면 상태와 자동 정지만 맡는다. `RecordingController.storageWarningBytes`/`storageCriticalBytes`는 같은 값을 그대로 가리킨다.
 - 이유: 한 파일이 너무 커서 고칠 때 부작용을 가늠하기 어려웠다. 동작을 바꾸지 않는다는 보장은 기존 `RecordingControllerTests`·`RecordingAlertTests`·`RecordingFormatTests`를 한 줄도 바꾸지 않고 통과시키는 것으로 확인했고, 값만 보는 판정은 SwiftData 없이 Linux CI에서도 직접 테스트한다.
+
+## 2026-10-25. 과목 이름을 바꾸면 폴더를 통째로 옮기고 녹음 경로를 고친다 (3-51)
+- 결정: `SubjectManager(context:storage:)`에 저장소를 주면 `rename`이 `Recordings/<학기>/<옛 이름>/`을 새 이름 폴더로 한 번에 옮기고(`RecordingStorage.moveFolder`, 같은 볼륨 안의 이름 바꾸기) 그 폴더 아래 녹음의 `relativePath`를 고친다. 새 이름 폴더가 이미 있으면 `folderExists`로 거부한다. 폴더 이동이 실패하면 아무것도 바꾸지 않고, DB 저장이 실패하면 롤백하고 폴더를 되돌린다(되돌리지 못하면 녹음을 잃지 않도록 기록이 파일을 따라가게 다시 저장). 녹음 중이거나 압축 전(CAF)인 녹음이 폴더에 있으면 `recordingInProgress`로 거부한다. 대소문자만 바꾸면 임시 이름을 거쳐 옮긴다. 옛 폴더는 통째로 옮겨지므로 비어서 남지 않는다.
+- 이유: 이름만 바뀌면 "폴더 다시 읽기"(3-35)가 옛 폴더를 읽고 같은 과목을 둘로 가른다. 마이그레이터처럼 파일 하나씩 복사·확인·삭제하지 않고 폴더 이름 바꾸기를 쓴 것은, 같은 볼륨에서 원자적이라 복사 중간 상태가 없고 용량도 두 배로 쓰지 않기 때문이다.
+
