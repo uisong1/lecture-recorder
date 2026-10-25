@@ -107,7 +107,7 @@ public final class RecordingController {
     private let overrunNotifier: (any NotificationScheduling)?
     private var classEnd: Date?
     private var overrunNotified = false
-    private var alertsSent: Set<RecordingAlert> = []
+    private let alertRaiser: RecordingAlertRaiser
     private var recordingInputDevice: AudioInputDevice?
     private let compressor: RecordingCompressor?
     private var compressionTask: Task<Void, Never>?
@@ -150,6 +150,7 @@ public final class RecordingController {
         self.powerStatus = powerStatus
         self.inputMonitor = inputMonitor
         self.overrunNotifier = overrunNotifier
+        alertRaiser = RecordingAlertRaiser(notifier: overrunNotifier)
         self.compressor = compressor
         self.storageCheckInterval = storageCheckInterval
         self.levelCheckInterval = levelCheckInterval
@@ -230,12 +231,8 @@ public final class RecordingController {
         if isInputSilent { raise(.inputSilent) }
     }
 
-    /// 앱이 뒤에 있어도 알 수 있게 시스템 알림을 보낸다. 같은 녹음에서 종류마다 한 번만, 이미 알림을 허용한 경우에만
-    /// (권한을 새로 묻지 않는다). 화면 경고는 따로 있으므로 알림이 없어도 알 수 있다.
     private func raise(_ alert: RecordingAlert, body: String? = nil) {
-        guard alertsSent.insert(alert).inserted, let notifier = overrunNotifier else { return }
-        let text = body ?? alert.body
-        Task { await notifier.notify(title: alert.title, body: text, identifier: alert.identifier) }
+        alertRaiser.raise(alert, body: body)
     }
 
     /// 녹음 중인 수업이 끝난 지 10분이 지났을 때 화면에 보일 안내. 아직이거나 수업을 모르면 nil.
@@ -379,7 +376,7 @@ public final class RecordingController {
         interruptionNotice = nil
         recorderStallNotice = nil
         stallDetector.reset()
-        alertsSent = []
+        alertRaiser.reset()
         storageWarning = nil
         startStorageMonitor()
         silenceDetector.reset()
