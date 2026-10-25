@@ -26,31 +26,40 @@ import Testing
 
     @Test func 정확히_10초까지는_경고하지_않고_넘으면_경고한다() {
         var detector = SilenceDetector()
-        #expect(!detector.update(level: 0, at: start))
-        #expect(!detector.update(level: 0, at: start.addingTimeInterval(10)))
-        #expect(detector.update(level: 0, at: start.addingTimeInterval(10.1)))
+        let r2777 = detector.update(level: 0, at: start)
+        #expect(!r2777)
+        let r3930 = detector.update(level: 0, at: start.addingTimeInterval(10))
+        #expect(!r3930)
+        let r4584 = detector.update(level: 0, at: start.addingTimeInterval(10.1))
+        #expect(r4584)
     }
 
     @Test func 소리가_들어오면_처음부터_다시_센다() {
         var detector = SilenceDetector()
         _ = detector.update(level: 0, at: start)
-        #expect(!detector.update(level: 0.5, at: start.addingTimeInterval(9)))
-        #expect(!detector.update(level: 0, at: start.addingTimeInterval(15)))
-        #expect(detector.update(level: 0, at: start.addingTimeInterval(25.5)))
-        #expect(!detector.update(level: 0.5, at: start.addingTimeInterval(26)))
+        let r9521 = detector.update(level: 0.5, at: start.addingTimeInterval(9))
+        #expect(!r9521)
+        let r254 = detector.update(level: 0, at: start.addingTimeInterval(15))
+        #expect(!r254)
+        let r2455 = detector.update(level: 0, at: start.addingTimeInterval(25.5))
+        #expect(r2455)
+        let r6330 = detector.update(level: 0.5, at: start.addingTimeInterval(26))
+        #expect(!r6330)
     }
 
     @Test func 기준과_같은_크기는_무음이_아니다() {
         var detector = SilenceDetector()
         _ = detector.update(level: InputLevel.silenceThreshold, at: start)
-        #expect(!detector.update(level: InputLevel.silenceThreshold, at: start.addingTimeInterval(60)))
+        let r4016 = detector.update(level: InputLevel.silenceThreshold, at: start.addingTimeInterval(60))
+        #expect(!r4016)
     }
 
     @Test func 초기화하면_세던_시간을_지운다() {
         var detector = SilenceDetector()
         _ = detector.update(level: 0, at: start)
         detector.reset()
-        #expect(!detector.update(level: 0, at: start.addingTimeInterval(30)))
+        let r8285 = detector.update(level: 0, at: start.addingTimeInterval(30))
+        #expect(!r8285)
     }
 }
 
