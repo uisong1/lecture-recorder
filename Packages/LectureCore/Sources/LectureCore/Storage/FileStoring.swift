@@ -18,6 +18,8 @@ public protocol FileStoring: Sendable {
     func removeEmptyDirectory(at url: URL) throws
     /// 폴더 바로 아래의 항목들 (숨김 파일 포함). 폴더가 없으면 오류.
     func contentsOfDirectory(at url: URL) throws -> [URL]
+    /// `data`를 `url`에 쓴다. 이미 있으면 새 내용으로 바꾼다 (쓰다가 실패해도 기존 파일이 반쯤 덮이지 않는다).
+    func writeData(_ data: Data, to url: URL) throws
     /// 파일 크기(바이트). 없거나 알 수 없으면 nil.
     func fileSize(at url: URL) -> Int64?
     /// 남은 저장 공간(바이트). 알 수 없으면 nil.
@@ -79,6 +81,10 @@ public struct LocalFileStore: FileStoring {
             try? manager.removeItem(at: temporary)
             throw error
         }
+    }
+
+    public func writeData(_ data: Data, to url: URL) throws {
+        try data.write(to: url, options: .atomic)
     }
 
     public func isDirectory(at url: URL) -> Bool {

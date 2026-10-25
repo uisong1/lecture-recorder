@@ -136,6 +136,23 @@ final class FakeFileStore: FileStoring, @unchecked Sendable {
         }
     }
 
+    /// `writeData`로 쓴 내용 (경로 → 데이터).
+    private(set) var written: [String: Data] = [:]
+    var failNextWrite = false
+
+    func writeData(_ data: Data, to url: URL) throws {
+        try lock.withLock {
+            if failNextWrite {
+                failNextWrite = false
+                throw CocoaError(.fileWriteOutOfSpace)
+            }
+            let path = url.standardizedFileURL.path
+            paths.insert(path)
+            written[path] = data
+            sizes[path] = Int64(data.count)
+        }
+    }
+
     func fileSize(at url: URL) -> Int64? {
         lock.withLock { sizes[url.standardizedFileURL.path] }
     }

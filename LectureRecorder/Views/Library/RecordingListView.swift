@@ -13,6 +13,8 @@ struct RecordingListView: View {
     @State private var deleting: Recording?
     /// 녹음 목록 대신 북마크를 모아 본다.
     @State private var showsBookmarks = false
+    /// Claude용 묶음 내보내기 결과 안내.
+    @State private var bundleNotice: String?
 
     var body: some View {
         Group {
@@ -94,6 +96,12 @@ struct RecordingListView: View {
                 .accessibilityIdentifier("listModePicker")
             }
             ToolbarItem {
+                Button("Claude용 내보내기…") { exportBundle() }
+                    .help("지금 목록의 녹음과 북마크·메모를 한 폴더로 묶어 내보냅니다.")
+                    .disabled(showsBookmarks || library.recordings.isEmpty)
+                    .accessibilityIdentifier("exportBundle")
+            }
+            ToolbarItem {
                 Picker("정렬", selection: Binding(get: { library.sortOrder }, set: { library.sortOrder = $0 })) {
                     ForEach(RecordingSortOrder.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
@@ -123,6 +131,11 @@ struct RecordingListView: View {
             Button("변경") {
                 if let recording = renaming { perform { try manager.rename(recording, to: renameText) } }
             }
+        }
+        .alert("내보내기", isPresented: Binding(get: { bundleNotice != nil }, set: { if !$0 { bundleNotice = nil } })) {
+            Button("확인") {}
+        } message: {
+            Text(bundleNotice ?? "")
         }
         .confirmationDialog(
             "‘\(deleting?.title ?? "")’을(를) 삭제할까요?",
@@ -166,6 +179,29 @@ struct RecordingListView: View {
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let destination = panel.url else { return }
         perform { try manager.export(recording, to: destination) }
+    }
+
+    /// 지금 목록(고른 과목과 기간)의 녹음을 폴더를 골라 묶어 내보내고 Finder에서 보여 준다.
+    private func exportBundle() {
+        let recordings = library.recordings
+        guard !recordings.isEmpty else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "묶음을 만들 위치를 고르세요."
+        panel.prompt = "여기에 내보내기"
+        guard panel.runModal() == .OK, let parent = panel.url else { return }
+        do {
+            let result = try manager.exportBundle(recordings, label: library.exportLabel, to: parent, now: Date())
+            NSWorkspace.shared.activateFileViewerSelecting([result.folder])
+            if !result.skippedTitles.isEmpty {
+                bundleNotice = "녹음 \(result.exportedCount)개를 내보냈습니다. 파일이 없어 빠진 녹음: " + result.skippedTitles.joined(separator: ", ")
+            }
+        } catch {
+            bundleNotice = manager.errorMessage ?? error.localizedDescription
+        }
     }
 
     /// 동작을 실행하고 목록을 다시 읽는다. 오류 문구는 `manager.errorMessage`에 남는다.

@@ -35,6 +35,19 @@ import Testing
         #expect(library.recordings.map(\.title) == ["수요일", "월요일"])
     }
 
+    @Test func 내보내기_이름은_분류와_기간을_담는다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let library = RecordingLibrary(context: context)
+        #expect(library.exportLabel == "모든 녹음")
+        library.select(.subject(ds.persistentModelID))
+        #expect(library.exportLabel == "자료구조")
+        library.select(.unclassified)
+        #expect(library.exportLabel == "미분류")
+        library.select(.all)
+        library.filter.period = .last7Days
+        #expect(library.exportLabel == "모든 녹음 최근 7일")
+    }
+
     @Test func 미분류를_고르면_과목_없는_녹음만_나온다() throws {
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         addRecording("과목 있음", subject: ds, at: date(2026, 3, 2, 10, 0))
