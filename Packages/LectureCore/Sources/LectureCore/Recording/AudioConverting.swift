@@ -9,7 +9,7 @@ public protocol AudioConverting: Sendable {
 #if canImport(AVFoundation)
 import AVFoundation
 
-/// `AVAudioFile`로 읽고 써서 AAC(16kHz 모노 32kbps)로 압축한다. 90분에 약 22MB, 3시간에 약 43MB.
+/// `AVAudioFile`로 읽고 써서 AAC(16kHz 모노 32kbps)로 압축한다. 작은 소리는 `VolumeNormalizer` 배율로 키운다. 90분에 약 22MB, 3시간에 약 43MB.
 public struct SystemAudioConverter: AudioConverting {
     /// 입력과 같은 샘플레이트로 쓴다. 다르게 쓰면 길이가 어긋난다. 16kHz 모노는 64kbps를 받지 않아 32kbps로 한다.
     public static func outputSettings(sampleRate: Double) -> [String: Any] { [
@@ -32,6 +32,33 @@ public struct SystemAudioConverter: AudioConverting {
         }.value
     }
 
+    /// 처음부터 끝까지 읽어 가장 큰 소리 크기(0...1)를 찾는다. 한 번에 한 조각만 읽는다.
+    private static func peakLevel(of file: AVAudioFile, buffer: AVAudioPCMBuffer) throws -> Float {
+        file.framePosition = 0
+        var peak: Float = 0
+        while file.framePosition < file.length {
+            try file.read(into: buffer, frameCount: chunkFrames)
+            guard buffer.frameLength > 0 else { break }
+            guard let channels = buffer.floatChannelData else { return 0 }
+            for channel in 0..<Int(buffer.format.channelCount) {
+                for frame in 0..<Int(buffer.frameLength) {
+                    peak = max(peak, abs(channels[channel][frame]))
+                }
+            }
+        }
+        file.framePosition = 0
+        return peak
+    }
+
+    private static func apply(gain: Float, to buffer: AVAudioPCMBuffer) {
+        guard gain != 1, let channels = buffer.floatChannelData else { return }
+        for channel in 0..<Int(buffer.format.channelCount) {
+            for frame in 0..<Int(buffer.frameLength) {
+                channels[channel][frame] *= gain
+            }
+        }
+    }
+
     private static func convert(from source: URL, to destination: URL) throws -> TimeInterval {
         let input = try AVAudioFile(forReading: source)
         let format = input.processingFormat
@@ -45,9 +72,13 @@ public struct SystemAudioConverter: AudioConverting {
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunkFrames) else {
             throw CocoaError(.fileWriteUnknown)
         }
+        // 작은 소리를 키우는 배율. 읽기에 실패해도 원본 음량으로 압축한다.
+        let gain = (try? peakLevel(of: input, buffer: buffer)).map(VolumeNormalizer.gain(forPeak:)) ?? 1
+        if gain != 1 { Log.recording.info("음량 자동 정규화 배율 \(gain, privacy: .public)") }
         while input.framePosition < input.length {
             try input.read(into: buffer, frameCount: chunkFrames)
             guard buffer.frameLength > 0 else { break }
+            apply(gain: gain, to: buffer)
             try output?.write(from: buffer)
         }
         output = nil
