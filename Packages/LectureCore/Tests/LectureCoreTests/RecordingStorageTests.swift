@@ -109,4 +109,43 @@ import Testing
         #expect(RecordingStorage.isWorkingPath("자료구조/a.caf"))
         #expect(!RecordingStorage.isWorkingPath("자료구조/a.m4a"))
     }
+
+    // MARK: 폴더 훑기와 빈 폴더 정리
+
+    func store(_ paths: [String], directories: [String] = []) throws -> (RecordingStorage, FakeFileStore) {
+        let files = FakeFileStore()
+        let storage = RecordingStorage(root: root, files: files)
+        for path in paths { files.add(storage.url(for: path)) }
+        for directory in directories { try files.createDirectory(at: storage.url(for: directory)) }
+        return (storage, files)
+    }
+
+    @Test func 오디오_파일만_모으고_임시_파일과_숨김_파일은_뺀다() throws {
+        let (storage, _) = try store([
+            "학기/과목/a.m4a", "학기/과목/b.caf", "학기/과목/b.converting.m4a",
+            "학기/과목/메모.txt", "학기/과목/.hidden.m4a", "미분류/c.M4A",
+        ])
+        #expect(storage.audioFilePaths() == ["미분류/c.M4A", "학기/과목/a.m4a", "학기/과목/b.caf"])
+    }
+
+    @Test func 빈_폴더만_지우고_파일이_있는_폴더와_루트는_남긴다() throws {
+        let (storage, files) = try store(["학기/과목/a.m4a"], directories: ["예전과목", "학기/빈과목", "깊은", "깊은/빈"])
+        let removed = storage.removeEmptyFolders()
+        #expect(removed == 4)
+        #expect(!files.isDirectory(at: storage.url(for: "예전과목")))
+        #expect(!files.isDirectory(at: storage.url(for: "깊은")))
+        #expect(files.fileExists(at: storage.url(for: "학기/과목/a.m4a")))
+    }
+
+    @Test func DS_Store만_있는_폴더는_비었다고_본다() throws {
+        let (storage, files) = try store(["예전과목/.DS_Store"])
+        #expect(storage.removeEmptyFolders() == 1)
+        #expect(!files.isDirectory(at: storage.url(for: "예전과목")))
+    }
+
+    @Test func 숨김_파일이_있는_폴더는_지우지_않는다() throws {
+        let (storage, files) = try store(["예전과목/.hidden"])
+        #expect(storage.removeEmptyFolders() == 0)
+        #expect(files.fileExists(at: storage.url(for: "예전과목/.hidden")))
+    }
 }
