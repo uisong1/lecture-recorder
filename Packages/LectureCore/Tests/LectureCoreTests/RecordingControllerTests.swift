@@ -108,6 +108,56 @@ import Testing
         #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
     }
 
+    @Test func 일시정지_후_재개해도_하나의_파일로_저장된다() async throws {
+        let controller = makeController(at: clock)
+        try await controller.start()
+        try controller.pause()
+        #expect(controller.isPaused)
+        #expect(controller.isRecording)
+        #expect(recorder.isPaused)
+        try controller.resume()
+        #expect(!controller.isPaused)
+        #expect(!recorder.isPaused)
+        recorder.currentTime = 120
+        let saved = try controller.stop()
+        #expect(recorder.startedURLs.count == 1)
+        #expect(saved.duration == 120)
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
+    }
+
+    @Test func 일시정지_중에도_정지하면_저장된다() async throws {
+        let controller = makeController(at: clock)
+        try await controller.start()
+        recorder.currentTime = 30
+        try controller.pause()
+        let saved = try controller.stop()
+        #expect(saved.duration == 30)
+        #expect(!controller.isRecording)
+        #expect(!controller.isPaused)
+    }
+
+    @Test func 녹음_중이_아니면_일시정지와_재개를_할_수_없다() {
+        let controller = makeController(at: clock)
+        #expect(throws: RecordingError.notRecording) { try controller.pause() }
+        #expect(throws: RecordingError.notRecording) { try controller.resume() }
+    }
+
+    @Test func 일시정지하지_않았으면_재개할_수_없다() async throws {
+        let controller = makeController(at: clock)
+        try await controller.start()
+        #expect(throws: RecordingError.notPaused) { try controller.resume() }
+    }
+
+    @Test func 재개에_실패하면_일시정지_상태로_남고_오류를_알린다() async throws {
+        let controller = makeController(at: clock)
+        try await controller.start()
+        try controller.pause()
+        recorder.resumeError = CocoaError(.fileWriteUnknown)
+        controller.togglePause()
+        #expect(controller.isPaused)
+        #expect(controller.errorMessage?.hasPrefix("녹음을 다시 시작하지 못했습니다") == true)
+    }
+
     @Test func 같은_분에_두_번_녹음하면_파일_이름이_겹치지_않는다() async throws {
         let controller = makeController(at: clock)
         try await controller.start()

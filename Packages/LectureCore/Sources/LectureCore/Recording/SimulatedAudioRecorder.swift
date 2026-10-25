@@ -6,6 +6,9 @@ import Foundation
 public final class SimulatedAudioRecorder: AudioRecording {
     private let now: @MainActor () -> Date
     private var startedAt: Date?
+    private var pausedAt: Date?
+    /// 일시정지로 빠진 시간의 합.
+    private var pausedTotal: TimeInterval = 0
 
     public init(now: @escaping @MainActor () -> Date = { Date() }) {
         self.now = now
@@ -13,17 +16,35 @@ public final class SimulatedAudioRecorder: AudioRecording {
 
     public var isRecording: Bool { startedAt != nil }
 
+    public var isPaused: Bool { pausedAt != nil }
+
     public var currentTime: TimeInterval {
-        startedAt.map { now().timeIntervalSince($0) } ?? 0
+        guard let startedAt else { return 0 }
+        return (pausedAt ?? now()).timeIntervalSince(startedAt) - pausedTotal
     }
 
     public func start(to url: URL) throws {
         startedAt = now()
+        pausedAt = nil
+        pausedTotal = 0
+    }
+
+    public func pause() {
+        guard startedAt != nil, pausedAt == nil else { return }
+        pausedAt = now()
+    }
+
+    public func resume() throws {
+        guard let pausedAt else { return }
+        pausedTotal += now().timeIntervalSince(pausedAt)
+        self.pausedAt = nil
     }
 
     public func stop() -> TimeInterval {
         let duration = currentTime
         startedAt = nil
+        pausedAt = nil
+        pausedTotal = 0
         return duration
     }
 }

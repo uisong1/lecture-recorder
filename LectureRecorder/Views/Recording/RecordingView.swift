@@ -10,7 +10,7 @@ struct RecordingView: View {
         VStack(spacing: 20) {
             TimelineView(.periodic(from: .now, by: 0.5)) { _ in
                 VStack(spacing: 6) {
-                    Text(recording.isRecording ? recording.currentSubjectName : "녹음 대기")
+                    Text(recording.isRecording ? recording.currentSubjectName + (recording.isPaused ? " (일시정지)" : "") : "녹음 대기")
                         .font(.title2.bold())
                         .accessibilityIdentifier("recordingSubject")
                     Text(recording.elapsedText)
@@ -32,6 +32,16 @@ struct RecordingView: View {
             .help(recording.isRecording ? "녹음 정지 (⌘R)" : "녹음 시작 (⌘R)")
             .accessibilityLabel(recording.isRecording ? "녹음 정지" : "녹음 시작")
             .accessibilityIdentifier("recordButton")
+
+            if recording.isRecording {
+                Button {
+                    recording.togglePause()
+                } label: {
+                    Label(recording.isPaused ? "재개" : "일시정지", systemImage: recording.isPaused ? "play.fill" : "pause.fill")
+                }
+                .keyboardShortcut("p", modifiers: .command)
+                .accessibilityIdentifier("pauseButton")
+            }
 
             if let message = recording.errorMessage {
                 Label(message, systemImage: "exclamationmark.triangle")

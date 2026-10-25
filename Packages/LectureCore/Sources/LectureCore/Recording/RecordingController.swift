@@ -7,6 +7,8 @@ public enum RecordingError: Error, Equatable, LocalizedError {
     case permissionDenied
     case alreadyRecording
     case notRecording
+    case notPaused
+    case resumeFailed(String)
     case insufficientStorage
     case startFailed(String)
     case saveFailed(String)
@@ -16,6 +18,8 @@ public enum RecordingError: Error, Equatable, LocalizedError {
         case .permissionDenied: "마이크 권한이 없어 녹음할 수 없습니다. 시스템 설정에서 권한을 켜 주세요."
         case .alreadyRecording: "이미 녹음 중입니다."
         case .notRecording: "녹음 중이 아닙니다."
+        case .notPaused: "일시정지 중이 아닙니다."
+        case .resumeFailed(let reason): "녹음을 다시 시작하지 못했습니다: \(reason)"
         case .insufficientStorage: "저장 공간이 부족해 녹음을 시작할 수 없습니다."
         case .startFailed(let reason): "녹음을 시작하지 못했습니다: \(reason)"
         case .saveFailed(let reason): "녹음을 저장하지 못했습니다: \(reason)"
@@ -34,6 +38,14 @@ public final class RecordingController {
     public enum State: Equatable {
         case idle
         case recording(startedAt: Date)
+        case paused(startedAt: Date)
+
+        var startedAt: Date? {
+            switch self {
+            case .idle: nil
+            case .recording(let date), .paused(let date): date
+            }
+        }
     }
 
     public private(set) var state: State = .idle
@@ -70,8 +82,11 @@ public final class RecordingController {
         self.now = now
     }
 
-    public var isRecording: Bool {
-        if case .recording = state { true } else { false }
+    /// 일시정지 중에도 true다 (녹음 세션이 열려 있다).
+    public var isRecording: Bool { state != .idle }
+
+    public var isPaused: Bool {
+        if case .paused = state { true } else { false }
     }
 
     /// 화면에 보여줄 과목 이름.
@@ -120,7 +135,7 @@ public final class RecordingController {
 
     @discardableResult
     public func stop() throws(RecordingError) -> Recording {
-        guard case .recording(let startedAt) = state, let relativePath = currentRelativePath else {
+        guard let startedAt = state.startedAt, let relativePath = currentRelativePath else {
             throw .notRecording
         }
         let duration = recorder.stop()
@@ -145,6 +160,39 @@ public final class RecordingController {
         }
         lastSaved = recording
         return recording
+    }
+
+    /// 녹음을 잠시 멈춘다. 이미 멈춘 상태면 아무 일도 하지 않는다.
+    public func pause() throws(RecordingError) {
+        switch state {
+        case .idle: throw .notRecording
+        case .paused: return
+        case .recording(let startedAt):
+            recorder.pause()
+            state = .paused(startedAt: startedAt)
+        }
+    }
+
+    /// 일시정지한 녹음을 같은 파일에 이어서 녹음한다.
+    public func resume() throws(RecordingError) {
+        guard case .paused(let startedAt) = state else { throw isRecording ? .notPaused : .notRecording }
+        do {
+            try recorder.resume()
+        } catch {
+            Log.recording.error("녹음 재개 실패: \(error.localizedDescription, privacy: .public)")
+            throw .resumeFailed(error.localizedDescription)
+        }
+        state = .recording(startedAt: startedAt)
+    }
+
+    /// 일시정지 중이면 재개하고, 녹음 중이면 일시정지한다.
+    public func togglePause() {
+        do {
+            if isPaused { try resume() } else { try pause() }
+            errorMessage = nil
+        } catch {
+            errorMessage = error.errorDescription
+        }
     }
 
     /// 버튼 하나로 시작·정지한다. 실패하면 `errorMessage`에 남긴다.
