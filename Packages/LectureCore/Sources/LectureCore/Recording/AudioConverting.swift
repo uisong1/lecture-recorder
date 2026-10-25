@@ -11,13 +11,13 @@ import AVFoundation
 
 /// `AVAudioFile`로 읽고 써서 AAC(모노 64kbps)로 압축한다. 90분에 약 43MB, 3시간에 약 86MB.
 public struct SystemAudioConverter: AudioConverting {
-    public static let outputSettings: [String: Any] = [
+    public static var outputSettings: [String: Any] { [
         AVFormatIDKey: kAudioFormatMPEG4AAC,
         AVSampleRateKey: 44_100,
         AVNumberOfChannelsKey: 1,
         AVEncoderBitRateKey: 64_000,
         AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
-    ]
+    ] }
 
     /// 한 번에 읽는 프레임 수. 3시간짜리도 메모리를 조금만 쓰게 나눠서 처리한다.
     private static let chunkFrames: AVAudioFrameCount = 64 * 1024
