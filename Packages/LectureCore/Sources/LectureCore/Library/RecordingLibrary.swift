@@ -5,6 +5,8 @@ import SwiftData
 
 /// 사이드바에서 고를 수 있는 분류.
 public enum LibrarySelection: Hashable, Sendable {
+    /// 과목과 상관없이 모든 녹음.
+    case all
     case subject(PersistentIdentifier)
     case unclassified
 }
@@ -64,9 +66,18 @@ public final class RecordingLibrary {
         inCategory(selection).count
     }
 
+    /// 목록 행에 과목 이름을 함께 보여야 하는지. "모든 녹음"에서는 어느 과목인지 알 수 있어야 한다.
+    public var showsSubjectName: Bool { selection == .all }
+
+    /// 행에 보일 과목 이름. 과목이 없으면 "미분류".
+    public func subjectName(of recording: Recording) -> String {
+        recording.subject?.name ?? SubjectManager.unclassifiedName
+    }
+
     private func inCategory(_ selection: LibrarySelection?) -> [Recording] {
         switch selection {
         case nil: []
+        case .all: all
         case .unclassified: all.filter { $0.subject == nil }
         case .subject(let id): all.filter { $0.subject?.persistentModelID == id }
         }

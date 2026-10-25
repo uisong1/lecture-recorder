@@ -18,7 +18,7 @@ struct RecordingListView: View {
                 ContentUnavailableView("조건에 맞는 녹음이 없습니다", systemImage: "magnifyingglass", description: Text("검색어나 기간을 바꿔 보세요."))
                     .accessibilityIdentifier("noMatchingRecordings")
             } else if library.recordings.isEmpty {
-                ContentUnavailableView("녹음이 없습니다", systemImage: "waveform", description: Text("이 과목으로 녹음한 수업이 여기에 나타납니다."))
+                ContentUnavailableView("녹음이 없습니다", systemImage: "waveform", description: Text(library.selection == .all ? "녹음한 수업이 여기에 나타납니다." : "이 과목으로 녹음한 수업이 여기에 나타납니다."))
                     .accessibilityIdentifier("emptyRecordings")
             } else {
                 List(library.recordings) { recording in
@@ -28,7 +28,7 @@ struct RecordingListView: View {
                                 .designText(.bodyStrong)
                                 .foregroundStyle(Design.Palette.ink)
                                 .accessibilityIdentifier("recordingRow")
-                            Text("\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(RecordingController.format(recording.duration))")
+                            Text((library.showsSubjectName ? "\(library.subjectName(of: recording)) · " : "") + "\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(RecordingController.format(recording.duration))")
                                 .designText(.caption)
                                 .foregroundStyle(Design.Palette.inkMuted)
                         }
