@@ -117,7 +117,7 @@ public final class RecordingController {
     private var levelMonitor: Task<Void, Never>?
     private let levelCheckInterval: Duration?
     private var silenceDetector = SilenceDetector()
-    private var stallDetector = RecorderStallDetector()
+    private var healthMonitor = RecorderHealthMonitor()
     private let calendar: Calendar
     private let now: @MainActor () -> Date
 
@@ -207,13 +207,12 @@ public final class RecordingController {
     /// 자동으로 새 파일에 이어 녹음하지는 않는다 (사용자가 다시 시작한다).
     public func checkRecorderHealth() {
         guard isRecording else { return }
-        let verdict = stallDetector.update(elapsed: recorder.currentTime, isPaused: isPaused, recorderEnded: recorder.hasEnded)
-        guard case .stalled(let reason) = verdict else { return }
+        guard let reason = healthMonitor.check(recorder, isPaused: isPaused) else { return }
         Log.recording.fault("녹음기가 멈춤 (\(String(describing: reason), privacy: .public)), 지금까지 녹음을 저장")
         stopAndNotify(because: "녹음기가 멈춰서", advice: "녹음을 다시 시작하세요.", alert: .recorderStalled, recorderStalled: true)
         if recorderStallNotice == nil {
             // 저장 자체가 실패한 경우에도 멈춘 사실은 크게 보인다. 이유는 errorMessage에 있다.
-            recorderStallNotice = "녹음이 멈춘 것 같습니다. 녹음을 다시 시작하세요."
+            recorderStallNotice = RecorderHealthMonitor.unsavedNotice
         }
     }
 
@@ -375,7 +374,7 @@ public final class RecordingController {
         state = .recording(startedAt: startedAt)
         interruptionNotice = nil
         recorderStallNotice = nil
-        stallDetector.reset()
+        healthMonitor.reset()
         alertRaiser.reset()
         storageWarning = nil
         startStorageMonitor()
@@ -426,7 +425,7 @@ public final class RecordingController {
             relativePath: relativePath
         )
         if recorderStalled {
-            recorderStallNotice = "녹음이 멈춘 것 같습니다. '\(recording.title)' 녹음을 여기까지 저장했습니다. 녹음을 다시 시작하세요."
+            recorderStallNotice = RecorderHealthMonitor.savedNotice(title: recording.title)
         }
         state = .idle
         currentSubject = nil
