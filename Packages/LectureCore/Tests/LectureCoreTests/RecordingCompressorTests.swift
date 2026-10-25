@@ -73,6 +73,29 @@ import Testing
         #expect(files.fileExists(at: root.appending(path: "자료구조/a.caf")))
     }
 
+    @Test func 변환하는_동안_녹음을_지웠으면_결과_파일을_남기지_않는다() async throws {
+        let recording = try addRecording("자료구조/a.caf")
+        let manager = RecordingManager(context: container.mainContext, storage: RecordingStorage(root: root, files: files))
+        converter.whileConverting = { try? manager.delete(recording) }
+
+        #expect(await compressor.compress(recording) == false)
+
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 0)
+        #expect(!files.fileExists(at: root.appending(path: "자료구조/a.m4a")))
+        #expect(!files.fileExists(at: root.appending(path: "자료구조/a.converting.m4a")))
+        #expect(!files.fileExists(at: root.appending(path: "자료구조/a.caf")))
+    }
+
+    @Test func 이미_지워진_녹음은_변환하지_않는다() async throws {
+        let recording = try addRecording("자료구조/a.caf")
+        container.mainContext.delete(recording)
+        try container.mainContext.save()
+
+        #expect(await compressor.compress(recording) == false)
+
+        #expect(converter.converted.isEmpty)
+    }
+
     @Test func 파일이_없으면_건드리지_않는다() async throws {
         let recording = try addRecording("자료구조/a.caf", createFile: false)
 

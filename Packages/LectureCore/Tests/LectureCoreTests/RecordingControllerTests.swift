@@ -373,6 +373,42 @@ final class TestClock {
         #expect(journal.load() != nil)
     }
 
+    @Test func 녹음_중에_과목이_지워져도_녹음은_미분류로_저장된다() async throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        let path = try #require(controller.currentRelativePath)
+        let subjects = SubjectManager(context: container.mainContext)
+        try subjects.delete(try #require(subjects.subjects.first))
+
+        #expect(controller.currentSubjectName == "자료구조")
+        #expect(controller.nextClassNotice == nil)
+        controller.checkNextClass()
+        let saved = try controller.stop()
+
+        #expect(saved.subject == nil)
+        #expect(saved.title.hasPrefix("자료구조"))
+        #expect(saved.relativePath == path)
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
+        #expect(journal.load() == nil)
+    }
+
+    @Test func 녹음_중에_과목이_지워진_뒤_녹음기가_멈춰도_이어_녹음은_미분류로_한다() async throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        let subjects = SubjectManager(context: container.mainContext)
+        try subjects.delete(try #require(subjects.subjects.first))
+        recorder.hasEnded = true
+
+        controller.checkRecorderHealth()
+
+        #expect(controller.isRecording)
+        #expect(controller.currentSubject == nil)
+        #expect(controller.currentSubjectName == SubjectManager.unclassifiedName)
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
+    }
+
     @Test func 이어_녹음한_파일은_같은_과목이고_제목에_이어서가_붙는다() async throws {
         let subject = try addSubjectWithSlot()
         let clock = TestClock(date(2026, 3, 2, 10, 0))

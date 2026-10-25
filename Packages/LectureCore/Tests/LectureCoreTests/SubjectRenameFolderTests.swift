@@ -113,6 +113,44 @@ import Testing
         #expect(exists("2026년 2학기/컴구/10-28 수 13-30.caf"))
     }
 
+    @Test func 아직_저장되지_않은_녹음_중_파일이_폴더에_있어도_이름을_바꾸지_않는다() throws {
+        let subject = try makeSubject("컴구")
+        let finished = try addRecording("2026년 2학기/컴구/10-21 수 13-30.m4a", subject: subject)
+        // 지금 녹음하는 파일은 정지 전이라 DB에 없다.
+        let activePath = "2026년 2학기/컴구/10-28 수 13-30.caf"
+        files.add(storage.url(for: activePath))
+        manager.activePaths = { [activePath] }
+
+        #expect(throws: SubjectError.recordingInProgress) { try manager.rename(subject, to: "컴퓨터구조") }
+
+        #expect(subject.name == "컴구")
+        #expect(finished.relativePath == "2026년 2학기/컴구/10-21 수 13-30.m4a")
+        #expect(exists(activePath))
+        #expect(exists(finished.relativePath))
+    }
+
+    @Test func 녹음이_하나도_저장되지_않은_과목도_녹음_중이면_이름을_바꾸지_않는다() throws {
+        let subject = try makeSubject("컴구")
+        let activePath = "2026년 2학기/컴구/10-28 수 13-30.caf"
+        files.add(storage.url(for: activePath))
+        manager.activePaths = { [activePath] }
+
+        #expect(throws: SubjectError.recordingInProgress) { try manager.rename(subject, to: "컴퓨터구조") }
+
+        #expect(subject.name == "컴구")
+        #expect(exists(activePath))
+    }
+
+    @Test func 다른_과목을_녹음_중이면_이름을_바꿀_수_있다() throws {
+        let subject = try makeSubject("컴구")
+        let recording = try addRecording("2026년 2학기/컴구/10-21 수 13-30.m4a", subject: subject)
+        manager.activePaths = { ["2026년 2학기/컴구2/10-28 수 13-30.caf"] }
+
+        try manager.rename(subject, to: "컴퓨터구조")
+
+        #expect(recording.relativePath == "2026년 2학기/컴퓨터구조/10-21 수 13-30.m4a")
+    }
+
     @Test func 압축_전_파일이_남은_과목도_이름을_바꾸지_않는다() throws {
         let subject = try makeSubject("컴구")
         try addRecording("2026년 2학기/컴구/10-28 수 13-30.caf", subject: subject)

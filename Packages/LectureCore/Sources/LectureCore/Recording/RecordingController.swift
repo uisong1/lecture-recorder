@@ -64,6 +64,10 @@ public final class RecordingController {
     public var subjectChoice: SubjectChoice = .automatic
     /// 녹음 중인 과목. nil이면 미분류.
     public private(set) var currentSubject: Subject?
+    /// 녹음 중에 과목이 지워져도 안전하게 읽도록 시작할 때 따로 적어 둔 과목 식별자와 이름.
+    /// 지워진 모델의 속성을 읽으면 앱이 죽을 수 있어, 녹음 중에는 `currentSubject`의 속성을 읽지 않는다.
+    private var currentSubjectID: PersistentIdentifier?
+    private var currentSubjectLabel: String?
     public private(set) var currentRelativePath: String?
     /// 마지막으로 저장된 녹음.
     public private(set) var lastSaved: Recording?
@@ -252,7 +256,7 @@ public final class RecordingController {
     /// 멈춘 녹음을 저장하고 같은 과목으로 새 파일에 이어 녹음한다.
     /// 저장하지 못했거나 새 녹음을 시작하지 못하면 녹음은 멈춘 채로 크게 알린다.
     private func resumeAfterStall() {
-        let subject = currentSubject
+        let subject = liveCurrentSubject()
         let saved: Recording
         do {
             saved = try finishRecording(recorderStalled: true)
@@ -367,9 +371,9 @@ public final class RecordingController {
     /// 녹음 중인 수업이 끝나고 다른 과목의 수업이 시작됐으면 그 과목. 아니면 nil.
     /// 시간표에서 시작한 녹음(수업 종료 시각을 아는 녹음)만 본다. 과목을 직접 골랐거나 미분류인 녹음은 건드리지 않는다.
     private var nextClassSubject: Subject? {
-        guard isRecording, let classEnd, let current = currentSubject, let scheduleSnapshot,
+        guard isRecording, let classEnd, let currentID = currentSubjectID, let scheduleSnapshot,
               let id = scheduleSnapshot.nextClassStarted(
-                replacing: current.persistentModelID, classEnd: classEnd, now: now(), calendar: calendar)
+                replacing: currentID, classEnd: classEnd, now: now(), calendar: calendar)
         else { return nil }
         return subjectsByID[id]
     }
@@ -489,7 +493,13 @@ public final class RecordingController {
 
     /// 화면에 보여줄 과목 이름.
     public var currentSubjectName: String {
-        currentSubject?.name ?? SubjectManager.unclassifiedName
+        currentSubjectLabel ?? SubjectManager.unclassifiedName
+    }
+
+    /// 녹음 중에 과목이 지워졌다면 nil (미분류로 저장된다). 아직 있으면 그 과목.
+    private func liveCurrentSubject() -> Subject? {
+        guard let id = currentSubjectID else { return nil }
+        return availableSubjects().first { $0.persistentModelID == id }
     }
 
     /// 녹음된 길이(초).
@@ -535,6 +545,8 @@ public final class RecordingController {
             throw .startFailed(error.localizedDescription)
         }
         currentSubject = subject
+        currentSubjectID = subject?.persistentModelID
+        currentSubjectLabel = subject?.name
         subjectChoice = .automatic
         currentRelativePath = relativePath
         bookmarkTimes = []
@@ -597,9 +609,10 @@ public final class RecordingController {
         classEnd = nil
         scheduleSnapshot = nil
         subjectsByID = [:]
+        let subjectName = currentSubjectName
         let recording = Recording(
-            title: Self.defaultTitle(subjectName: currentSubjectName, startedAt: startedAt, calendar: calendar) + (isStallContinuation ? Self.continuationTitleSuffix : ""),
-            subject: currentSubject,
+            title: Self.defaultTitle(subjectName: subjectName, startedAt: startedAt, calendar: calendar) + (isStallContinuation ? Self.continuationTitleSuffix : ""),
+            subject: liveCurrentSubject(),
             startedAt: startedAt,
             duration: duration,
             relativePath: relativePath
@@ -609,6 +622,8 @@ public final class RecordingController {
         }
         state = .idle
         currentSubject = nil
+        currentSubjectID = nil
+        currentSubjectLabel = nil
         currentRelativePath = nil
 
         context.insert(recording)
@@ -676,7 +691,7 @@ public final class RecordingController {
     private func pendingRecording(bookmarkTimes: [TimeInterval]) -> PendingRecording {
         PendingRecording(
             relativePath: currentRelativePath ?? "",
-            subjectName: currentSubject?.name,
+            subjectName: currentSubjectLabel,
             startedAt: state.startedAt ?? now(),
             bookmarkTimes: bookmarkTimes,
             bookmarkNotes: bookmarkNotes
