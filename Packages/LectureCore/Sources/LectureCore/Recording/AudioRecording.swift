@@ -10,6 +10,8 @@ public protocol AudioRecording: AnyObject {
     var currentTime: TimeInterval { get }
     /// 지금 입력 크기 (0...1, `InputLevel` 참고). 녹음 중이 아니면 0.
     var inputLevel: Float { get }
+    /// 녹음 중(일시정지 제외)인데 녹음기가 스스로 끝났다고 알렸거나 더 이상 녹음하지 않는지.
+    var hasEnded: Bool { get }
     /// `url`에 새 파일로 녹음을 시작한다.
     func start(to url: URL) throws
     /// 녹음을 잠시 멈춘다. 같은 파일에 이어서 쓰며, 멈춘 동안 `currentTime`은 늘지 않는다.
@@ -22,6 +24,7 @@ public protocol AudioRecording: AnyObject {
 
 extension AudioRecording {
     public var inputLevel: Float { 0 }
+    public var hasEnded: Bool { false }
 }
 
 #if canImport(AVFoundation)
@@ -54,8 +57,21 @@ public final class SystemAudioRecorder: NSObject, AudioRecording {
 
     private var recorder: AVAudioRecorder?
     private var paused = false
+    /// 델리게이트가 녹음기가 끝났다(또는 인코딩 오류)고 알린 적이 있는지. 우리가 `stop()`한 경우는 해당하지 않는다.
+    private var finishedUnexpectedly = false
 
     public override init() {}
+
+    public var hasEnded: Bool {
+        guard let recorder, !paused else { return false }
+        return finishedUnexpectedly || !recorder.isRecording
+    }
+
+    /// 델리게이트는 우리가 `stop()`해도 불릴 수 있다. 지금 쓰는 녹음기가 보낸 것일 때만 스스로 끝난 것으로 본다.
+    fileprivate func recorderReportedEnd(_ id: ObjectIdentifier) {
+        guard let recorder, ObjectIdentifier(recorder) == id else { return }
+        finishedUnexpectedly = true
+    }
 
     public var isRecording: Bool { recorder != nil }
     public var isPaused: Bool { paused }
@@ -77,6 +93,7 @@ public final class SystemAudioRecorder: NSObject, AudioRecording {
         }
         self.recorder = recorder
         paused = false
+        finishedUnexpectedly = false
         Log.recording.info("녹음 시작: \(url.lastPathComponent, privacy: .public)")
     }
 
@@ -111,12 +128,16 @@ public final class SystemAudioRecorder: NSObject, AudioRecording {
 extension SystemAudioRecorder: AVAudioRecorderDelegate {
     nonisolated public func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
         Log.recording.error("녹음 인코딩 오류: \(error?.localizedDescription ?? "알 수 없음", privacy: .public)")
+        let id = ObjectIdentifier(recorder)
+        Task { @MainActor [weak self] in self?.recorderReportedEnd(id) }
     }
 
     nonisolated public func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
         if !flag {
             Log.recording.error("녹음이 정상적으로 끝나지 않음")
         }
+        let id = ObjectIdentifier(recorder)
+        Task { @MainActor [weak self] in self?.recorderReportedEnd(id) }
     }
 }
 #endif

@@ -236,6 +236,96 @@ final class TestClock {
         #expect(controller.interruptionNotice?.contains("종료") == true)
     }
 
+    @Test func 녹음기가_끝났다고_알리면_지금까지_녹음을_저장하고_크게_알린다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        let url = recorder.startedURLs[0]
+        files.add(url)
+        files.sizes[url.standardizedFileURL.path] = Int64(RecordingFormat.workingBytesPerSecond) * 600
+        recorder.currentTime = 0  // 멈춘 녹음기는 0을 돌려줄 수 있다
+        recorder.hasEnded = true
+
+        controller.checkRecorderHealth()
+
+        #expect(!controller.isRecording)
+        #expect(!sleep.isActive)
+        #expect(journal.load() == nil)
+        #expect(controller.recorderStallNotice?.contains("녹음이 멈춘 것 같습니다") == true)
+        let saved = try #require(try container.mainContext.fetch(FetchDescriptor<Recording>()).first)
+        // 길이 0으로 잡히지 않고 파일 크기로 어림한다.
+        #expect(abs(saved.duration - 600) < 1)
+        #expect(controller.lastSaved === saved)
+    }
+
+    @Test func 경과_시간이_연속_세_번_안_늘면_멈춘_것으로_보고_저장한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 120
+
+        controller.checkRecorderHealth()  // 기준
+        controller.checkRecorderHealth()  // 10초
+        controller.checkRecorderHealth()  // 20초
+        #expect(controller.isRecording)
+        #expect(controller.recorderStallNotice == nil)
+
+        controller.checkRecorderHealth()  // 30초
+        #expect(!controller.isRecording)
+        #expect(controller.recorderStallNotice != nil)
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
+        #expect(try container.mainContext.fetch(FetchDescriptor<Recording>()).first?.duration == 120)
+        // 자동으로 새 녹음을 시작하지 않는다.
+        #expect(recorder.startedURLs.count == 1)
+    }
+
+    @Test func 정상으로_녹음되면_경고하지_않는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        for step in 1...10 {
+            recorder.currentTime = Double(step) * 10
+            controller.checkRecorderHealth()
+        }
+        #expect(controller.isRecording)
+        #expect(controller.recorderStallNotice == nil)
+    }
+
+    @Test func 일시정지_중에는_멈춤_경고를_하지_않는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 60
+        try controller.pause()
+        for _ in 1...10 { controller.checkRecorderHealth() }
+        #expect(controller.isPaused)
+        #expect(controller.recorderStallNotice == nil)
+    }
+
+    @Test func 멈춘_뒤_다시_늘면_저장하지_않고_계속_녹음한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 120
+        controller.checkRecorderHealth()
+        controller.checkRecorderHealth()
+        controller.checkRecorderHealth()
+        recorder.currentTime = 130
+        controller.checkRecorderHealth()
+        controller.checkRecorderHealth()
+        controller.checkRecorderHealth()
+        #expect(controller.isRecording)
+        #expect(controller.recorderStallNotice == nil)
+    }
+
+    @Test func 새_녹음을_시작하면_멈춤_경고가_사라진다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.hasEnded = true
+        controller.checkRecorderHealth()
+        #expect(controller.recorderStallNotice != nil)
+
+        recorder.hasEnded = false
+        try await controller.start()
+        #expect(controller.recorderStallNotice == nil)
+        #expect(controller.isRecording)
+    }
+
     @Test func 녹음_중이_아니면_잠자기_이벤트를_무시한다() throws {
         let controller = makeController(at: date(2026, 3, 2, 10, 0))
 
