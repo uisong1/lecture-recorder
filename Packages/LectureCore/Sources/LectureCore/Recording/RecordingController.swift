@@ -63,6 +63,10 @@ public final class RecordingController {
     public var interruptionNotice: String?
     /// 녹음 중 저장 공간이 부족해질 때 보여줄 경고. 문제가 없으면 nil.
     public private(set) var storageWarning: String?
+    /// 지금 입력 크기 (0...1). 녹음 중이 아니거나 일시정지 중이면 0.
+    public private(set) var inputLevel: Float = 0
+    /// 10초 넘게 거의 무음이면 true. 화면이 "소리가 거의 들어오지 않습니다"를 보인다.
+    public private(set) var isInputSilent = false
     /// 지금 녹음에 찍은 북마크 시점(초). 정지하면 `Recording`의 북마크로 저장된다.
     public private(set) var bookmarkTimes: [TimeInterval] = []
     /// 녹음이 시작된 직후 불린다. 재생 중인 소리를 멈추는 데 쓴다 (재생 소리가 마이크로 들어가는 것 방지).
@@ -81,6 +85,9 @@ public final class RecordingController {
     private var compressionTask: Task<Void, Never>?
     private var storageMonitor: Task<Void, Never>?
     private let storageCheckInterval: Duration?
+    private var levelMonitor: Task<Void, Never>?
+    private let levelCheckInterval: Duration?
+    private var silenceDetector = SilenceDetector()
     private let calendar: Calendar
     private let now: @MainActor () -> Date
 
@@ -95,6 +102,7 @@ public final class RecordingController {
         lifecycle: (any LifecycleEventSource)? = nil,
         compressor: RecordingCompressor? = nil,
         storageCheckInterval: Duration? = .seconds(10),
+        levelCheckInterval: Duration? = .milliseconds(100),
         calendar: Calendar = .current,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
@@ -108,6 +116,7 @@ public final class RecordingController {
         self.sleepPreventer = sleepPreventer
         self.compressor = compressor
         self.storageCheckInterval = storageCheckInterval
+        self.levelCheckInterval = levelCheckInterval
         self.calendar = calendar
         self.now = now
         lifecycle?.observe { [weak self] event in self?.handle(event) }
@@ -150,6 +159,39 @@ public final class RecordingController {
         } else {
             storageWarning = nil
         }
+    }
+
+    /// 입력 크기를 읽어 막대와 무음 경고를 갱신한다. 녹음 중에는 주기적으로 불린다.
+    /// 일시정지 중에는 소리가 없는 게 정상이므로 경고하지 않고 세던 시간도 지운다.
+    public func sampleInputLevel() {
+        guard case .recording = state else {
+            inputLevel = 0
+            isInputSilent = false
+            silenceDetector.reset()
+            return
+        }
+        inputLevel = recorder.inputLevel
+        isInputSilent = silenceDetector.update(level: inputLevel, at: now())
+    }
+
+    private func startLevelMonitor() {
+        guard let interval = levelCheckInterval else { return }
+        levelMonitor?.cancel()
+        levelMonitor = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled else { return }
+                self?.sampleInputLevel()
+            }
+        }
+    }
+
+    private func stopLevelMonitor() {
+        levelMonitor?.cancel()
+        levelMonitor = nil
+        inputLevel = 0
+        isInputSilent = false
+        silenceDetector.reset()
     }
 
     private func startStorageMonitor() {
@@ -229,6 +271,8 @@ public final class RecordingController {
         interruptionNotice = nil
         storageWarning = nil
         startStorageMonitor()
+        silenceDetector.reset()
+        startLevelMonitor()
         sleepPreventer?.begin(reason: "수업 녹음 중")
         onStarted?()
         do {
@@ -249,6 +293,7 @@ public final class RecordingController {
         storageMonitor?.cancel()
         storageMonitor = nil
         storageWarning = nil
+        stopLevelMonitor()
         let recording = Recording(
             title: Self.defaultTitle(subjectName: currentSubjectName, startedAt: startedAt, calendar: calendar),
             subject: currentSubject,

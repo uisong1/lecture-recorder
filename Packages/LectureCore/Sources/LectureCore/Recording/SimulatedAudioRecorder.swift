@@ -23,6 +23,9 @@ public final class SimulatedAudioRecorder: AudioRecording {
         return (pausedAt ?? now()).timeIntervalSince(startedAt) - pausedTotal
     }
 
+    /// 소리가 들어오는 것처럼 일정한 크기를 돌려준다 (UI 테스트에서 무음 경고가 뜨지 않도록).
+    public var inputLevel: Float { isRecording && !isPaused ? 0.3 : 0 }
+
     public func start(to url: URL) throws {
         startedAt = now()
         pausedAt = nil
