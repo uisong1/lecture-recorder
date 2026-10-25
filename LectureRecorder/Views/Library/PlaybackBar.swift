@@ -31,6 +31,8 @@ struct PlaybackBar: View {
                         }
                     }
                     .tint(Design.Palette.primary)
+                    .accessibilityLabel("재생 위치")
+                    .accessibilityValue("\(RecordingController.format(shownTime)) / \(RecordingController.format(playback.duration))")
                     .overlay { BookmarkMarkers(fractions: playback.bookmarkMarkers) }
                     .accessibilityIdentifier("playbackSlider")
                     Text(RecordingController.format(playback.duration))
@@ -122,6 +124,7 @@ struct PlaybackBar: View {
                                     Label(label(for: bookmark), systemImage: "bookmark.fill")
                                 }
                                 .buttonStyle(.pillSecondary)
+                                .accessibilityHint("이 북마크 위치부터 재생합니다")
                                 .contextMenu {
                                     Button("메모 수정…") {
                                         noteText = bookmark.note
@@ -193,5 +196,6 @@ private struct BookmarkMarkers: View {
             }
         }
         .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }

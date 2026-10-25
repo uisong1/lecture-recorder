@@ -61,13 +61,13 @@ struct ContentView: View {
                     Label(startupError, systemImage: "exclamationmark.triangle")
                         .designText(.caption)
                         .foregroundStyle(Design.Palette.danger)
-                        .padding(8)
+                        .padding(Design.Spacing.xs)
                 }
                 if let notice = dependencies.recoveryNotice {
                     Label(notice, systemImage: "arrow.counterclockwise")
                         .designText(.caption)
                         .foregroundStyle(Design.Palette.primary)
-                        .padding(8)
+                        .padding(Design.Spacing.xs)
                         .accessibilityIdentifier("recoveryNotice")
                 }
                 switch sidebar {

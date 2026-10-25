@@ -38,7 +38,7 @@ struct RecordingListView: View {
                             Circle()
                                 .fill(Design.Palette.primary)
                                 .frame(width: 8, height: 8)
-                                .accessibilityLabel("안 들음")
+                                .accessibilityHidden(true)
                                 .accessibilityIdentifier("unplayedDot")
                         }
                         VStack(alignment: .leading, spacing: 2) {
@@ -60,6 +60,7 @@ struct RecordingListView: View {
                         Spacer()
                         Button(playback.current === recording && playback.isPlaying ? "일시정지" : "듣기") { play(recording) }
                             .buttonStyle(.textLink)
+                            .accessibilityLabel((playback.current === recording && playback.isPlaying ? "일시정지: " : "듣기: ") + recording.title)
                     }
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) { play(recording) }
@@ -189,7 +190,7 @@ struct RecordingListView: View {
                 Label(message, systemImage: "exclamationmark.triangle")
                     .designText(.caption)
                     .foregroundStyle(Design.Palette.danger)
-                    .padding(8)
+                    .padding(Design.Spacing.xs)
             }
         }
     }
