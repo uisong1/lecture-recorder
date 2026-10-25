@@ -1,5 +1,9 @@
 # PROGRESS
 
+## 2026-10-25 2-1 Bookmark 모델
+- 한 일: `Bookmark`(시점, 메모, 만든 시각) 모델과 `Recording.bookmarks`(녹음 삭제 시 함께 삭제), `BookmarkManager`(추가·메모 수정·삭제). 단위 테스트 6개.
+- 다음: 2-2 녹음 중 북마크 추가, 2-3 재생 화면에서 북마크로 이동.
+
 ## 2026-10-25 1-16 이름 변경 / 삭제 / 과목 이동
 - 한 일: `RecordingManager`(이름 변경·과목 이동·삭제, 파일과 DB 함께 처리)와 `RecordingStorage.moveFile/removeFile`, 목록 행 우클릭 메뉴(이름 변경 창, 삭제 확인 창, 과목 이동). 단위 테스트 9개. 결정은 DECISIONS.md에 기록.
 - 확인 필요: 우클릭 메뉴와 대화 상자는 Mac에서 직접 눌러 확인해 주세요.
