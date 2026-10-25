@@ -13,6 +13,7 @@ public struct BookmarkTourStop: Equatable {
 }
 
 /// 북마크만 차례로 이어 듣는 구간 계산. 시간·파일에 기대지 않는 순수 함수다.
+@MainActor
 public enum BookmarkTour {
     /// 북마크마다 재생하는 길이(초). 시작은 북마크 `PlaybackController.bookmarkLeadIn`초 앞이다.
     public static let segmentLength: TimeInterval = 30
