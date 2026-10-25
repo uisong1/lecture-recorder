@@ -28,7 +28,7 @@ public enum RecordingError: Error, Equatable, LocalizedError {
 }
 
 /// 녹음을 시작하기 전에 고른 과목. 고르지 않으면 시간표로 자동 분류한다.
-public enum SubjectChoice: Equatable {
+public enum SubjectChoice: Hashable {
     case automatic
     case unclassified
     case subject(PersistentIdentifier)
