@@ -47,7 +47,8 @@ import Testing
         #expect(recovered.relativePath == p.relativePath)
         #expect(recovered.startedAt == startedAt)
         #expect(recovered.duration == 60)
-        #expect(recovered.title == "자료구조 3월 2일 10:00 (복구됨)")
+        #expect(recovered.title == "자료구조 3월 2일 10:00")
+        #expect(recovered.wasRecovered)
         #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
         #expect(journal.load() == nil)
     }
