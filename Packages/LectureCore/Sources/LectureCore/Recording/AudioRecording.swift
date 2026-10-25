@@ -21,7 +21,8 @@ public protocol AudioRecording: AnyObject {
 #if canImport(AVFoundation)
 import AVFoundation
 
-/// `AVAudioRecorder`로 AAC(.m4a) 파일을 녹음한다. 모노 64kbps라 90분에 약 43MB.
+/// `AVAudioRecorder`로 CAF(PCM) 파일을 녹음한다. 모노 16kHz 16비트라 3시간에 약 346MB이고,
+/// 압축하지 않은 파일은 강제 종료돼도 그때까지 재생된다. 정지 뒤 `SystemAudioConverter`가 m4a로 압축한다.
 @MainActor
 public final class SystemAudioRecorder: NSObject, AudioRecording {
     public enum RecorderError: Error, LocalizedError {
@@ -37,11 +38,12 @@ public final class SystemAudioRecorder: NSObject, AudioRecording {
     }
 
     public static let settings: [String: Any] = [
-        AVFormatIDKey: kAudioFormatMPEG4AAC,
-        AVSampleRateKey: 44_100,
+        AVFormatIDKey: kAudioFormatLinearPCM,
+        AVSampleRateKey: 16_000,
         AVNumberOfChannelsKey: 1,
-        AVEncoderBitRateKey: 64_000,
-        AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue,
+        AVLinearPCMBitDepthKey: 16,
+        AVLinearPCMIsFloatKey: false,
+        AVLinearPCMIsBigEndianKey: false,
     ]
 
     private var recorder: AVAudioRecorder?

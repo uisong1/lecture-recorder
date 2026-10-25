@@ -4,7 +4,10 @@ import Foundation
 /// DB에는 `Recordings/` 기준 상대 경로를 저장한다.
 public struct RecordingStorage: Sendable {
     public static let unclassifiedFolder = "미분류"
+    /// 완성된 녹음 파일의 확장자.
     public static let fileExtension = "m4a"
+    /// 녹음 중에 쓰는 확장자. 강제 종료돼도 재생할 수 있는 CAF로 쓰고, 정지 뒤에 m4a로 압축한다.
+    public static let workingExtension = "caf"
 
     /// `Recordings` 폴더.
     public let root: URL
@@ -45,21 +48,50 @@ public struct RecordingStorage: Sendable {
     }
 
     /// 새 녹음의 상대 경로. 같은 이름이 있으면 `_2`, `_3` …을 붙인다.
-    public func newRelativePath(subjectName: String?, startedAt: Date, calendar: Calendar) -> String {
+    /// 확장자는 기본이 m4a이고, 녹음 중 파일은 `workingExtension`을 넘긴다.
+    public func newRelativePath(
+        subjectName: String?,
+        startedAt: Date,
+        calendar: Calendar,
+        fileExtension: String = RecordingStorage.fileExtension
+    ) -> String {
         let folder = Self.folderName(for: subjectName)
         let base = Self.baseFileName(for: startedAt, calendar: calendar)
-        return availableRelativePath(folder: folder, baseName: base)
+        return availableRelativePath(folder: folder, baseName: base, fileExtension: fileExtension)
     }
 
     /// `folder` 안에서 `baseName`으로 쓸 수 있는 상대 경로.
-    public func availableRelativePath(folder: String, baseName: String) -> String {
-        var candidate = "\(folder)/\(baseName).\(Self.fileExtension)"
+    /// 압축 전 CAF와 압축된 m4a 어느 쪽이 있어도 같은 이름으로 보고 피한다.
+    public func availableRelativePath(
+        folder: String,
+        baseName: String,
+        fileExtension: String = RecordingStorage.fileExtension
+    ) -> String {
+        func taken(_ name: String) -> Bool {
+            [Self.fileExtension, Self.workingExtension].contains { files.fileExists(at: url(for: "\(folder)/\(name).\($0)")) }
+        }
+        var name = baseName
         var suffix = 2
-        while files.fileExists(at: url(for: candidate)) {
-            candidate = "\(folder)/\(baseName)_\(suffix).\(Self.fileExtension)"
+        while taken(name) {
+            name = "\(baseName)_\(suffix)"
             suffix += 1
         }
-        return candidate
+        return "\(folder)/\(name).\(fileExtension)"
+    }
+
+    /// 압축 전 파일의 상대 경로에 대응하는 m4a 상대 경로.
+    public static func compressedPath(for workingPath: String) -> String {
+        (workingPath as NSString).deletingPathExtension + "." + fileExtension
+    }
+
+    /// 압축 중에 쓰는 임시 파일 경로. 끝나면 최종 경로로 옮긴다.
+    public static func temporaryCompressedPath(for workingPath: String) -> String {
+        (workingPath as NSString).deletingPathExtension + ".converting." + fileExtension
+    }
+
+    /// 아직 압축되지 않은 (CAF) 경로인지.
+    public static func isWorkingPath(_ relativePath: String) -> Bool {
+        (relativePath as NSString).pathExtension.lowercased() == workingExtension
     }
 
     /// 상대 경로의 실제 위치.

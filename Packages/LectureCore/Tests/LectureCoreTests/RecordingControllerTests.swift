@@ -15,22 +15,29 @@ import Testing
 
     init() throws {
         container = try LectureModelContainer.make(inMemory: true)
+        converter = FakeAudioConverter(files: files)
     }
 
     let journal = InMemoryRecordingJournal()
     let sleep = FakeSleepPreventer()
     let lifecycle = FakeLifecycleEvents()
 
-    func makeController(at time: Date) -> RecordingController {
-        RecordingController(
+    let converter: FakeAudioConverter
+
+    func makeController(at time: Date, compressing: Bool = false) -> RecordingController {
+        let storage = RecordingStorage(root: root, files: files)
+        return RecordingController(
             context: container.mainContext,
             recorder: recorder,
-            storage: RecordingStorage(root: root, files: files),
+            storage: storage,
             files: files,
             permission: permission,
             journal: journal,
             sleepPreventer: sleep,
             lifecycle: lifecycle,
+            compressor: compressing
+                ? RecordingCompressor(context: container.mainContext, storage: storage, files: files, converter: converter)
+                : nil,
             calendar: seoulCalendar,
             now: { time }
         )
@@ -113,6 +120,39 @@ import Testing
         #expect(controller.errorMessage == nil)
     }
 
+    @Test func 정지하면_CAF로_저장하고_m4a로_압축한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0), compressing: true)
+        try await controller.start()
+        let caf = recorder.startedURLs[0]
+        files.add(caf)
+        recorder.currentTime = 90
+
+        let saved = try controller.stop()
+        // 압축이 끝나기 전에도 재생할 수 있는 CAF를 가리킨다.
+        #expect(saved.relativePath == "미분류/2026-03-02_1000.caf")
+
+        await controller.waitForCompression()
+        #expect(saved.relativePath == "미분류/2026-03-02_1000.m4a")
+        #expect(saved.duration == FakeAudioConverter.duration)
+        #expect(files.fileExists(at: root.appending(path: "미분류/2026-03-02_1000.m4a")))
+        #expect(!files.fileExists(at: caf))
+    }
+
+    @Test func 압축이_실패해도_CAF_녹음이_남는다() async throws {
+        converter.error = CocoaError(.fileWriteOutOfSpace)
+        let controller = makeController(at: date(2026, 3, 2, 10, 0), compressing: true)
+        try await controller.start()
+        let caf = recorder.startedURLs[0]
+        files.add(caf)
+
+        let saved = try controller.stop()
+        await controller.waitForCompression()
+
+        #expect(saved.relativePath == "미분류/2026-03-02_1000.caf")
+        #expect(files.fileExists(at: caf))
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
+    }
+
     @Test func 시작하고_정지하면_Recording이_저장된다() async throws {
         let subject = try addSubjectWithSlot()
         let controller = makeController(at: date(2026, 3, 2, 10, 0))
@@ -120,7 +160,7 @@ import Testing
         try await controller.start()
         #expect(controller.isRecording)
         #expect(controller.currentSubjectName == "자료구조")
-        #expect(recorder.startedURLs.map(\.path) == ["/tmp/LectureRecorderTests/Recordings/자료구조/2026-03-02_1000.m4a"])
+        #expect(recorder.startedURLs.map(\.path) == ["/tmp/LectureRecorderTests/Recordings/자료구조/2026-03-02_1000.caf"])
 
         recorder.currentTime = 4_500
         let saved = try controller.stop()
@@ -134,7 +174,7 @@ import Testing
         #expect(recording.title == "자료구조 3월 2일 10:00")
         #expect(recording.duration == 4_500)
         #expect(recording.startedAt == date(2026, 3, 2, 10, 0))
-        #expect(recording.relativePath == "자료구조/2026-03-02_1000.m4a")
+        #expect(recording.relativePath == "자료구조/2026-03-02_1000.caf")
     }
 
     @Test func 수업_없는_시간이면_미분류로_저장된다() async throws {
@@ -144,7 +184,7 @@ import Testing
         #expect(controller.currentSubjectName == "미분류")
         let recording = try controller.stop()
         #expect(recording.subject == nil)
-        #expect(recording.relativePath == "미분류/2026-03-02_1230.m4a")
+        #expect(recording.relativePath == "미분류/2026-03-02_1230.caf")
     }
 
     @Test func 권한이_없으면_시작하지_않는다() async throws {
@@ -265,7 +305,7 @@ import Testing
         _ = try addSubjectWithSlot()
         let controller = makeController(at: date(2026, 3, 2, 10, 0))
         try await controller.start()
-        #expect(journal.load() == PendingRecording(relativePath: "자료구조/2026-03-02_1000.m4a", subjectName: "자료구조", startedAt: date(2026, 3, 2, 10, 0)))
+        #expect(journal.load() == PendingRecording(relativePath: "자료구조/2026-03-02_1000.caf", subjectName: "자료구조", startedAt: date(2026, 3, 2, 10, 0)))
         try controller.stop()
         #expect(journal.load() == nil)
     }
@@ -277,7 +317,7 @@ import Testing
         try controller.stop()
         try await controller.start()
         let second = try controller.stop()
-        #expect(second.relativePath == "미분류/2026-03-02_1000_2.m4a")
+        #expect(second.relativePath == "미분류/2026-03-02_1000_2.caf")
     }
 }
 

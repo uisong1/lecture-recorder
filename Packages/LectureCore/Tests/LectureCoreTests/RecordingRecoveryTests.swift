@@ -52,6 +52,14 @@ import Testing
         #expect(journal.load() == nil)
     }
 
+    @Test func CAF가_남았으면_PCM_비트레이트로_길이를_어림한다() throws {
+        let p = PendingRecording(relativePath: "자료구조/2026-03-02_1000.caf", subjectName: nil, startedAt: startedAt)
+        addFile(p, bytes: 1_920_000) // 256kbps = 초당 32,000바이트 → 60초
+        let recovered = try #require(try makeRecovery(journal: InMemoryRecordingJournal(pending: p)).recoverIfNeeded())
+        #expect(recovered.relativePath == p.relativePath)
+        #expect(recovered.duration == 60)
+    }
+
     @Test func 과목이_없으면_미분류로_되살린다() throws {
         let p = pending(nil)
         addFile(p, bytes: 8_000)

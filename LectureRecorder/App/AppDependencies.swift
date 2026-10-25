@@ -30,6 +30,11 @@ final class AppDependencies {
         self.container = container
         subjects = SubjectManager(context: container.mainContext)
         schedule = ScheduleManager(context: container.mainContext)
+        let compressor = Self.isUITesting ? nil : RecordingCompressor(
+            context: container.mainContext,
+            storage: storage,
+            converter: SystemAudioConverter()
+        )
         if Self.isUITesting {
             recording = RecordingController(
                 context: container.mainContext,
@@ -46,7 +51,8 @@ final class AppDependencies {
                 permission: SystemMicrophonePermission(),
                 journal: journal,
                 sleepPreventer: SystemSleepPreventer(),
-                lifecycle: SystemLifecycleEvents()
+                lifecycle: SystemLifecycleEvents(),
+                compressor: compressor
             )
         }
         library = RecordingLibrary(context: container.mainContext)
@@ -60,6 +66,10 @@ final class AppDependencies {
             Log.recording.error("녹음 복구 실패: \(error.localizedDescription, privacy: .public)")
             problems.append("꺼진 녹음을 되살리지 못했습니다: \(error.localizedDescription)")
             recoveryNotice = nil
+        }
+        if let compressor {
+            // 지난 실행에서 압축하지 못한 CAF 녹음(꺼졌거나 실패한 것)을 이어서 압축한다.
+            Task { await compressor.compressPending() }
         }
         startupError = problems.isEmpty ? nil : problems.joined(separator: "\n")
     }
