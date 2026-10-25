@@ -70,6 +70,7 @@ public struct MenuBarStatus: Equatable, Sendable {
     }
 }
 
+#if canImport(SwiftData)
 extension RecordingController {
     /// 지금 컨트롤러 상태를 메뉴 막대용 값으로 옮긴다.
     public var menuBarStatus: MenuBarStatus {
@@ -84,3 +85,4 @@ extension RecordingController {
         )
     }
 }
+#endif
