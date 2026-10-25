@@ -60,7 +60,7 @@ struct VisionTimetableReader: TimetableImageReading {
 
     /// Vision이 읽은 줄마다 낱말 위치를 얻어, 서로 멀리 떨어진 글자(요일 머리글, 옆 칸의 과목명)가
     /// 한 줄로 합쳐졌어도 다시 나눈다. 좌표는 이미지 픽셀(왼쪽 위 원점)로 바꿔 돌려준다.
-    private static func recognizeText(in image: CGImage) throws -> [TextObservation] {
+    private static func recognizeText(in image: CGImage) throws -> [LectureCore.TextObservation] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = false
@@ -71,14 +71,14 @@ struct VisionTimetableReader: TimetableImageReading {
 
         let width = Double(image.width)
         let height = Double(image.height)
-        var result: [TextObservation] = []
+        var result: [LectureCore.TextObservation] = []
         for observation in request.results ?? [] {
             guard let candidate = observation.topCandidates(1).first else { continue }
             let text = candidate.string
-            var words: [TextObservation] = []
+            var words: [LectureCore.TextObservation] = []
             for range in TimetableWordGrouping.wordRanges(in: text) {
                 guard let box = try? candidate.boundingBox(for: range)?.boundingBox else { continue }
-                words.append(TextObservation(
+                words.append(LectureCore.TextObservation(
                     text: String(text[range]),
                     x: box.minX * width,
                     y: (1 - box.maxY) * height,
@@ -89,7 +89,7 @@ struct VisionTimetableReader: TimetableImageReading {
             if words.isEmpty {
                 // 낱말 위치를 얻지 못하면 줄 전체의 위치를 쓴다.
                 let box = observation.boundingBox
-                result.append(TextObservation(text: text, x: box.minX * width, y: (1 - box.maxY) * height, width: box.width * width, height: box.height * height))
+                result.append(LectureCore.TextObservation(text: text, x: box.minX * width, y: (1 - box.maxY) * height, width: box.width * width, height: box.height * height))
             } else {
                 result.append(contentsOf: TimetableWordGrouping.merge(words))
             }
