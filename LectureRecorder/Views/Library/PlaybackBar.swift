@@ -40,6 +40,35 @@ struct PlaybackBar: View {
                 }
                 HStack(spacing: Design.Spacing.sm) {
                     Button {
+                        playback.skipBackward()
+                    } label: {
+                        Label("15초 뒤로", systemImage: "gobackward.15")
+                    }
+                    .buttonStyle(.pillSecondary)
+                    .keyboardShortcut(.leftArrow, modifiers: [])
+                    .help("15초 뒤로 (←)")
+                    .accessibilityIdentifier("skipBackward")
+                    Button {
+                        playback.togglePlayPause()
+                    } label: {
+                        Label(playback.isPlaying ? "일시정지" : "재생", systemImage: playback.isPlaying ? "pause.fill" : "play.fill")
+                    }
+                    .buttonStyle(.pill)
+                    .keyboardShortcut(.space, modifiers: [])
+                    .help("재생 / 일시정지 (스페이스)")
+                    .accessibilityIdentifier("playPause")
+                    Button {
+                        playback.skipForward()
+                    } label: {
+                        Label("15초 앞으로", systemImage: "goforward.15")
+                    }
+                    .buttonStyle(.pillSecondary)
+                    .keyboardShortcut(.rightArrow, modifiers: [])
+                    .help("15초 앞으로 (→)")
+                    .accessibilityIdentifier("skipForward")
+                }
+                HStack(spacing: Design.Spacing.sm) {
+                    Button {
                         playback.addBookmarkAtCurrentTime()
                     } label: {
                         Label("지금 위치에 북마크", systemImage: "bookmark")

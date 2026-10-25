@@ -270,5 +270,59 @@ import Testing
         controller.pause()
         #expect(saved == 1)
     }
+
+    // MARK: 건너뛰기
+
+    @Test func 앞으로_건너뛰면_15초_뒤로_간다() {
+        let controller = makeController()
+        controller.select(makeRecording())
+        controller.seek(to: 10)
+        controller.skipForward()
+        #expect(controller.currentTime == 25)
+    }
+
+    @Test func 뒤로_건너뛰면_15초_앞으로_간다() {
+        let controller = makeController()
+        controller.select(makeRecording())
+        controller.seek(to: 40)
+        controller.skipBackward()
+        #expect(controller.currentTime == 25)
+    }
+
+    @Test func 건너뛰기는_처음과_끝을_넘지_않는다() {
+        let controller = makeController()
+        controller.select(makeRecording())
+        controller.seek(to: 5)
+        controller.skipBackward()
+        #expect(controller.currentTime == 0)
+        controller.seek(to: 50)
+        controller.skipForward()
+        #expect(controller.currentTime == 60)
+    }
+
+    @Test func 정확히_15초_남았을_때_앞으로_건너뛰면_끝에_닿는다() {
+        let controller = makeController()
+        controller.select(makeRecording())
+        controller.seek(to: 45)
+        controller.skipForward()
+        #expect(controller.currentTime == 60)
+    }
+
+    @Test func 불러온_녹음이_없으면_건너뛰지_않는다() {
+        let controller = makeController()
+        controller.skipForward()
+        #expect(player.currentTime == 0)
+    }
+
+    @Test func 건너뛰어도_재생_상태는_그대로다() {
+        let controller = makeController()
+        controller.select(makeRecording())
+        controller.play()
+        controller.skipForward()
+        #expect(controller.isPlaying)
+        controller.pause()
+        controller.skipBackward()
+        #expect(!controller.isPlaying)
+    }
 }
 #endif
