@@ -67,6 +67,12 @@ public final class RecordingController {
     public static let shortRecordingSeconds: TimeInterval = 5
     /// 방금 정지한, 너무 짧아서 저장할지 묻는 중인 녹음. 없으면 nil.
     public private(set) var shortRecordingPrompt: Recording?
+    /// 녹음 중 마이크가 바뀌거나 끊겼을 때 보일 경고. 문제가 없으면 nil. 녹음은 계속된다.
+    public private(set) var inputDeviceWarning: String?
+    /// 지금 쓰는 마이크 이름. 대기·녹음 화면에 보인다. 알 수 없으면 nil.
+    public var inputDeviceName: String? {
+        inputMonitor?.currentDevice()?.name
+    }
     /// 지금 입력 크기 (0...1). 녹음 중이 아니거나 일시정지 중이면 0.
     public private(set) var inputLevel: Float = 0
     /// 10초 넘게 거의 무음이면 true. 화면이 "소리가 거의 들어오지 않습니다"를 보인다.
@@ -86,6 +92,8 @@ public final class RecordingController {
     private let journal: (any RecordingJournaling)?
     private let sleepPreventer: (any SleepPreventing)?
     private let powerStatus: (any PowerStatusProviding)?
+    private let inputMonitor: (any AudioInputMonitoring)?
+    private var recordingInputDevice: AudioInputDevice?
     private let compressor: RecordingCompressor?
     private var compressionTask: Task<Void, Never>?
     private var storageMonitor: Task<Void, Never>?
@@ -106,6 +114,7 @@ public final class RecordingController {
         journal: (any RecordingJournaling)? = nil,
         sleepPreventer: (any SleepPreventing)? = nil,
         powerStatus: (any PowerStatusProviding)? = nil,
+        inputMonitor: (any AudioInputMonitoring)? = nil,
         lifecycle: (any LifecycleEventSource)? = nil,
         compressor: RecordingCompressor? = nil,
         storageCheckInterval: Duration? = .seconds(10),
@@ -122,12 +131,14 @@ public final class RecordingController {
         self.journal = journal
         self.sleepPreventer = sleepPreventer
         self.powerStatus = powerStatus
+        self.inputMonitor = inputMonitor
         self.compressor = compressor
         self.storageCheckInterval = storageCheckInterval
         self.levelCheckInterval = levelCheckInterval
         self.calendar = calendar
         self.now = now
         lifecycle?.observe { [weak self] event in self?.handle(event) }
+        inputMonitor?.observe { [weak self] in self?.checkInputDevice() }
     }
 
     /// 잠자기나 종료 직전이면 그때까지의 녹음을 정상 파일로 닫아 저장한다.
@@ -180,6 +191,12 @@ public final class RecordingController {
         }
         inputLevel = recorder.inputLevel
         isInputSilent = silenceDetector.update(level: inputLevel, at: now())
+    }
+
+    /// 녹음을 시작할 때의 마이크와 지금 마이크를 비교해 경고를 갱신한다. 장치가 바뀔 때마다 불린다.
+    public func checkInputDevice() {
+        guard isRecording else { return }
+        inputDeviceWarning = InputDeviceAdvice.warning(started: recordingInputDevice, current: inputMonitor?.currentDevice())
     }
 
     private func startLevelMonitor() {
@@ -295,6 +312,8 @@ public final class RecordingController {
         startStorageMonitor()
         silenceDetector.reset()
         startLevelMonitor()
+        recordingInputDevice = inputMonitor?.currentDevice()
+        inputDeviceWarning = nil
         sleepPreventer?.begin(reason: "수업 녹음 중")
         onStarted?()
         do {
@@ -316,6 +335,8 @@ public final class RecordingController {
         storageMonitor = nil
         storageWarning = nil
         stopLevelMonitor()
+        recordingInputDevice = nil
+        inputDeviceWarning = nil
         let recording = Recording(
             title: Self.defaultTitle(subjectName: currentSubjectName, startedAt: startedAt, calendar: calendar),
             subject: currentSubject,
