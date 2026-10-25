@@ -139,6 +139,7 @@ public final class PlaybackController {
     }
 
     /// 북마크 작업을 실행하고 실패하면 오류 문구를 남긴다.
+    @discardableResult
     private func perform<T>(_ action: () throws -> T) -> T? {
         do {
             let result = try action()
