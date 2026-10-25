@@ -64,6 +64,7 @@ public final class RecordingController {
     private let files: any FileStoring
     private let permission: any MicrophonePermissionProviding
     private let journal: (any RecordingJournaling)?
+    private let sleepPreventer: (any SleepPreventing)?
     private let calendar: Calendar
     private let now: @MainActor () -> Date
 
@@ -74,6 +75,7 @@ public final class RecordingController {
         files: any FileStoring = LocalFileStore(),
         permission: any MicrophonePermissionProviding,
         journal: (any RecordingJournaling)? = nil,
+        sleepPreventer: (any SleepPreventing)? = nil,
         calendar: Calendar = .current,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
@@ -84,6 +86,7 @@ public final class RecordingController {
         self.permission = permission
         self.permissionStatus = permission.currentStatus()
         self.journal = journal
+        self.sleepPreventer = sleepPreventer
         self.calendar = calendar
         self.now = now
     }
@@ -149,6 +152,7 @@ public final class RecordingController {
         currentSubject = subject
         currentRelativePath = relativePath
         state = .recording(startedAt: startedAt)
+        sleepPreventer?.begin(reason: "수업 녹음 중")
         do {
             try journal?.save(PendingRecording(relativePath: relativePath, subjectName: subject?.name, startedAt: startedAt))
         } catch {
@@ -163,6 +167,7 @@ public final class RecordingController {
             throw .notRecording
         }
         let duration = recorder.stop()
+        sleepPreventer?.end()
         let recording = Recording(
             title: Self.defaultTitle(subjectName: currentSubjectName, startedAt: startedAt, calendar: calendar),
             subject: currentSubject,
