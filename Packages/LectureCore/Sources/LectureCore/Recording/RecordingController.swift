@@ -72,6 +72,8 @@ public final class RecordingController {
     public var interruptionNotice: String?
     /// 녹음기가 조용히 멈춰 녹음을 저장했을 때 보일 큰 경고. 멈추지 않았으면 nil. 새 녹음을 시작하면 사라진다.
     public private(set) var recorderStallNotice: String?
+    /// 녹음기가 멈춰 새 파일로 이어 녹음하는 중일 때의 안내. 이어 녹음하는 동안만 값이 있다.
+    public private(set) var stallResumeNotice: String?
     /// 녹음 중 저장 공간이 부족해질 때 보여줄 경고. 문제가 없으면 nil.
     public private(set) var storageWarning: String?
     /// 이 시간(초)보다 짧게 끝난 녹음은 저장할지 묻는다.
@@ -120,6 +122,8 @@ public final class RecordingController {
     private let levelCheckInterval: Duration?
     private var silenceDetector = SilenceDetector()
     private var healthMonitor = RecorderHealthMonitor()
+    /// 지금 녹음이 멈춘 녹음을 이은 두 번째 파일인지. 사용자가 직접 시작하면 지워지고, 이어 녹음은 한 번만 한다.
+    private var isStallContinuation = false
     private let calendar: Calendar
     private let now: @MainActor () -> Date
 
@@ -202,18 +206,50 @@ public final class RecordingController {
     }
 
     /// 녹음기가 실제로 녹음하고 있는지 확인한다. 녹음기가 끝났다고 알렸거나 경과 시간이 30초(연속 3번 점검) 동안
-    /// 늘지 않으면 지금까지의 녹음을 정상 파일로 닫아 저장하고 `recorderStallNotice`로 크게 알린다.
+    /// 늘지 않으면 지금까지의 녹음을 정상 파일로 닫아 저장한다. 처음 멈춘 것이면 같은 과목으로 새 파일에 한 번 이어 녹음하고
+    /// (`stallResumeNotice`), 이어 녹음하다 또 멈췄거나 이어 녹음을 시작하지 못하면 멈추고 `recorderStallNotice`로 크게 알린다.
     /// 일시정지 중에는 확인하지 않는다. 녹음 중에는 10초마다 불린다.
-    /// 자동으로 새 파일에 이어 녹음하지는 않는다 (사용자가 다시 시작한다).
     public func checkRecorderHealth() {
         guard isRecording else { return }
         guard let reason = healthMonitor.check(recorder, isPaused: isPaused) else { return }
         Log.recording.fault("녹음기가 멈춤 (\(String(describing: reason), privacy: .public)), 지금까지 녹음을 저장")
+        if !isStallContinuation {
+            resumeAfterStall()
+            return
+        }
         stopAndNotify(because: "녹음기가 멈춰서", advice: "녹음을 다시 시작하세요.", alert: .recorderStalled, recorderStalled: true)
         if recorderStallNotice == nil {
             // 저장 자체가 실패한 경우에도 멈춘 사실은 크게 보인다. 이유는 errorMessage에 있다.
             recorderStallNotice = RecorderHealthMonitor.unsavedNotice
         }
+    }
+
+    /// 멈춘 녹음을 저장하고 같은 과목으로 새 파일에 이어 녹음한다.
+    /// 저장하지 못했거나 새 녹음을 시작하지 못하면 녹음은 멈춘 채로 크게 알린다.
+    private func resumeAfterStall() {
+        let subject = currentSubject
+        let saved: Recording
+        do {
+            saved = try finishRecording(recorderStalled: true)
+        } catch {
+            // 저장이 실패했으면 이어 녹음하지 않고 멈춘 사실을 크게 알린다.
+            raise(.recorderStalled)
+            errorMessage = error.errorDescription
+            recorderStallNotice = RecorderHealthMonitor.unsavedNotice
+            return
+        }
+        do {
+            try beginRecording(subject: subject, startedAt: now(), isContinuation: true)
+        } catch {
+            Log.recording.fault("멈춘 녹음 뒤 이어 녹음 시작 실패: \(error.localizedDescription, privacy: .public)")
+            raise(.recorderStalled)
+            errorMessage = error.errorDescription
+            // finishRecording이 남긴 "여기까지 저장했습니다. 다시 시작하세요" 안내를 그대로 둔다.
+            return
+        }
+        recorderStallNotice = nil
+        stallResumeNotice = RecorderHealthMonitor.resumedNotice(title: saved.title)
+        raise(.recorderResumed)
     }
 
     /// 입력 크기를 읽어 막대와 무음 경고를 갱신한다. 녹음 중에는 주기적으로 불린다.
@@ -358,7 +394,12 @@ public final class RecordingController {
 
         shortRecordingPrompt = nil
         let startedAt = now()
-        let subject = resolvedSubject(at: startedAt)
+        try beginRecording(subject: resolvedSubject(at: startedAt), startedAt: startedAt, isContinuation: false)
+    }
+
+    /// 새 파일에 녹음을 시작하고 모니터를 켠다. `isContinuation`이면 멈춘 녹음을 이은 것이라
+    /// 사용자가 이미 본 알림·수업 종료 안내는 다시 내보내지 않는다.
+    private func beginRecording(subject: Subject?, startedAt: Date, isContinuation: Bool) throws(RecordingError) {
         let relativePath = storage.newRelativePath(subjectName: subject?.name, semester: subject?.semester, startedAt: startedAt, calendar: calendar, fileExtension: RecordingStorage.workingExtension)
         do {
             try storage.prepareFolder(for: relativePath)
@@ -373,10 +414,12 @@ public final class RecordingController {
         bookmarkTimes = []
         bookmarkNotes = []
         state = .recording(startedAt: startedAt)
+        isStallContinuation = isContinuation
         interruptionNotice = nil
         recorderStallNotice = nil
+        stallResumeNotice = nil
         healthMonitor.reset()
-        alertRaiser.reset()
+        if !isContinuation { alertRaiser.reset() }
         storageWarning = nil
         startStorageMonitor()
         silenceDetector.reset()
@@ -384,7 +427,7 @@ public final class RecordingController {
         recordingInputDevice = inputMonitor?.currentDevice()
         inputDeviceWarning = nil
         classEnd = subject.flatMap { scheduledEnd(of: $0, startedAt: startedAt) }
-        overrunNotified = false
+        if !isContinuation { overrunNotified = false }
         sleepPreventer?.begin(reason: "수업 녹음 중")
         onStarted?()
         do {
@@ -400,11 +443,15 @@ public final class RecordingController {
         try finishRecording(recorderStalled: false)
     }
 
+    /// 멈춘 녹음을 이어 녹음한 파일의 제목 끝에 붙는다. 같은 수업의 앞 파일과 같은 과목 목록에서 이어져 보인다.
+    public static let continuationTitleSuffix = " (이어서)"
+
     /// 녹음을 닫고 저장한다. 녹음기가 멈춘 경우 `currentTime`이 0으로 돌아갈 수 있으니 실제 파일 크기로 길이를 어림한다.
     private func finishRecording(recorderStalled: Bool) throws(RecordingError) -> Recording {
         guard let startedAt = state.startedAt, let relativePath = currentRelativePath else {
             throw .notRecording
         }
+        stallResumeNotice = nil
         var duration = recorder.stop()
         if recorderStalled {
             let bytes = files.fileSize(at: storage.url(for: relativePath)) ?? 0
@@ -419,7 +466,7 @@ public final class RecordingController {
         inputDeviceWarning = nil
         classEnd = nil
         let recording = Recording(
-            title: Self.defaultTitle(subjectName: currentSubjectName, startedAt: startedAt, calendar: calendar),
+            title: Self.defaultTitle(subjectName: currentSubjectName, startedAt: startedAt, calendar: calendar) + (isStallContinuation ? Self.continuationTitleSuffix : ""),
             subject: currentSubject,
             startedAt: startedAt,
             duration: duration,

@@ -184,6 +184,14 @@ struct RecordingView: View {
                     .accessibilityIdentifier("storageWarning")
             }
 
+            if let notice = recording.stallResumeNotice, recording.isRecording {
+                Label(notice, systemImage: "exclamationmark.triangle.fill")
+                    .designText(.bodyStrong)
+                    .foregroundStyle(Design.Palette.danger)
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("stallResumeNotice")
+            }
+
             if let notice = recording.recorderStallNotice, !recording.isRecording {
                 Label(notice, systemImage: "exclamationmark.triangle.fill")
                     .designText(.bodyStrong)

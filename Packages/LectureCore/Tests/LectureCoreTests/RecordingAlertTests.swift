@@ -85,12 +85,15 @@ import SwiftData
         #expect(notifier.notified.isEmpty)
     }
 
-    @Test func 녹음기가_멈추면_알림을_보낸다() async throws {
+    @Test func 녹음기가_멈추면_이어_녹음한다는_알림을_보내고_또_멈추면_멈춘_알림을_보낸다() async throws {
         try await controller.start()
         recorder.hasEnded = true
         controller.checkRecorderHealth()
         await settle()
-        #expect(notifier.notifiedIdentifiers == [RecordingAlert.recorderStalled.identifier])
+        #expect(notifier.notifiedIdentifiers == [RecordingAlert.recorderResumed.identifier])
+        controller.checkRecorderHealth()
+        await settle()
+        #expect(notifier.notifiedIdentifiers == [RecordingAlert.recorderResumed.identifier, RecordingAlert.recorderStalled.identifier])
     }
 
     @Test func 마이크가_바뀌면_알림을_한_번만_보낸다() async throws {
