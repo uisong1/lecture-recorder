@@ -421,13 +421,6 @@ final class TestClock {
         let second = try controller.stop()
         #expect(second.relativePath == "미분류/2026-03-02_1000_2.caf")
     }
-}
-
-@Suite struct ElapsedFormatTests {
-    @Test(arguments: [(0.0, "00:00"), (5.9, "00:05"), (65, "01:05"), (600, "10:00"), (5_403, "90:03"), (-3, "00:00")])
-    func 경과_시간을_분과_초로_보여준다(seconds: Double, expected: String) {
-        #expect(RecordingController.format(seconds) == expected)
-    }
 
     @Test func 녹음_중_북마크를_찍으면_정지할_때_녹음에_저장된다() async throws {
         let controller = makeController(at: date(2026, 3, 2, 10, 0))
@@ -468,6 +461,13 @@ final class TestClock {
         try controller.stop()
         try await controller.start()
         #expect(controller.bookmarkTimes.isEmpty)
+    }
+}
+
+@Suite struct ElapsedFormatTests {
+    @Test(arguments: [(0.0, "00:00"), (5.9, "00:05"), (65, "01:05"), (600, "10:00"), (5_403, "90:03"), (-3, "00:00")])
+    func 경과_시간을_분과_초로_보여준다(seconds: Double, expected: String) {
+        #expect(RecordingController.format(seconds) == expected)
     }
 }
 #endif
