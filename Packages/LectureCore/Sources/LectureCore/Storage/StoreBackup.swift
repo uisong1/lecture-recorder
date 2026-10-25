@@ -1,6 +1,6 @@
 import Foundation
 
-/// 앱을 켤 때 SwiftData 저장소 파일을 하루에 한 번 복사해 두고 최근 몇 개만 남긴다.
+/// 앱을 켤 때 SwiftData 저장소 파일을 하루에 한 번 복사해 두고, 최근 3개와 지난 4주의 주마다 하나씩만 남긴다.
 /// 저장소를 열기 **전에** 부른다: 저장소가 열리지 않거나 망가져도 직전 날짜의 사본이 남도록.
 ///
 /// `Backups/2026-10-25/default.store` 같은 모양이다. 복사하는 동안 앱이 꺼져도 하루가 "백업됨"으로 잘못 남지 않도록
@@ -17,8 +17,10 @@ public struct StoreBackup: Sendable {
         case failed(String)
     }
 
-    /// 남길 백업 수 (날짜 폴더 기준).
+    /// 날짜와 상관없이 남길 가장 최근 백업 수 (날짜 폴더 기준).
     public static let keepCount = 3
+    /// 주마다 하나씩 남길 주 수 (이번 주를 포함한 달력상의 주).
+    public static let keepWeeks = 4
     /// 저장소 본 파일 뒤에 붙는 부속 파일 접미사.
     public static let sidecarSuffixes = ["-wal", "-shm"]
 
@@ -65,6 +67,34 @@ public struct StoreBackup: Sendable {
         return parts.allSatisfy { part in part.allSatisfy { $0.isASCII && $0.isNumber } }
     }
 
+    /// 지워도 되는 날짜 폴더 이름을 고른다. 최근 `keepCount`개와, 이번 주를 포함한 `keepWeeks`주 안의 주마다
+    /// 가장 오래된 하나는 남긴다. 날짜 형식이 아니거나 없는 날짜(2026-13-45)인 이름은 지우지 않는다.
+    static func daysToRemove(from names: [String], now: Date, calendar userCalendar: Calendar) -> [String] {
+        // 사용자의 첫 요일 설정과 상관없이 주는 월요일에 시작한다 (같은 백업이 환경마다 다르게 남지 않도록).
+        var calendar = userCalendar
+        calendar.firstWeekday = 2
+        let days = names.filter(isDayName)
+        var dated: [(name: String, date: Date)] = []
+        for name in days {
+            let parts = name.split(separator: "-").compactMap { Int($0) }
+            let components = DateComponents(year: parts[0], month: parts[1], day: parts[2])
+            guard let date = calendar.date(from: components), dayName(for: date, calendar: calendar) == name else { continue }
+            dated.append((name, date))
+        }
+        let recent = Set(dated.map { $0.name }.sorted(by: >).prefix(keepCount))
+        guard let thisWeek = calendar.dateInterval(of: .weekOfYear, for: now),
+              let windowStart = calendar.date(byAdding: .weekOfYear, value: -(keepWeeks - 1), to: thisWeek.start) else {
+            return dated.map { $0.name }.filter { !recent.contains($0) }.sorted()
+        }
+        var oldestOfWeek: [Date: String] = [:]
+        for (name, date) in dated.sorted(by: { $0.name < $1.name }) {
+            guard let week = calendar.dateInterval(of: .weekOfYear, for: date), week.start >= windowStart else { continue }
+            if oldestOfWeek[week.start] == nil { oldestOfWeek[week.start] = name }
+        }
+        let keep = recent.union(oldestOfWeek.values)
+        return dated.map { $0.name }.filter { !keep.contains($0) }.sorted()
+    }
+
     @discardableResult
     public func backupIfNeeded() -> Outcome {
         guard files.fileExists(at: storeURL) else { return .noStore }
@@ -99,7 +129,7 @@ public struct StoreBackup: Sendable {
         return .created(day: day, removedOld: pruneOldBackups())
     }
 
-    /// 날짜 폴더가 `keepCount`개를 넘으면 오래된 것부터 지운다. 지운 개수를 돌려준다.
+    /// 보관 규칙(`daysToRemove`)에 들지 않는 오래된 백업을 지운다. 지운 개수를 돌려준다.
     private func pruneOldBackups() -> Int {
         let entries: [URL]
         do {
@@ -110,9 +140,8 @@ public struct StoreBackup: Sendable {
 #endif
             return 0
         }
-        let days = entries.map(\.lastPathComponent).filter(Self.isDayName).sorted(by: >)
         var removed = 0
-        for old in days.dropFirst(Self.keepCount) {
+        for old in Self.daysToRemove(from: entries.map(\.lastPathComponent), now: now(), calendar: calendar) {
             do {
                 try files.removeItem(at: backupsRoot.appending(path: old, directoryHint: .isDirectory))
                 removed += 1
