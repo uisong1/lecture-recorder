@@ -10,6 +10,8 @@ public protocol FileStoring: Sendable {
     func trashItem(at url: URL) throws
     /// `source`를 `destination`으로 복사한다. 이미 있으면 새 파일로 바꾼다 (복사에 실패하면 기존 파일은 그대로 둔다).
     func copyItem(at source: URL, to destination: URL) throws
+    /// 폴더 바로 아래의 항목들 (숨김 파일 포함). 폴더가 없으면 오류.
+    func contentsOfDirectory(at url: URL) throws -> [URL]
     /// 파일 크기(바이트). 없거나 알 수 없으면 nil.
     func fileSize(at url: URL) -> Int64?
     /// 남은 저장 공간(바이트). 알 수 없으면 nil.
@@ -60,6 +62,10 @@ public struct LocalFileStore: FileStoring {
             try? manager.removeItem(at: temporary)
             throw error
         }
+    }
+
+    public func contentsOfDirectory(at url: URL) throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil, options: [])
     }
 
     public func fileSize(at url: URL) -> Int64? {
