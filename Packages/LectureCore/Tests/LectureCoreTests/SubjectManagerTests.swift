@@ -21,6 +21,25 @@ import Testing
         #expect(manager.subjects.last?.color == .green)
     }
 
+    @Test func 과목이_하나도_없으면_첫_안내를_보인다() {
+        #expect(manager.needsFirstRunGuide)
+    }
+
+    @Test func 과목을_등록하면_첫_안내가_사라진다() throws {
+        try manager.add(name: "자료구조", color: .green)
+        #expect(!manager.needsFirstRunGuide)
+    }
+
+    @Test func 과목을_모두_지우면_첫_안내가_다시_보인다() throws {
+        let subject = try manager.add(name: "자료구조", color: .green)
+        try manager.delete(subject)
+        #expect(manager.needsFirstRunGuide)
+    }
+
+    @Test func 첫_안내_문구() {
+        #expect(SubjectManager.firstRunGuideText == "과목과 시간표를 먼저 등록하면 녹음이 자동으로 분류돼요")
+    }
+
     @Test func 빈_이름은_거부된다() {
         #expect(throws: SubjectError.emptyName) { try manager.add(name: "   ", color: .red) }
         #expect(manager.subjects.isEmpty)
