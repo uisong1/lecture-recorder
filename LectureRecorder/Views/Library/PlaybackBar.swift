@@ -108,6 +108,11 @@ struct PlaybackBar: View {
                 .labelsHidden()
                 .frame(maxWidth: 320)
                 .accessibilityIdentifier("ratepicker")
+                Toggle("다음 녹음으로 이어서 재생", isOn: Binding(get: { playback.continuousPlayback }, set: { playback.continuousPlayback = $0 }))
+                    .toggleStyle(.checkbox)
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.inkMuted)
+                    .accessibilityIdentifier("continuousPlayback")
             }
             .padding(Design.Spacing.md)
         }
