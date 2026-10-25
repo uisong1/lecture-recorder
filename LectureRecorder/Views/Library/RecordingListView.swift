@@ -26,6 +26,7 @@ struct RecordingListView: View {
                     .accessibilityIdentifier("emptyRecordings")
             } else {
                 List(library.recordings) { recording in
+                    let status = manager.status(for: recording)
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(recording.title)
@@ -35,14 +36,20 @@ struct RecordingListView: View {
                             Text((library.showsSubjectName ? "\(library.subjectName(of: recording)) · " : "") + "\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(RecordingController.format(recording.duration))")
                                 .designText(.caption)
                                 .foregroundStyle(Design.Palette.inkMuted)
+                            let extras = (RecordingRowStatus.bookmarkLabel(count: recording.bookmarks.count).map { [$0] } ?? []) + status.labels
+                            if !extras.isEmpty {
+                                Text(extras.joined(separator: " · "))
+                                    .designText(.caption)
+                                    .foregroundStyle(status.isMissing ? Design.Palette.danger : Design.Palette.inkMuted)
+                                    .accessibilityIdentifier("recordingStatus")
+                            }
                         }
                         Spacer()
-                        Button(playback.current === recording && playback.isPlaying ? "일시정지" : "듣기") {
-                            playback.select(recording)
-                            playback.togglePlayPause()
-                        }
-                        .buttonStyle(.textLink)
+                        Button(playback.current === recording && playback.isPlaying ? "일시정지" : "듣기") { play(recording) }
+                            .buttonStyle(.textLink)
                     }
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { play(recording) }
                     .contextMenu {
                         Button("이름 변경…") {
                             renameText = recording.title
@@ -63,7 +70,7 @@ struct RecordingListView: View {
                             ShareLink("공유…", item: url)
                         }
                         Divider()
-                        Button("삭제…", role: .destructive) { deleting = recording }
+                        Button("휴지통으로 이동…", role: .destructive) { deleting = recording }
                     }
                 }
             }
@@ -101,15 +108,15 @@ struct RecordingListView: View {
             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
             titleVisibility: .visible
         ) {
-            Button("삭제", role: .destructive) {
+            Button("휴지통으로 이동", role: .destructive) {
                 if let recording = deleting {
                     if playback.current === recording { playback.select(nil) }
-                    perform { try manager.delete(recording) }
+                    perform { try manager.trash(recording) }
                 }
             }
             Button("취소", role: .cancel) {}
         } message: {
-            Text("녹음 파일이 함께 지워지고 되돌릴 수 없습니다.")
+            Text("녹음 파일이 휴지통으로 이동합니다. 휴지통에서 되돌릴 수 있습니다.")
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if playback.current != nil { PlaybackBar(playback: playback) }
@@ -122,6 +129,13 @@ struct RecordingListView: View {
                     .padding(8)
             }
         }
+    }
+
+    /// 파일이 있으면 재생·일시정지하고, 없으면 재생 대신 안내를 보인다.
+    private func play(_ recording: Recording) {
+        guard manager.canPlay(recording) else { return }
+        playback.select(recording)
+        playback.togglePlayPause()
     }
 
     /// 저장 위치를 고르는 대화상자를 열고 녹음 파일을 복사한다.

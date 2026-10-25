@@ -146,6 +146,88 @@ public struct RecordingStorage: Sendable {
         files.fileExists(at: url)
     }
 
+    /// 파일을 마지막으로 고친 시각. 알 수 없으면 nil.
+    public func modificationDate(at relativePath: String) -> Date? {
+        files.modificationDate(at: url(for: relativePath))
+    }
+
+    /// `Recordings/` 아래의 모든 녹음 파일(m4a, caf)의 상대 경로 (이름순).
+    /// 압축 중 임시 파일(`.converting.m4a`)과 숨김 파일은 뺀다. 읽지 못하는 폴더는 건너뛴다.
+    public func audioFilePaths() -> [String] {
+        var result: [String] = []
+        func walk(_ directory: URL, prefix: String) {
+            let entries: [URL]
+            do {
+                entries = try files.contentsOfDirectory(at: directory)
+            } catch {
+#if canImport(os)
+                Log.storage.error("폴더를 읽지 못했습니다 \(directory.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+#endif
+                return
+            }
+            for entry in entries.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+                let name = entry.lastPathComponent
+                guard !name.hasPrefix(".") else { continue }
+                if files.isDirectory(at: entry) {
+                    walk(entry, prefix: prefix + name + "/")
+                } else if Self.isAudioFileName(name) {
+                    result.append(prefix + name)
+                }
+            }
+        }
+        walk(root, prefix: "")
+        return result
+    }
+
+    /// 녹음 파일로 보는 이름인지: m4a나 caf이고 압축 중 임시 파일(`.converting.`)이 아니다.
+    public static func isAudioFileName(_ name: String) -> Bool {
+        guard !name.contains(".converting.") else { return false }
+        let ext = (name as NSString).pathExtension.lowercased()
+        return ext == fileExtension || ext == workingExtension
+    }
+
+    /// 안에 아무것도 없는 폴더를 지운다 (`Recordings` 자체는 남긴다). 지운 폴더 수를 돌려준다.
+    /// 파일이 하나라도 있으면(숨김 파일 포함, Finder의 `.DS_Store`만 예외) 그 폴더는 그대로 둔다.
+    /// 지울 때는 안의 것을 따라 지우지 않는 방식을 써서, 목록에서 놓친 파일이 있어도 지워지지 않는다.
+    @discardableResult
+    public func removeEmptyFolders() -> Int {
+        var removed = 0
+        /// 폴더가 지워졌으면 true.
+        func clean(_ directory: URL, isRoot: Bool) -> Bool {
+            let entries: [URL]
+            do {
+                entries = try files.contentsOfDirectory(at: directory)
+            } catch {
+                return false
+            }
+            var remaining = 0
+            var finder: URL?
+            for entry in entries {
+                if entry.lastPathComponent == ".DS_Store", !files.isDirectory(at: entry) {
+                    finder = entry
+                } else if files.isDirectory(at: entry) {
+                    if !clean(entry, isRoot: false) { remaining += 1 }
+                } else {
+                    remaining += 1
+                }
+            }
+            guard remaining == 0, !isRoot else { return false }
+            do {
+                if let finder { try files.removeItem(at: finder) }
+                try files.removeEmptyDirectory(at: directory)
+                removed += 1
+                return true
+            } catch {
+#if canImport(os)
+                Log.storage.error("빈 폴더를 지우지 못했습니다 \(directory.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+#endif
+                return false
+            }
+        }
+        _ = clean(root, isRoot: true)
+        return removed
+    }
+
     /// 파일 크기(바이트). 없거나 알 수 없으면 nil.
     public func fileSize(at relativePath: String) -> Int64? {
         files.fileSize(at: url(for: relativePath))
@@ -167,5 +249,12 @@ public struct RecordingStorage: Sendable {
         let target = url(for: relativePath)
         guard files.fileExists(at: target) else { return }
         try files.removeItem(at: target)
+    }
+
+    /// 파일을 휴지통으로 보낸다. 이미 없으면 보낼 것이 없으므로 넘어간다.
+    public func trashFile(at relativePath: String) throws {
+        let target = url(for: relativePath)
+        guard files.fileExists(at: target) else { return }
+        try files.trashItem(at: target)
     }
 }

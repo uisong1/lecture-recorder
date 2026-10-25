@@ -81,6 +81,18 @@ public final class RecordingManager {
         }
     }
 
+    /// 목록 줄에 보일 상태 (압축 중, 복구됨, 파일 없음).
+    public func status(for recording: Recording) -> RecordingRowStatus {
+        RecordingRowStatus(relativePath: recording.relativePath, isRecovered: recording.isRecovered, storage: storage)
+    }
+
+    /// 재생해도 되는지 확인한다. 파일이 없으면 안내를 `errorMessage`에 남기고 false.
+    public func canPlay(_ recording: Recording) -> Bool {
+        let playable = status(for: recording).isPlayable
+        errorMessage = playable ? nil : RecordingRowStatus.missingFileNotice
+        return playable
+    }
+
     /// 녹음 파일의 실제 위치. Finder에서 보여 주거나 공유할 때 쓴다.
     public func fileURL(for recording: Recording) -> URL {
         storage.url(for: recording.relativePath)
@@ -113,10 +125,21 @@ public final class RecordingManager {
         }
     }
 
-    /// 파일과 DB 기록을 모두 지운다. 파일을 지우지 못하면 기록도 남겨 둔다.
+    /// 파일을 영구 삭제하고 DB 기록도 지운다. 파일을 지우지 못하면 기록도 남겨 둔다.
+    /// 너무 짧아 버리는 녹음처럼 되돌릴 필요가 없을 때 쓴다.
     public func delete(_ recording: Recording) throws {
+        try remove(recording) { try storage.removeFile(at: $0) }
+    }
+
+    /// 파일을 휴지통으로 보내고 DB 기록을 지운다. 휴지통으로 보내지 못하면 파일도 기록도 그대로 둔다.
+    /// 휴지통에서 되돌린 파일은 폴더 다시 읽기(3-35)로 목록에 되살릴 수 있다.
+    public func trash(_ recording: Recording) throws {
+        try remove(recording) { try storage.trashFile(at: $0) }
+    }
+
+    private func remove(_ recording: Recording, removingFile: (String) throws -> Void) throws {
         do {
-            try storage.removeFile(at: recording.relativePath)
+            try removingFile(recording.relativePath)
         } catch {
             Log.storage.error("녹음 삭제 실패 \(recording.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw fail(.fileFailed(error.localizedDescription))

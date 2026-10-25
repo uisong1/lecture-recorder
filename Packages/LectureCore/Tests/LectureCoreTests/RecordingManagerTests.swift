@@ -150,11 +150,73 @@ import Testing
         #expect(try context.fetch(FetchDescriptor<Recording>()).isEmpty)
     }
 
+    @Test func 휴지통으로_보내면_파일은_휴지통에_가고_기록은_사라진다() throws {
+        let recording = addRecording("미분류/a.m4a")
+        try makeManager().trash(recording)
+        #expect(files.trashed == [storage.url(for: "미분류/a.m4a").standardizedFileURL.path])
+        #expect(!files.fileExists(at: storage.url(for: "미분류/a.m4a")))
+        #expect(try context.fetch(FetchDescriptor<Recording>()).isEmpty)
+    }
+
+    @Test func 휴지통으로_보내지_못하면_파일도_기록도_그대로_두고_오류를_남긴다() throws {
+        let recording = addRecording("미분류/a.m4a")
+        files.failNextTrash = true
+        let manager = makeManager()
+        #expect(throws: RecordingManagerError.self) { try manager.trash(recording) }
+        #expect(files.fileExists(at: storage.url(for: "미분류/a.m4a")))
+        #expect(files.trashed.isEmpty)
+        #expect(try context.fetch(FetchDescriptor<Recording>()).count == 1)
+        #expect(manager.errorMessage?.hasPrefix("녹음 파일을 처리하지 못했습니다") == true)
+    }
+
+    @Test func 파일이_이미_없어도_휴지통_삭제는_기록을_지운다() throws {
+        let recording = addRecording("미분류/a.m4a")
+        try files.removeItem(at: storage.url(for: "미분류/a.m4a"))
+        try makeManager().trash(recording)
+        #expect(files.trashed.isEmpty)
+        #expect(try context.fetch(FetchDescriptor<Recording>()).isEmpty)
+    }
+
+    @Test func 영구_삭제는_휴지통을_거치지_않는다() throws {
+        let recording = addRecording("미분류/a.m4a")
+        try makeManager().delete(recording)
+        #expect(files.trashed.isEmpty)
+    }
+
     @Test func 파일이_이미_없어도_기록은_지운다() throws {
         let recording = addRecording("미분류/a.m4a")
         try files.removeItem(at: storage.url(for: "미분류/a.m4a"))
         try makeManager().delete(recording)
         #expect(try context.fetch(FetchDescriptor<Recording>()).isEmpty)
+    }
+
+    @Test func 파일이_없는_녹음은_재생하지_않고_안내를_남긴다() {
+        let recording = Recording(title: "녹음", subject: nil, startedAt: date(2026, 3, 2, 10, 0), duration: 60, relativePath: "미분류/없는.m4a")
+        context.insert(recording)
+        let manager = makeManager()
+
+        #expect(!manager.canPlay(recording))
+        #expect(manager.errorMessage == RecordingRowStatus.missingFileNotice)
+        #expect(manager.status(for: recording).labels == ["파일 없음"])
+    }
+
+    @Test func 파일이_있으면_재생해도_되고_이전_안내를_지운다() {
+        let recording = addRecording("미분류/a.m4a")
+        let manager = makeManager()
+        manager.errorMessage = "이전 오류"
+
+        #expect(manager.canPlay(recording))
+        #expect(manager.errorMessage == nil)
+    }
+
+    @Test func 제목_끝에_복구됨이_붙은_예전_기록도_복구된_녹음이다() {
+        let legacy = Recording(title: "자료구조 (복구됨)", subject: nil, startedAt: date(2026, 3, 2, 10, 0), duration: 60, relativePath: "a.m4a")
+        let flagged = Recording(title: "자료구조", subject: nil, startedAt: date(2026, 3, 2, 10, 0), duration: 60, relativePath: "b.m4a")
+        flagged.wasRecovered = true
+        let plain = Recording(title: "자료구조", subject: nil, startedAt: date(2026, 3, 2, 10, 0), duration: 60, relativePath: "c.m4a")
+        #expect(legacy.isRecovered)
+        #expect(flagged.isRecovered)
+        #expect(!plain.isRecovered)
     }
 }
 #endif

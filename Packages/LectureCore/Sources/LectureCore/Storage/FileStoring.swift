@@ -6,8 +6,16 @@ public protocol FileStoring: Sendable {
     func createDirectory(at url: URL) throws
     func moveItem(at source: URL, to destination: URL) throws
     func removeItem(at url: URL) throws
+    /// `url`을 영구 삭제하지 않고 휴지통으로 보낸다. 실패하면 파일은 그대로다.
+    func trashItem(at url: URL) throws
     /// `source`를 `destination`으로 복사한다. 이미 있으면 새 파일로 바꾼다 (복사에 실패하면 기존 파일은 그대로 둔다).
     func copyItem(at source: URL, to destination: URL) throws
+    /// 폴더인지. 심볼릭 링크는 따라가지 않는다 (링크는 폴더가 아닌 항목으로 본다).
+    func isDirectory(at url: URL) -> Bool
+    /// 마지막으로 고친 시각. 알 수 없으면 nil.
+    func modificationDate(at url: URL) -> Date?
+    /// **비어 있는** 폴더만 지운다. 안에 무엇이든 있으면 지우지 않고 오류를 던진다 (`removeItem`처럼 안의 것을 따라 지우지 않는다).
+    func removeEmptyDirectory(at url: URL) throws
     /// 폴더 바로 아래의 항목들 (숨김 파일 포함). 폴더가 없으면 오류.
     func contentsOfDirectory(at url: URL) throws -> [URL]
     /// 파일 크기(바이트). 없거나 알 수 없으면 nil.
@@ -36,6 +44,15 @@ public struct LocalFileStore: FileStoring {
         try FileManager.default.removeItem(at: url)
     }
 
+    public func trashItem(at url: URL) throws {
+        #if os(macOS)
+        try FileManager.default.trashItem(at: url, resultingItemURL: nil)
+        #else
+        // Linux(CI)에는 휴지통이 없다. 앱은 macOS에서만 돈다.
+        throw CocoaError(.featureUnsupported)
+        #endif
+    }
+
     public func copyItem(at source: URL, to destination: URL) throws {
         let manager = FileManager.default
         guard fileExists(at: destination) else {
@@ -50,6 +67,23 @@ public struct LocalFileStore: FileStoring {
         } catch {
             try? manager.removeItem(at: temporary)
             throw error
+        }
+    }
+
+    public func isDirectory(at url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        return values?.isDirectory == true && values?.isSymbolicLink != true
+    }
+
+    public func modificationDate(at url: URL) -> Date? {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path(percentEncoded: false))
+        return attributes?[.modificationDate] as? Date
+    }
+
+    public func removeEmptyDirectory(at url: URL) throws {
+        // rmdir은 폴더가 비어 있을 때만 지운다. 비어 있지 않으면 ENOTEMPTY로 실패한다.
+        guard rmdir(url.path(percentEncoded: false)) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
     }
 
