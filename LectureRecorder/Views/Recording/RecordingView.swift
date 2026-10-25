@@ -60,6 +60,16 @@ struct RecordingView: View {
                 .buttonStyle(.pillSecondary)
                 .keyboardShortcut("p", modifiers: .command)
                 .accessibilityIdentifier("pauseButton")
+
+                Button {
+                    recording.addBookmark()
+                } label: {
+                    Label("북마크 \(recording.bookmarkTimes.count)", systemImage: "bookmark")
+                }
+                .buttonStyle(.pillSecondary)
+                .keyboardShortcut("b", modifiers: .command)
+                .help("중요한 구간 표시 (⌘B)")
+                .accessibilityIdentifier("bookmarkButton")
             }
 
             if let message = recording.errorMessage {

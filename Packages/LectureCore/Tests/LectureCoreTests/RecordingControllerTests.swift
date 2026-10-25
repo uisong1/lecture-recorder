@@ -421,6 +421,47 @@ final class TestClock {
         let second = try controller.stop()
         #expect(second.relativePath == "미분류/2026-03-02_1000_2.caf")
     }
+
+    @Test func 녹음_중_북마크를_찍으면_정지할_때_녹음에_저장된다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 65
+        controller.addBookmark()
+        recorder.currentTime = 600
+        controller.addBookmark()
+        #expect(controller.bookmarkTimes == [65, 600])
+
+        recorder.currentTime = 900
+        let saved = try controller.stop()
+        #expect(saved.sortedBookmarks.map(\.time) == [65, 600])
+        #expect(controller.bookmarkTimes.isEmpty)
+        #expect(try container.mainContext.fetch(FetchDescriptor<Bookmark>()).count == 2)
+    }
+
+    @Test func 일시정지_중에도_북마크를_찍을_수_있다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 30
+        try controller.pause()
+        controller.addBookmark()
+        #expect(controller.bookmarkTimes == [30])
+    }
+
+    @Test func 녹음_중이_아니면_북마크를_찍지_않는다() throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        controller.addBookmark()
+        #expect(controller.bookmarkTimes.isEmpty)
+    }
+
+    @Test func 새_녹음을_시작하면_이전_북마크가_남지_않는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 10
+        controller.addBookmark()
+        try controller.stop()
+        try await controller.start()
+        #expect(controller.bookmarkTimes.isEmpty)
+    }
 }
 
 @Suite struct ElapsedFormatTests {
