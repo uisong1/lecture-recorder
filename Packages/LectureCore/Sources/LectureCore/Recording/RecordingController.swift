@@ -63,6 +63,8 @@ public final class RecordingController {
     public var interruptionNotice: String?
     /// 녹음 중 저장 공간이 부족해질 때 보여줄 경고. 문제가 없으면 nil.
     public private(set) var storageWarning: String?
+    /// 지금 녹음에 찍은 북마크 시점(초). 정지하면 `Recording`의 북마크로 저장된다.
+    public private(set) var bookmarkTimes: [TimeInterval] = []
     /// 마지막으로 확인한 마이크 권한. 거부 상태면 화면이 녹음 버튼 대신 안내를 보여준다.
     public private(set) var permissionStatus: MicrophonePermissionStatus
 
@@ -220,6 +222,7 @@ public final class RecordingController {
         }
         currentSubject = subject
         currentRelativePath = relativePath
+        bookmarkTimes = []
         state = .recording(startedAt: startedAt)
         interruptionNotice = nil
         storageWarning = nil
@@ -255,6 +258,11 @@ public final class RecordingController {
         currentRelativePath = nil
 
         context.insert(recording)
+        let createdAt = now()
+        for time in bookmarkTimes {
+            context.insert(Bookmark(time: min(time, duration), createdAt: createdAt, recording: recording))
+        }
+        bookmarkTimes = []
         do {
             try context.save()
         } catch {
@@ -282,6 +290,12 @@ public final class RecordingController {
     /// 진행 중인 압축이 모두 끝날 때까지 기다린다. 주로 테스트에서 쓴다.
     public func waitForCompression() async {
         await compressionTask?.value
+    }
+
+    /// 지금 녹음된 시점에 북마크를 찍는다. 녹음 중(일시정지 포함)이 아니면 아무 일도 하지 않는다.
+    public func addBookmark() {
+        guard isRecording else { return }
+        bookmarkTimes.append(elapsed)
     }
 
     /// 녹음을 잠시 멈춘다. 이미 멈춘 상태면 아무 일도 하지 않는다.
