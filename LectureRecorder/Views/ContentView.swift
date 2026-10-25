@@ -4,22 +4,64 @@ import SwiftUI
 struct ContentView: View {
     let dependencies: AppDependencies
 
+    private enum SidebarItem: Hashable {
+        case recorder
+        case library(LibrarySelection)
+    }
+
+    @State private var sidebar: SidebarItem? = .recorder
+
     var body: some View {
-        VStack(spacing: 0) {
-            if let startupError = dependencies.startupError {
-                Label(startupError, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                    .padding(8)
+        NavigationSplitView {
+            List(selection: $sidebar) {
+                Label("녹음", systemImage: "record.circle")
+                    .tag(SidebarItem.recorder)
+                    .accessibilityIdentifier("sidebar-recorder")
+                Section("과목") {
+                    ForEach(dependencies.library.subjects) { subject in
+                        Label(subject.name, systemImage: "book.closed")
+                            .badge(dependencies.library.count(for: .subject(subject.persistentModelID)))
+                            .tag(SidebarItem.library(.subject(subject.persistentModelID)))
+                            .accessibilityIdentifier("sidebar-subject-\(subject.name)")
+                    }
+                    Label("미분류", systemImage: "tray")
+                        .badge(dependencies.library.count(for: .unclassified))
+                        .tag(SidebarItem.library(.unclassified))
+                        .accessibilityIdentifier("sidebar-unclassified")
+                }
             }
-            if let notice = dependencies.recoveryNotice {
-                Label(notice, systemImage: "arrow.counterclockwise")
-                    .foregroundStyle(.blue)
-                    .padding(8)
-                    .accessibilityIdentifier("recoveryNotice")
+            .navigationSplitViewColumnWidth(min: 160, ideal: 200)
+        } detail: {
+            VStack(spacing: 0) {
+                if let startupError = dependencies.startupError {
+                    Label(startupError, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                        .padding(8)
+                }
+                if let notice = dependencies.recoveryNotice {
+                    Label(notice, systemImage: "arrow.counterclockwise")
+                        .foregroundStyle(.blue)
+                        .padding(8)
+                        .accessibilityIdentifier("recoveryNotice")
+                }
+                switch sidebar {
+                case .library:
+                    RecordingListView(library: dependencies.library, playback: dependencies.playback)
+                default:
+                    RecordingView(recording: dependencies.recording, playback: dependencies.playback)
+                }
             }
-            RecordingView(recording: dependencies.recording, playback: dependencies.playback)
         }
-        .frame(minWidth: 600, minHeight: 400)
+        .frame(minWidth: 760, minHeight: 440)
+        .onChange(of: sidebar) { _, item in
+            dependencies.library.reload()
+            if case .library(let selection) = item {
+                dependencies.library.select(selection)
+            }
+        }
+        .onChange(of: dependencies.recording.lastSaved) {
+            dependencies.library.reload()
+        }
         .toolbar {
             SettingsLink {
                 Label("과목과 시간표 설정", systemImage: "gearshape")
