@@ -224,3 +224,7 @@
 ## 2026-10-25. UI 테스트의 휴지통은 임시 폴더로 대신한다 (3-48)
 - 결정: `LocalFileStore(trashDirectory:)`를 주면 `trashItem`이 시스템 휴지통 대신 그 폴더로 파일을 옮긴다(이름 앞에 고유 접두를 붙여 덮어쓰지 않음). 앱은 `-UITesting`일 때만 임시 폴더(`…/LectureRecorder/FakeTrash`)를 넘기고 평소에는 지금처럼 시스템 휴지통을 쓴다. 새 UI 테스트 `LibraryFlowUITests`는 녹음 중 북마크, 휴지통 이동, 폴더 다시 읽기, "모든 녹음"의 섞인 목록을 다룬다.
 - 이유: UI 테스트가 개발자의 실제 휴지통을 어지럽히면 안 된다. 휴지통으로 가는 실제 경로(`FileManager.trashItem`)는 그대로 두고 옮기는 위치만 바꾸므로 앱 동작을 가짜로 바꾸지 않는다.
+
+## 2026-10-25. 녹음 컨트롤러에서 판정 로직을 작은 타입으로 뺀다 (3-49)
+- 결정: 630줄 `RecordingController`에서 (1) 상황마다 한 번만 보내는 경고 알림(`RecordingAlertRaiser`), (2) 녹음기 멈춤 확인(`RecorderHealthMonitor`), (3) 남은 저장 공간 판정과 경고 문구(`StorageSpaceStatus`, 값만 보는 enum)를 각각 뺐다. 컨트롤러는 이 타입들을 불러 화면 상태와 자동 정지만 맡는다. `RecordingController.storageWarningBytes`/`storageCriticalBytes`는 같은 값을 그대로 가리킨다.
+- 이유: 한 파일이 너무 커서 고칠 때 부작용을 가늠하기 어려웠다. 동작을 바꾸지 않는다는 보장은 기존 `RecordingControllerTests`·`RecordingAlertTests`·`RecordingFormatTests`를 한 줄도 바꾸지 않고 통과시키는 것으로 확인했고, 값만 보는 판정은 SwiftData 없이 Linux CI에서도 직접 테스트한다.
