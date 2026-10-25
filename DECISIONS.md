@@ -233,3 +233,7 @@
 ## 2026-10-25. 녹음 컨트롤러에서 판정 로직을 작은 타입으로 뺀다 (3-49)
 - 결정: 630줄 `RecordingController`에서 (1) 상황마다 한 번만 보내는 경고 알림(`RecordingAlertRaiser`), (2) 녹음기 멈춤 확인(`RecorderHealthMonitor`), (3) 남은 저장 공간 판정과 경고 문구(`StorageSpaceStatus`, 값만 보는 enum)를 각각 뺐다. 컨트롤러는 이 타입들을 불러 화면 상태와 자동 정지만 맡는다. `RecordingController.storageWarningBytes`/`storageCriticalBytes`는 같은 값을 그대로 가리킨다.
 - 이유: 한 파일이 너무 커서 고칠 때 부작용을 가늠하기 어려웠다. 동작을 바꾸지 않는다는 보장은 기존 `RecordingControllerTests`·`RecordingAlertTests`·`RecordingFormatTests`를 한 줄도 바꾸지 않고 통과시키는 것으로 확인했고, 값만 보는 판정은 SwiftData 없이 Linux CI에서도 직접 테스트한다.
+
+## 2026-10-25. 메뉴 막대 아이콘은 `MenuBarExtra`(창 모양)로 만든다
+- 결정: SwiftUI `MenuBarExtra`를 `.window` 스타일로 추가했다. 창 안에 상태(과목·경과 시간), 시작/정지, 일시정지/재개, 북마크, "창 열기"를 둔다. 보여줄 문구와 버튼 활성 여부는 값만 보는 `MenuBarStatus`(LectureCore)가 정하고 `RecordingController.menuBarStatus`가 현재 상태를 옮긴다. 메인 창에 `id`를 붙여 "창 열기"가 닫힌 창도 다시 연다. 메뉴 막대 창에는 단축키를 달지 않는다(메인 창의 ⌘R/⌘B와 겹치지 않게).
+- 이유: 필기 앱을 쓰는 동안에도 정지·북마크를 누를 곳이 필요하다. `.window` 스타일이라야 경과 시간이 실시간으로 갱신되고 DESIGN.md의 pill 버튼을 그대로 쓴다. 메뉴 막대 아이콘은 시스템이 단색(템플릿)으로 그리므로 녹음 중 빨강 대신 아이콘 모양(`mic` → `record.circle.fill`, 일시정지 `pause.circle.fill`)으로 구분하고, 빨강은 창 안의 녹음 중 표시에만 쓴다.
