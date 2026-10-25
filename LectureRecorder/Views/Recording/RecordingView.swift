@@ -180,6 +180,14 @@ struct RecordingView: View {
                     .accessibilityIdentifier("storageWarning")
             }
 
+            if let notice = recording.recorderStallNotice, !recording.isRecording {
+                Label(notice, systemImage: "exclamationmark.triangle.fill")
+                    .designText(.bodyStrong)
+                    .foregroundStyle(Design.Palette.danger)
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("recorderStallNotice")
+            }
+
             if let notice = recording.interruptionNotice, !recording.isRecording {
                 Label(notice, systemImage: "moon.zzz")
                     .designText(.caption)

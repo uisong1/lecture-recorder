@@ -70,6 +70,8 @@ public final class RecordingController {
     public var errorMessage: String?
     /// 잠자기나 종료 때문에 녹음이 중단되어 저장됐을 때 보여줄 안내.
     public var interruptionNotice: String?
+    /// 녹음기가 조용히 멈춰 녹음을 저장했을 때 보일 큰 경고. 멈추지 않았으면 nil. 새 녹음을 시작하면 사라진다.
+    public private(set) var recorderStallNotice: String?
     /// 녹음 중 저장 공간이 부족해질 때 보여줄 경고. 문제가 없으면 nil.
     public private(set) var storageWarning: String?
     /// 이 시간(초)보다 짧게 끝난 녹음은 저장할지 묻는다.
@@ -114,6 +116,7 @@ public final class RecordingController {
     private var levelMonitor: Task<Void, Never>?
     private let levelCheckInterval: Duration?
     private var silenceDetector = SilenceDetector()
+    private var stallDetector = RecorderStallDetector()
     private let calendar: Calendar
     private let now: @MainActor () -> Date
 
@@ -170,9 +173,9 @@ public final class RecordingController {
     }
 
     /// 녹음을 정상 정지해 저장하고, 왜 멈췄는지 안내를 남긴다.
-    private func stopAndNotify(because reason: String, advice: String) {
+    private func stopAndNotify(because reason: String, advice: String, recorderStalled: Bool = false) {
         do {
-            let saved = try stop()
+            let saved = try finishRecording(recorderStalled: recorderStalled)
             interruptionNotice = "\(reason) '\(saved.title)' 녹음을 여기까지 저장했습니다. \(advice)"
         } catch {
             errorMessage = error.errorDescription
@@ -191,6 +194,22 @@ public final class RecordingController {
             storageWarning = "저장 공간이 부족합니다. 약 \(minutes)분 더 녹음할 수 있어요. 공간을 비워 주세요."
         } else {
             storageWarning = nil
+        }
+    }
+
+    /// 녹음기가 실제로 녹음하고 있는지 확인한다. 녹음기가 끝났다고 알렸거나 경과 시간이 30초(연속 3번 점검) 동안
+    /// 늘지 않으면 지금까지의 녹음을 정상 파일로 닫아 저장하고 `recorderStallNotice`로 크게 알린다.
+    /// 일시정지 중에는 확인하지 않는다. 녹음 중에는 10초마다 불린다.
+    /// 자동으로 새 파일에 이어 녹음하지는 않는다 (사용자가 다시 시작한다).
+    public func checkRecorderHealth() {
+        guard isRecording else { return }
+        let verdict = stallDetector.update(elapsed: recorder.currentTime, isPaused: isPaused, recorderEnded: recorder.hasEnded)
+        guard case .stalled(let reason) = verdict else { return }
+        Log.recording.fault("녹음기가 멈춤 (\(String(describing: reason), privacy: .public)), 지금까지 녹음을 저장")
+        stopAndNotify(because: "녹음기가 멈춰서", advice: "녹음을 다시 시작하세요.", recorderStalled: true)
+        if recorderStallNotice == nil {
+            // 저장 자체가 실패한 경우에도 멈춘 사실은 크게 보인다. 이유는 errorMessage에 있다.
+            recorderStallNotice = "녹음이 멈춘 것 같습니다. 녹음을 다시 시작하세요."
         }
     }
 
@@ -260,6 +279,7 @@ public final class RecordingController {
             while !Task.isCancelled {
                 try? await Task.sleep(for: interval)
                 guard !Task.isCancelled else { return }
+                self?.checkRecorderHealth()
                 self?.checkStorage()
                 self?.checkOverrun()
             }
@@ -344,6 +364,8 @@ public final class RecordingController {
         bookmarkTimes = []
         state = .recording(startedAt: startedAt)
         interruptionNotice = nil
+        recorderStallNotice = nil
+        stallDetector.reset()
         storageWarning = nil
         startStorageMonitor()
         silenceDetector.reset()
@@ -364,10 +386,19 @@ public final class RecordingController {
 
     @discardableResult
     public func stop() throws(RecordingError) -> Recording {
+        try finishRecording(recorderStalled: false)
+    }
+
+    /// 녹음을 닫고 저장한다. 녹음기가 멈춘 경우 `currentTime`이 0으로 돌아갈 수 있으니 실제 파일 크기로 길이를 어림한다.
+    private func finishRecording(recorderStalled: Bool) throws(RecordingError) -> Recording {
         guard let startedAt = state.startedAt, let relativePath = currentRelativePath else {
             throw .notRecording
         }
-        let duration = recorder.stop()
+        var duration = recorder.stop()
+        if recorderStalled {
+            let bytes = files.fileSize(at: storage.url(for: relativePath)) ?? 0
+            duration = max(duration, Double(bytes) * 8 / RecordingRecovery.workingBitsPerSecond)
+        }
         sleepPreventer?.end()
         storageMonitor?.cancel()
         storageMonitor = nil
@@ -383,6 +414,9 @@ public final class RecordingController {
             duration: duration,
             relativePath: relativePath
         )
+        if recorderStalled {
+            recorderStallNotice = "녹음이 멈춘 것 같습니다. '\(recording.title)' 녹음을 여기까지 저장했습니다. 녹음을 다시 시작하세요."
+        }
         state = .idle
         currentSubject = nil
         currentRelativePath = nil
