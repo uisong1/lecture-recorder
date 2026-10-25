@@ -18,7 +18,7 @@ struct LectureRecorderApp: App {
         .modelContainer(dependencies.container)
 
         Settings {
-            SettingsView(subjects: dependencies.subjects)
+            SettingsView(subjects: dependencies.subjects, schedule: dependencies.schedule)
         }
         .modelContainer(dependencies.container)
     }

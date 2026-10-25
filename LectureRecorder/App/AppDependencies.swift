@@ -12,12 +12,14 @@ final class AppDependencies {
     /// 디스크 저장소를 열지 못해 임시 저장소로 대신 실행 중이면 그 이유.
     let startupError: String?
     let subjects: SubjectManager
+    let schedule: ScheduleManager
 
     init() {
         let (container, startupError) = Self.makeContainer()
         self.container = container
         self.startupError = startupError
         subjects = SubjectManager(context: container.mainContext)
+        schedule = ScheduleManager(context: container.mainContext)
     }
 
     private static func makeContainer() -> (ModelContainer, String?) {
