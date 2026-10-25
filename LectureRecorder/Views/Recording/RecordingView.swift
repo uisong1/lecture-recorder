@@ -53,6 +53,13 @@ struct RecordingView: View {
                     .accessibilityIdentifier("inputDevice")
             }
 
+            if let notice = recording.overrunNotice {
+                Label(notice, systemImage: "clock.badge.exclamationmark")
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.primary)
+                    .accessibilityIdentifier("classOverrunNotice")
+            }
+
             if let warning = recording.inputDeviceWarning {
                 Label(warning, systemImage: "exclamationmark.triangle")
                     .designText(.caption)

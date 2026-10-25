@@ -102,6 +102,9 @@ public final class RecordingController {
     private let sleepPreventer: (any SleepPreventing)?
     private let powerStatus: (any PowerStatusProviding)?
     private let inputMonitor: (any AudioInputMonitoring)?
+    private let overrunNotifier: (any NotificationScheduling)?
+    private var classEnd: Date?
+    private var overrunNotified = false
     private var recordingInputDevice: AudioInputDevice?
     private let compressor: RecordingCompressor?
     private var compressionTask: Task<Void, Never>?
@@ -124,6 +127,7 @@ public final class RecordingController {
         sleepPreventer: (any SleepPreventing)? = nil,
         powerStatus: (any PowerStatusProviding)? = nil,
         inputMonitor: (any AudioInputMonitoring)? = nil,
+        overrunNotifier: (any NotificationScheduling)? = nil,
         lifecycle: (any LifecycleEventSource)? = nil,
         compressor: RecordingCompressor? = nil,
         storageCheckInterval: Duration? = .seconds(10),
@@ -141,6 +145,7 @@ public final class RecordingController {
         self.sleepPreventer = sleepPreventer
         self.powerStatus = powerStatus
         self.inputMonitor = inputMonitor
+        self.overrunNotifier = overrunNotifier
         self.compressor = compressor
         self.storageCheckInterval = storageCheckInterval
         self.levelCheckInterval = levelCheckInterval
@@ -202,6 +207,26 @@ public final class RecordingController {
         isInputSilent = silenceDetector.update(level: inputLevel, at: now())
     }
 
+    /// 녹음 중인 수업이 끝난 지 10분이 지났을 때 화면에 보일 안내. 아직이거나 수업을 모르면 nil.
+    public var overrunNotice: String? {
+        guard isRecording else { return nil }
+        return ClassOverrunAdvice.notice(subjectName: currentSubjectName, classEnd: classEnd, now: now())
+    }
+
+    /// 안내할 때가 되면 시스템 알림도 한 번 보낸다 (다른 앱을 보고 있어도 알 수 있게). 주기적으로 불린다.
+    public func checkOverrun() {
+        guard let notice = overrunNotice, !overrunNotified else { return }
+        overrunNotified = true
+        Log.recording.notice("수업이 끝난 뒤에도 녹음 중: \(notice, privacy: .public)")
+        guard let overrunNotifier else { return }
+        Task { await overrunNotifier.notify(title: "수업이 끝났습니다", body: notice) }
+    }
+
+    private func scheduledEnd(of subject: Subject, startedAt: Date) -> Date? {
+        guard let (schedule, _) = loadSchedule() else { return nil }
+        return schedule.classEnd(of: subject.persistentModelID, startedAt: startedAt, calendar: calendar)
+    }
+
     /// 녹음을 시작할 때의 마이크와 지금 마이크를 비교해 경고를 갱신한다. 장치가 바뀔 때마다 불린다.
     public func checkInputDevice() {
         guard isRecording else { return }
@@ -236,6 +261,7 @@ public final class RecordingController {
                 try? await Task.sleep(for: interval)
                 guard !Task.isCancelled else { return }
                 self?.checkStorage()
+                self?.checkOverrun()
             }
         }
     }
@@ -324,6 +350,8 @@ public final class RecordingController {
         startLevelMonitor()
         recordingInputDevice = inputMonitor?.currentDevice()
         inputDeviceWarning = nil
+        classEnd = subject.flatMap { scheduledEnd(of: $0, startedAt: startedAt) }
+        overrunNotified = false
         sleepPreventer?.begin(reason: "수업 녹음 중")
         onStarted?()
         do {
@@ -347,6 +375,7 @@ public final class RecordingController {
         stopLevelMonitor()
         recordingInputDevice = nil
         inputDeviceWarning = nil
+        classEnd = nil
         let recording = Recording(
             title: Self.defaultTitle(subjectName: currentSubjectName, startedAt: startedAt, calendar: calendar),
             subject: currentSubject,
@@ -530,19 +559,24 @@ public final class RecordingController {
         expectedSubject()?.name ?? SubjectManager.unclassifiedName
     }
 
-    private func subject(at date: Date) -> Subject? {
+    private func loadSchedule() -> (ClassSchedule<PersistentIdentifier>, [TimeSlot])? {
         do {
             let slots = try context.fetch(FetchDescriptor<TimeSlot>())
             let schedule = ClassSchedule(entries: slots.compactMap { slot -> ClassSchedule<PersistentIdentifier>.Entry? in
                 guard let period = slot.period, let subject = slot.subject else { return nil }
                 return .init(period: period, subjectID: subject.persistentModelID)
             })
-            guard case .subject(let id) = schedule.classify(at: date, calendar: calendar) else { return nil }
-            return slots.first { $0.subject?.persistentModelID == id }?.subject
+            return (schedule, slots)
         } catch {
-            Log.data.error("시간표 조회 실패, 미분류로 녹음: \(error.localizedDescription, privacy: .public)")
+            Log.data.error("시간표 조회 실패: \(error.localizedDescription, privacy: .public)")
             return nil
         }
+    }
+
+    private func subject(at date: Date) -> Subject? {
+        guard let (schedule, slots) = loadSchedule() else { return nil }
+        guard case .subject(let id) = schedule.classify(at: date, calendar: calendar) else { return nil }
+        return slots.first { $0.subject?.persistentModelID == id }?.subject
     }
 }
 #endif

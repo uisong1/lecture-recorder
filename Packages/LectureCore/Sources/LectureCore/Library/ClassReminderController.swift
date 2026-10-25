@@ -26,6 +26,12 @@ public protocol NotificationScheduling: AnyObject {
     func requestAuthorization() async -> Bool
     /// 앱이 예약한 알림을 모두 지우고 `notifications`로 바꾼다.
     func replaceAll(with notifications: [ScheduledNotification]) async
+    /// 지금 바로 알림 하나를 보낸다. 권한이 없으면 아무 일도 하지 않는다.
+    func notify(title: String, body: String) async
+}
+
+extension NotificationScheduling {
+    public func notify(title: String, body: String) async {}
 }
 
 #if canImport(SwiftData)
@@ -142,6 +148,10 @@ public final class SystemNotificationScheduler: NSObject, NotificationScheduling
         await Self.replace(with: notifications)
     }
 
+    public func notify(title: String, body: String) async {
+        await Self.deliver(title: title, body: body)
+    }
+
     // 알림 센터는 메인 액터 밖에서 쓴다 (센터 객체를 액터 사이로 넘기지 않는다).
     nonisolated private static func authorize() async -> Bool {
         do {
@@ -167,6 +177,26 @@ public final class SystemNotificationScheduler: NSObject, NotificationScheduling
             } catch {
                 Log.data.error("알림 예약 실패 \(notification.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
+        }
+    }
+
+    nonisolated private static func deliver(title: String, body: String) async {
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "class-overrun",
+            content: content,
+            trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+        )
+        do {
+            try await center.add(request)
+        } catch {
+            Log.data.error("알림 전송 실패: \(error.localizedDescription, privacy: .public)")
         }
     }
 

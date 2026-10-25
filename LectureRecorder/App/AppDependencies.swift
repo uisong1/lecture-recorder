@@ -37,6 +37,8 @@ final class AppDependencies {
             storage: storage,
             converter: SystemAudioConverter()
         )
+        // UI 테스트에서는 시스템 알림 센터를 건드리지 않는다.
+        let notifications: any NotificationScheduling = Self.isUITesting ? NoNotificationScheduler() : SystemNotificationScheduler()
         if Self.isUITesting {
             recording = RecordingController(
                 context: container.mainContext,
@@ -55,12 +57,11 @@ final class AppDependencies {
                 sleepPreventer: SystemSleepPreventer(),
                 powerStatus: SystemPowerStatus(),
                 inputMonitor: SystemAudioInput(),
+                overrunNotifier: notifications,
                 lifecycle: SystemLifecycleEvents(),
                 compressor: compressor
             )
         }
-        // UI 테스트에서는 시스템 알림 센터를 건드리지 않는다.
-        let notifications: any NotificationScheduling = Self.isUITesting ? NoNotificationScheduler() : SystemNotificationScheduler()
         reminders = ClassReminderController(context: container.mainContext, notifications: notifications)
         let reminders = reminders
         schedule.onChange = { Task { await reminders.reschedule() } }

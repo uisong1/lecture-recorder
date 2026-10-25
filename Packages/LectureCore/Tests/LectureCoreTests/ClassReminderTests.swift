@@ -106,6 +106,11 @@ final class FakeNotificationScheduler: NotificationScheduling {
     private(set) var authorizationRequests = 0
     private(set) var scheduled: [ScheduledNotification] = []
     private(set) var replaceCount = 0
+    private(set) var notified: [(title: String, body: String)] = []
+
+    func notify(title: String, body: String) async {
+        notified.append((title, body))
+    }
 
     func requestAuthorization() async -> Bool {
         authorizationRequests += 1

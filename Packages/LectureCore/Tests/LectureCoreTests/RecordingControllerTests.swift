@@ -32,7 +32,9 @@ final class TestClock {
 
     let converter: FakeAudioConverter
 
-    func makeController(at time: Date, compressing: Bool = false) -> RecordingController {
+    let overrunNotifier = FakeNotificationScheduler()
+
+    func makeController(at time: Date, compressing: Bool = false, clock: TestClock? = nil) -> RecordingController {
         let storage = RecordingStorage(root: root, files: files)
         return RecordingController(
             context: container.mainContext,
@@ -42,6 +44,7 @@ final class TestClock {
             permission: permission,
             journal: journal,
             sleepPreventer: sleep,
+            overrunNotifier: overrunNotifier,
             lifecycle: lifecycle,
             compressor: compressing
                 ? RecordingCompressor(context: container.mainContext, storage: storage, files: files, converter: converter)
@@ -49,7 +52,7 @@ final class TestClock {
             storageCheckInterval: nil,
             levelCheckInterval: nil,
             calendar: seoulCalendar,
-            now: { time }
+            now: { clock?.now ?? time }
         )
     }
 
@@ -59,6 +62,50 @@ final class TestClock {
         try ScheduleManager(context: container.mainContext)
             .add(subject: subject, weekday: .monday, start: TimeOfDay(hour: 10), end: TimeOfDay(hour: 11, minute: 15))
         return subject
+    }
+
+    @Test func 수업이_끝나고_10분_뒤에도_녹음_중이면_안내하고_알림을_한_번_보낸다() async throws {
+        _ = try addSubjectWithSlot()  // 월 10:00~11:15
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+
+        clock.advance(by: 75 * 60 + 9 * 60 + 59)  // 11:24:59
+        controller.checkOverrun()
+        #expect(controller.overrunNotice == nil)
+        #expect(overrunNotifier.notified.isEmpty)
+
+        clock.advance(by: 1)  // 11:25:00
+        controller.checkOverrun()
+        controller.checkOverrun()
+        await Task.yield()
+        #expect(controller.overrunNotice?.contains("자료구조 수업이 10분 전에 끝났습니다") == true)
+        #expect(overrunNotifier.notified.count == 1)
+    }
+
+    @Test func 수업을_모르는_녹음은_종료_안내를_하지_않는다() async throws {
+        let clock = TestClock(date(2026, 3, 2, 20, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+
+        clock.advance(by: 5 * 3600)
+        controller.checkOverrun()
+
+        #expect(controller.overrunNotice == nil)
+        #expect(overrunNotifier.notified.isEmpty)
+    }
+
+    @Test func 정지하면_종료_안내가_사라진다() async throws {
+        _ = try addSubjectWithSlot()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+        clock.advance(by: 3 * 3600)
+        #expect(controller.overrunNotice != nil)
+
+        _ = try controller.stop()
+
+        #expect(controller.overrunNotice == nil)
     }
 
     @Test func 시작_전에_고른_과목으로_저장한다() async throws {
