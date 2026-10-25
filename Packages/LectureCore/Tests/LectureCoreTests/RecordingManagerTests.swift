@@ -50,6 +50,14 @@ import Testing
         #expect(!files.fileExists(at: storage.url(for: "미분류/2026-03-02_1000.m4a")))
     }
 
+    @Test func 압축_전_CAF를_옮겨도_확장자는_CAF로_남는다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let recording = addRecording("미분류/a.caf")
+        try makeManager().move(recording, to: ds)
+        #expect(recording.relativePath == "자료구조/a.caf")
+        #expect(files.fileExists(at: storage.url(for: "자료구조/a.caf")))
+    }
+
     @Test func 미분류로_옮길_수_있다() throws {
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         let recording = addRecording("자료구조/a.m4a", subject: ds)

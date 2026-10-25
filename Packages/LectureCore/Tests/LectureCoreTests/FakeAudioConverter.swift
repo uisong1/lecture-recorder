@@ -17,12 +17,20 @@ final class FakeAudioConverter: AudioConverting, @unchecked Sendable {
         set { lock.withLock { _error = newValue } }
     }
 
+    /// 변환이 끝나기 직전에 부르는 동작. 압축하는 동안 일어나는 일(예: 과목 이동)을 흉내 낸다.
+    var whileConverting: (@MainActor () -> Void)? {
+        get { lock.withLock { _whileConverting } }
+        set { lock.withLock { _whileConverting = newValue } }
+    }
+    private var _whileConverting: (@MainActor () -> Void)?
+
     var converted: [URL] { lock.withLock { _converted } }
 
     func compress(from source: URL, to destination: URL) async throws -> TimeInterval {
         if let error { throw error }
         lock.withLock { _converted.append(source) }
         files.add(destination)
+        if let hook = whileConverting { await hook() }
         return Self.duration
     }
 }
