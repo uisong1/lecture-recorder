@@ -48,6 +48,22 @@ import Testing
         #expect(library.exportLabel == "모든 녹음 최근 7일")
     }
 
+    @Test func 직접_지정한_기간으로_목록이_걸러지고_내보내기_이름에_담긴다() throws {
+        addRecording("3월 2일", subject: nil, at: date(2026, 3, 2, 10, 0))
+        addRecording("3월 10일 밤", subject: nil, at: date(2026, 3, 10, 23, 59))
+        addRecording("3월 11일", subject: nil, at: date(2026, 3, 11, 0, 0))
+        try context.save()
+
+        let library = RecordingLibrary(context: context, now: { date(2026, 6, 1, 9, 0) }, calendar: seoulCalendar)
+        library.select(.all)
+        library.filter = RecordingFilter(period: .custom, customStart: date(2026, 3, 10, 0, 0), customEnd: date(2026, 3, 10, 0, 0))
+        #expect(library.recordings.map(\.title) == ["3월 10일 밤"])
+        #expect(library.exportLabel == "모든 녹음 2026-03-10~2026-03-10")
+
+        library.filter = RecordingFilter()
+        #expect(library.recordings.count == 3)
+    }
+
     @Test func 미분류를_고르면_과목_없는_녹음만_나온다() throws {
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         addRecording("과목 있음", subject: ds, at: date(2026, 3, 2, 10, 0))

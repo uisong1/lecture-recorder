@@ -116,7 +116,7 @@ struct RecordingListView: View {
                     .accessibilityIdentifier("unplayedOnly")
             }
             ToolbarItem {
-                Picker("기간", selection: Binding(get: { library.filter.period }, set: { library.filter.period = $0 })) {
+                Picker("기간", selection: Binding(get: { library.filter.period }, set: selectPeriod)) {
                     ForEach(RecordingPeriod.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
@@ -152,6 +152,9 @@ struct RecordingListView: View {
         } message: {
             Text("녹음 파일이 휴지통으로 이동합니다. 휴지통에서 되돌릴 수 있습니다.")
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if library.filter.isActive { filterBar }
+        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if playback.current != nil { PlaybackBar(playback: playback) }
         }
@@ -163,6 +166,51 @@ struct RecordingListView: View {
                     .padding(8)
             }
         }
+    }
+
+    /// 걸러지는 조건이 있을 때 목록 위에 보이는 줄. 직접 지정 기간이면 날짜를 여기서 고르고, 한 번에 해제한다.
+    private var filterBar: some View {
+        HStack(spacing: Design.Spacing.sm) {
+            Text("필터 적용 중")
+                .designText(.captionStrong)
+                .foregroundStyle(Design.Palette.ink)
+            if library.filter.period == .custom {
+                DatePicker("시작일", selection: customDate(\.customStart), displayedComponents: .date)
+                    .labelsHidden()
+                    .accessibilityIdentifier("customStartDate")
+                Text("~").designText(.caption).foregroundStyle(Design.Palette.inkMuted)
+                DatePicker("끝일", selection: customDate(\.customEnd), displayedComponents: .date)
+                    .labelsHidden()
+                    .accessibilityIdentifier("customEndDate")
+            }
+            Spacer()
+            Button("필터 해제") { library.filter = RecordingFilter() }
+                .buttonStyle(.textLink)
+                .accessibilityIdentifier("clearFilter")
+        }
+        .padding(.horizontal, Design.Spacing.md)
+        .padding(.vertical, Design.Spacing.xs)
+        .background(Design.Palette.parchment)
+        .accessibilityIdentifier("filterBar")
+    }
+
+    /// 기간을 바꾼다. "직접 지정…"을 처음 고르면 오늘 하루로 시작한다.
+    private func selectPeriod(_ period: RecordingPeriod) {
+        var filter = library.filter
+        filter.period = period
+        if period == .custom {
+            let today = Date()
+            filter.customStart = filter.customStart ?? today
+            filter.customEnd = filter.customEnd ?? today
+        }
+        library.filter = filter
+    }
+
+    private func customDate(_ keyPath: WritableKeyPath<RecordingFilter, Date?>) -> Binding<Date> {
+        Binding(
+            get: { library.filter[keyPath: keyPath] ?? Date() },
+            set: { library.filter[keyPath: keyPath] = $0 }
+        )
     }
 
     /// 파일이 있으면 재생·일시정지하고, 없으면 재생 대신 안내를 보인다.

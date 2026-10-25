@@ -189,7 +189,7 @@ public final class RecordingLibrary {
         case .unclassified: name = SubjectManager.unclassifiedName
         case .subject(let id): name = subjects.first { $0.persistentModelID == id }?.name ?? "모든 녹음"
         }
-        if filter.period != .all { name += " \(filter.period.label)" }
+        if filter.period != .all { name += " \(filter.periodLabel(calendar: calendar))" }
         return name
     }
 
