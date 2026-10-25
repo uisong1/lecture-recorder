@@ -45,6 +45,12 @@ public final class SubjectManager {
         reload()
     }
 
+    /// 처음 쓸 때 보여 줄 안내 문구. 과목을 등록하면 녹음이 시간표대로 분류된다는 것만 알린다.
+    public static let firstRunGuideText = "과목과 시간표를 먼저 등록하면 녹음이 자동으로 분류돼요"
+
+    /// 과목이 하나도 없으면 true. 시간표 없이도 녹음은 되므로 막지 않고 안내만 한다.
+    public var needsFirstRunGuide: Bool { subjects.isEmpty }
+
     public func reload() {
         do {
             subjects = try context.fetch(FetchDescriptor<Subject>(sortBy: [SortDescriptor(\.name)]))
