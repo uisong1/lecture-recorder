@@ -13,6 +13,9 @@ public final class Recording {
     public var duration: TimeInterval
     /// 녹음 폴더(`Recordings/`) 기준 상대 경로. 앱 폴더가 바뀌어도 깨지지 않게 상대 경로로 둔다.
     public var relativePath: String
+    /// 녹음을 지우면 북마크도 함께 지운다.
+    @Relationship(deleteRule: .cascade, inverse: \Bookmark.recording)
+    public var bookmarks: [Bookmark] = []
 
     public init(title: String, subject: Subject?, startedAt: Date, duration: TimeInterval, relativePath: String) {
         self.title = title
@@ -20,6 +23,13 @@ public final class Recording {
         self.startedAt = startedAt
         self.duration = duration
         self.relativePath = relativePath
+    }
+}
+
+extension Recording {
+    /// 시점 순서로 정렬한 북마크.
+    public var sortedBookmarks: [Bookmark] {
+        bookmarks.sorted { $0.time < $1.time }
     }
 }
 #endif
