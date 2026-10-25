@@ -147,6 +147,18 @@ public enum TimetableReader {
 
     // MARK: 2단계: 읽기
 
+    /// 글자 인식 결과와 이미지 픽셀로 바로 읽는다. 요일 칸을 정하고, 칸마다 세로 한 줄의 색과 가로 눈금줄 후보를 뽑아 아래 `read`에 넘긴다.
+    public static func read(observations: [TextObservation], pixels: TimetablePixels) throws(TimetableReadError) -> TimetableDraft {
+        let dayColumns = try columns(from: observations)
+        var strips: [Weekday: [RGB]] = [:]
+        for column in dayColumns {
+            strips[column.weekday] = pixels.strip(atX: column.stripX)
+        }
+        let left = dayColumns.map(\.left).min() ?? 0
+        let right = dayColumns.map(\.right).max() ?? 0
+        return try read(observations: observations, columns: dayColumns, strips: strips, lineRows: pixels.lineRows(left: left, right: right))
+    }
+
     /// - Parameters:
     ///   - observations: 이미지에서 읽은 모든 글자.
     ///   - columns: `columns(from:)`의 결과.
@@ -159,7 +171,7 @@ public enum TimetableReader {
         lineRows: [Int]
     ) throws(TimetableReadError) -> TimetableDraft {
         guard let gridLeft = columns.map(\.left).min(), let gridRight = columns.map(\.right).max() else { throw .noDayHeaders }
-        let lines = clusterLines(lineRows)
+        let lines = regularLines(clusterLines(lineRows))
         guard lines.count >= 2 else { throw .noGrid }
         let spacing = median(zip(lines, lines.dropFirst()).map { $1 - $0 })
         guard spacing > 0 else { throw .noGrid }
@@ -221,6 +233,48 @@ public enum TimetableReader {
         }
         if !group.isEmpty { result.append(Double(group.reduce(0, +)) / Double(group.count)) }
         return result
+    }
+
+    /// 눈금줄 후보 중 같은 간격으로 늘어선 줄만 남긴다. 머리글 아래 선이나 화면 아래의 회색 띠처럼
+    /// 간격이 맞지 않는 줄은 버리고, 색 칸에 가려 보이지 않는 줄은 간격에 맞춰 채운다.
+    /// 규칙적인 줄을 두 개 이상 찾지 못하면 후보를 그대로 돌려준다.
+    static func regularLines(_ lines: [Double]) -> [Double] {
+        guard lines.count >= 3 else { return lines }
+        // 가장 흔한 간격(5px 단위로 묶는다)이 눈금 간격이다.
+        var buckets: [Int: [Double]] = [:]
+        for (first, second) in zip(lines, lines.dropFirst()) where second - first >= 10 {
+            buckets[Int(((second - first) / 5).rounded()), default: []].append(second - first)
+        }
+        guard let best = buckets.max(by: { ($0.value.count, $0.key) < ($1.value.count, $1.key) }) else { return lines }
+        let step = best.value.reduce(0, +) / Double(best.value.count)
+        let tolerance = max(3, step * 0.08)
+
+        var bestReal = 0
+        var bestFilled: [Double] = []
+        for start in lines.indices {
+            var real = 1
+            var filled = [lines[start]]
+            var index = start
+            while true {
+                var next: (index: Int, multiple: Int)?
+                for multiple in 1...3 where next == nil {
+                    let expected = lines[index] + step * Double(multiple)
+                    if let found = lines.indices.dropFirst(index + 1).first(where: { abs(lines[$0] - expected) <= tolerance }) {
+                        next = (found, multiple)
+                    }
+                }
+                guard let next else { break }
+                for missing in 1..<next.multiple { filled.append(lines[index] + step * Double(missing)) }
+                filled.append(lines[next.index])
+                real += 1
+                index = next.index
+            }
+            if real > bestReal {
+                bestReal = real
+                bestFilled = filled
+            }
+        }
+        return bestReal >= 2 ? bestFilled : lines
     }
 
     /// 첫 눈금줄이 몇 시인지. 시간 숫자마다 "이 줄이 몇 시여야 하는지"를 추정해 가장 많이 나온 값을 쓴다.

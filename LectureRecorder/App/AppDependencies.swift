@@ -20,6 +20,7 @@ final class AppDependencies {
     let playback: PlaybackController
     let library: RecordingLibrary
     let manager: RecordingManager
+    let timetableImport: TimetableImportModel
 
     init() {
         var problems: [String] = []
@@ -95,6 +96,22 @@ final class AppDependencies {
         let migrator = RecordingMigrator(context: container.mainContext, storage: storage)
         // 예전 폴더 구조의 녹음을 학기/과목 폴더로 옮긴다. 복사해 확인한 뒤에만 원본을 지우고, 실패하면 그대로 둔다.
         Task { await migrator.migrateIfNeeded() }
+        let subjects = subjects
+        let schedule = schedule
+        let library = library
+        timetableImport = TimetableImportModel(
+            reader: VisionTimetableReader(),
+            importer: TimetableImporter(context: context),
+            onImported: {
+                // 새 과목·시간표를 화면에 반영하고, 수업 알림을 다시 예약하고, 학기가 정해진 과목의 예전 녹음을 새 폴더로 옮긴다.
+                subjects.reload()
+                schedule.reload()
+                library.reload()
+                await reminders.reschedule()
+                await migrator.migrateIfNeeded()
+                library.reload()
+            }
+        )
         if let compressor {
             // 지난 실행에서 압축하지 못한 CAF 녹음(꺼졌거나 실패한 것)을 이어서 압축한다.
             Task { await compressor.compressPending() }

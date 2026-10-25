@@ -25,6 +25,11 @@ struct LectureRecorderApp: App {
         }
         .modelContainer(dependencies.container)
 
+        Window("시간표 가져오기", id: TimetableImportView.windowID) {
+            TimetableImportView(model: dependencies.timetableImport)
+        }
+        .defaultSize(width: 860, height: 640)
+
         Settings {
             SettingsView(subjects: dependencies.subjects, schedule: dependencies.schedule, reminders: dependencies.reminders)
         }

@@ -4,9 +4,19 @@ import SwiftUI
 struct ScheduleSettingsView: View {
     let subjects: SubjectManager
     @Bindable var manager: ScheduleManager
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("에브리타임 시간표 캡처를 읽어 한 번에 넣을 수 있습니다.")
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.inkMuted)
+                Spacer()
+                Button("이미지로 가져오기…") { openWindow(id: TimetableImportView.windowID) }
+                    .buttonStyle(.pillSecondary)
+                    .accessibilityIdentifier("openTimetableImport")
+            }
             Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 8) {
                 GridRow {
                     Text("과목")
@@ -84,19 +94,5 @@ struct ScheduleSettingsView: View {
             subjects.reload()
             manager.reload()
         }
-    }
-}
-
-/// `TimeOfDay`를 시:분 선택 컨트롤로 보여준다.
-private struct TimePicker: View {
-    let label: String
-    @Binding var time: TimeOfDay
-
-    var body: some View {
-        DatePicker(label, selection: Binding(
-            get: { time.date(on: .now, calendar: .current) },
-            set: { time = TimeOfDay(date: $0, calendar: .current) }
-        ), displayedComponents: .hourAndMinute)
-        .labelsHidden()
     }
 }

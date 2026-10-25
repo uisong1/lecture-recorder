@@ -93,6 +93,7 @@ struct PillButtonStyle: ButtonStyle {
         let foreground: Color
         let background: Color
         @Environment(\.isFocused) private var isFocused
+        @Environment(\.isEnabled) private var isEnabled
 
         var body: some View {
             label
@@ -110,6 +111,7 @@ struct PillButtonStyle: ButtonStyle {
                 }
                 .focusEffectDisabled()
                 .scaleEffect(isPressed ? 0.95 : 1)
+                .opacity(isEnabled ? 1 : 0.4)
         }
     }
 
