@@ -26,12 +26,16 @@ public protocol NotificationScheduling: AnyObject {
     func requestAuthorization() async -> Bool
     /// 앱이 예약한 알림을 모두 지우고 `notifications`로 바꾼다.
     func replaceAll(with notifications: [ScheduledNotification]) async
-    /// 지금 바로 알림 하나를 보낸다. 권한이 없으면 아무 일도 하지 않는다.
-    func notify(title: String, body: String) async
+    /// 지금 바로 알림 하나를 보낸다. 권한이 없으면 아무 일도 하지 않는다 (새로 묻지 않는다).
+    /// `identifier`가 같은 알림은 서로 덮어쓰므로 종류마다 다르게 준다. 알림을 누르면 앱이 열린다.
+    func notify(title: String, body: String, identifier: String) async
 }
 
 extension NotificationScheduling {
-    public func notify(title: String, body: String) async {}
+    /// 수업 종료 후 녹음 중 안내처럼 식별자를 따로 정하지 않는 알림.
+    public func notify(title: String, body: String) async {
+        await notify(title: title, body: body, identifier: "class-overrun")
+    }
 }
 
 #if canImport(SwiftData)
@@ -148,8 +152,8 @@ public final class SystemNotificationScheduler: NSObject, NotificationScheduling
         await Self.replace(with: notifications)
     }
 
-    public func notify(title: String, body: String) async {
-        await Self.deliver(title: title, body: body)
+    public func notify(title: String, body: String, identifier: String) async {
+        await Self.deliver(title: title, body: body, identifier: identifier)
     }
 
     // 알림 센터는 메인 액터 밖에서 쓴다 (센터 객체를 액터 사이로 넘기지 않는다).
@@ -180,7 +184,7 @@ public final class SystemNotificationScheduler: NSObject, NotificationScheduling
         }
     }
 
-    nonisolated private static func deliver(title: String, body: String) async {
+    nonisolated private static func deliver(title: String, body: String, identifier: String) async {
         let center = UNUserNotificationCenter.current()
         let settings = await center.notificationSettings()
         guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
@@ -189,7 +193,7 @@ public final class SystemNotificationScheduler: NSObject, NotificationScheduling
         content.body = body
         content.sound = .default
         let request = UNNotificationRequest(
-            identifier: "class-overrun",
+            identifier: identifier,
             content: content,
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         )
@@ -215,4 +219,5 @@ public final class NoNotificationScheduler: NotificationScheduling {
     public init() {}
     public func requestAuthorization() async -> Bool { true }
     public func replaceAll(with notifications: [ScheduledNotification]) async {}
+    public func notify(title: String, body: String, identifier: String) async {}
 }
