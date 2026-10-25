@@ -33,6 +33,9 @@ public final class PlaybackController {
     /// 이 간격(초) 안에 이미 북마크가 있으면 같은 자리로 보고 새로 만들지 않는다.
     public static let duplicateBookmarkWindow: TimeInterval = 1
 
+    /// 앞뒤 건너뛰기 간격(초).
+    public static let skipInterval: TimeInterval = 15
+
     /// 끝에서 이 시간(초) 안쪽까지 들었으면 다 들은 것으로 보고 다음엔 처음부터 듣는다.
     public static let finishedMargin: TimeInterval = 3
 
@@ -100,6 +103,14 @@ public final class PlaybackController {
         guard current != nil else { return }
         player.seek(to: min(max(time, 0), duration))
     }
+
+    /// 지금 위치에서 `seconds`초만큼 건너뛴다 (음수면 뒤로). 0~길이 밖으로는 나가지 않는다.
+    public func skip(by seconds: TimeInterval) {
+        seek(to: player.currentTime + seconds)
+    }
+
+    public func skipForward() { skip(by: Self.skipInterval) }
+    public func skipBackward() { skip(by: -Self.skipInterval) }
 
     public func setRate(_ newRate: PlaybackRate) {
         rate = newRate
