@@ -54,6 +54,7 @@ final class AppDependencies {
                 journal: journal,
                 sleepPreventer: SystemSleepPreventer(),
                 powerStatus: SystemPowerStatus(),
+                inputMonitor: SystemAudioInput(),
                 lifecycle: SystemLifecycleEvents(),
                 compressor: compressor
             )
