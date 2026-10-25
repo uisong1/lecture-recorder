@@ -7,10 +7,8 @@ final class SubjectSettingsUITests: XCTestCase {
 
     @MainActor
     func test과목을_추가하고_이름을_바꾸고_삭제한다() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-UITesting"]
-        app.launch()
-        app.typeKey(",", modifierFlags: .command)
+        let app = XCUIApplication.launchForTesting()
+        app.openSettings(tab: "과목")
 
         let nameField = app.textFields["newSubjectName"]
         XCTAssertTrue(nameField.waitForExistence(timeout: 5))

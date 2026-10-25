@@ -7,10 +7,8 @@ final class ScheduleSettingsUITests: XCTestCase {
 
     @MainActor
     func test시간표를_추가하고_겹치면_오류가_보인다() throws {
-        let app = XCUIApplication()
-        app.launchArguments = ["-UITesting"]
-        app.launch()
-        app.typeKey(",", modifierFlags: .command)
+        let app = XCUIApplication.launchForTesting()
+        app.openSettings(tab: "과목")
 
         let nameField = app.textFields["newSubjectName"]
         XCTAssertTrue(nameField.waitForExistence(timeout: 5))
