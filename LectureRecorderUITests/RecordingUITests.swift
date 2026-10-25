@@ -12,27 +12,29 @@ final class RecordingUITests: XCTestCase {
 
         let button = app.buttons["recordButton"]
         XCTAssertTrue(button.waitForExistence(timeout: 10))
-        XCTAssertEqual(app.staticTexts["elapsedTime"].label, "00:00")
+        let elapsed = app.staticTexts["elapsedTime"]
+        XCTAssertEqual(text(of: elapsed), "00:00")
 
         button.click()
         let subject = app.staticTexts["recordingSubject"]
         XCTAssertTrue(subject.waitForExistence(timeout: 5))
-        XCTAssertTrue(waitForLabel(of: subject, toBe: "미분류"))
+        XCTAssertTrue(wait(for: subject, matching: NSPredicate(format: "value == %@", "미분류")))
         // 경과 시간이 흐른다.
-        XCTAssertTrue(wait(for: app.staticTexts["elapsedTime"], matching: NSPredicate(format: "label BEGINSWITH '00:0' AND label != '00:00'"), timeout: 6))
+        XCTAssertTrue(wait(for: elapsed, matching: NSPredicate(format: "value BEGINSWITH '00:0' AND value != '00:00'"), timeout: 6))
 
         button.click()
         let saved = app.staticTexts["lastSavedTitle"]
         XCTAssertTrue(saved.waitForExistence(timeout: 5))
-        XCTAssertTrue(saved.label.hasPrefix("저장됨: 미분류"))
-        XCTAssertEqual(app.staticTexts["elapsedTime"].label, "00:00")
+        XCTAssertTrue(text(of: saved).hasPrefix("저장됨: 미분류"))
+        XCTAssertEqual(text(of: elapsed), "00:00")
     }
 
-    private func waitForLabel(of element: XCUIElement, toBe expected: String, timeout: TimeInterval = 5) -> Bool {
-        wait(for: element, matching: NSPredicate(format: "label == %@", expected), timeout: timeout)
+    /// macOS에서 `Text`의 문구는 label이 아니라 value에 들어 있다.
+    private func text(of element: XCUIElement) -> String {
+        (element.value as? String) ?? element.label
     }
 
-    private func wait(for element: XCUIElement, matching predicate: NSPredicate, timeout: TimeInterval) -> Bool {
+    private func wait(for element: XCUIElement, matching predicate: NSPredicate, timeout: TimeInterval = 5) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
