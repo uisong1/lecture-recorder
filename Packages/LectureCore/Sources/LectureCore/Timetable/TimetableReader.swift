@@ -363,14 +363,22 @@ public enum TimetableReader {
         return (name, roomStart != nil)
     }
 
-    /// 격자 위쪽 글자에서 "2026년 2학기"를 찾는다.
+    /// 격자 위쪽 글자에서 "2026년 2학기", "2026년 여름학기", "2026년 겨울학기"를 찾는다.
     private static func semester(in observations: [TextObservation], above gridTop: Double) -> String? {
         for observation in observations where observation.centerY < gridTop {
             let text = observation.text
-            guard let range = text.range(of: #"\d{4}\s*년\s*\d\s*학기"#, options: .regularExpression) else { continue }
-            let digits = text[range].split(whereSeparator: { !$0.isNumber }).map(String.init)
-            guard digits.count == 2 else { continue }
-            return "\(digits[0])년 \(digits[1])학기"
+            guard let range = text.range(of: #"\d{4}\s*년\s*(\d|여름|겨울)\s*학기"#, options: .regularExpression) else { continue }
+            let match = String(text[range])
+            let year = match.prefix(4)
+            let term: String
+            if match.contains("여름") {
+                term = "여름"
+            } else if match.contains("겨울") {
+                term = "겨울"
+            } else {
+                term = String(match.dropFirst(4).filter(\.isNumber))
+            }
+            return "\(year)년 \(term)학기"
         }
         return nil
     }
