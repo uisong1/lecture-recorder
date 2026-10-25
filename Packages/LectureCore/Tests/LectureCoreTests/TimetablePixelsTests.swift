@@ -140,7 +140,7 @@ private struct SyntheticTimetableImage {
         #expect(TimetableReader.regularLines([100, 300]) == [100, 300])
     }
 
-    @Test func 규칙이_없으면_후보를_그대로_돌려준다() {
-        #expect(TimetableReader.regularLines([100, 150, 400]) == [100, 150, 400])
+    @Test func 간격이_너무_좁은_후보뿐이면_그대로_돌려준다() {
+        #expect(TimetableReader.regularLines([100, 105, 108]) == [100, 105, 108])
     }
 }
