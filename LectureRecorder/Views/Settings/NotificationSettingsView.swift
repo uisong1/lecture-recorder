@@ -22,7 +22,7 @@ struct NotificationSettingsView: View {
                 if let message = reminders.message {
                     Label(message, systemImage: "bell.slash")
                         .designText(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Design.Palette.danger)
                         .accessibilityIdentifier("classReminderMessage")
                 }
             }

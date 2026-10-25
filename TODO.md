@@ -169,7 +169,7 @@
 - [x] **3-30. 남은 DESIGN.md 어긋남 정리**
   - 완료 기준: (1) 녹음 중임을 보여주는 빨간 표시(점+"녹음 중")가 녹음 화면에 생긴다 (결정됨: 버튼은 파랑, 녹음 중 표시만 빨강. 지금은 정지 버튼이 어두운 색이고 빨간 표시가 없다). (2) 화면 곳곳의 `.red`·`.orange` 오류 글자를 토큰 하나로 모은다 (오류는 DESIGN.md에 색이 없으니 `Design.Palette`에 `danger`를 추가하고 DECISIONS.md에 기록). (3) 녹음 화면 56pt 글자(`.system(size: 56…)`)를 `Design.Text` 단계로 옮긴다. (4) 파란 버튼 포커스 링 2px(`primaryFocus`)을 확인한다. UI 테스트 통과.
 
-- [ ] **3-41. 남은 `.red` 직접 지정 정리**
+- [x] **3-41. 남은 `.red` 직접 지정 정리**
   - 완료 기준: `RecordingView`의 배터리 경고와 `NotificationSettingsView`의 알림 오류 글자가 `Design.Palette.danger`를 쓰고, 화면 코드에 `.red`/`.orange` 직접 지정이 과목 색 변환(`SubjectColor+Color.swift`) 밖에 남지 않는다 (`grep`으로 확인). 3-30 (2)의 빠진 부분이다.
 
 ## 확인 필요

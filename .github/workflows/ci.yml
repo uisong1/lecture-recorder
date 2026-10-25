@@ -14,6 +14,8 @@ jobs:
       - uses: actions/checkout@v5
       - name: 샌드박스 권한 점검
         run: scripts/check-entitlements.sh
+      - name: 디자인 색 직접 지정 점검
+        run: scripts/check-design-colors.sh
       - name: swift test
         run: |
           if [ -d Packages/LectureCore ]; then

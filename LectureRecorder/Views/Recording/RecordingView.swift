@@ -157,7 +157,7 @@ struct RecordingView: View {
                 if let warning = recording.batteryWarning {
                     Label(warning, systemImage: "battery.25percent")
                         .designText(.caption)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Design.Palette.danger)
                         .accessibilityIdentifier("batteryWarning")
                 }
                 Text("창을 닫아도 녹음은 계속됩니다. Dock 아이콘을 누르면 창이 다시 열립니다.")

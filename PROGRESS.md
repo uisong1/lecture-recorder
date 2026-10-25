@@ -81,3 +81,7 @@
 - 한 일: `RecorderStallDetector`(경과 시간 정체·녹음기 종료 판정, 순수 값)와 `AudioRecording.hasEnded`, 컨트롤러의 `checkRecorderHealth()`(10초마다), 멈추면 파일 크기로 길이를 어림해 저장하고 녹음 화면에 큰 경고(`recorderStallNotice`). 단위 테스트 13개. 컨트롤러 테스트는 SwiftData가 있는 macOS CI에서만 돈다.
 - Mac에서 확인 필요: 실제 `AVAudioRecorder`를 일부러 멈추기는 어려워 CI는 가짜 녹음기로만 검증합니다. 평소 녹음·일시정지·재개 중에 가짜 경고가 뜨지 않는지(특히 일시정지 후 재개 직후), 3분 정도 녹음해 보세요.
 - 다음: 3-34 시스템 알림(녹음기 멈춤 포함).
+
+## 2026-10-25 3-41 남은 .red 정리
+- 한 일: 배터리 경고(`RecordingView`)와 알림 오류(`NotificationSettingsView`)를 `Design.Palette.danger`로 바꿈. `scripts/check-design-colors.sh`가 과목 색 변환 밖의 `.red`/`.orange`를 찾아 CI(Linux)에서 막는다.
+- Mac에서 확인 필요: 없음 (색만 바뀜, 위험 색은 기존 danger와 같음).
