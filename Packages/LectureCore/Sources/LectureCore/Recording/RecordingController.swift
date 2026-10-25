@@ -65,6 +65,8 @@ public final class RecordingController {
     public private(set) var storageWarning: String?
     /// 지금 녹음에 찍은 북마크 시점(초). 정지하면 `Recording`의 북마크로 저장된다.
     public private(set) var bookmarkTimes: [TimeInterval] = []
+    /// 녹음이 시작된 직후 불린다. 재생 중인 소리를 멈추는 데 쓴다 (재생 소리가 마이크로 들어가는 것 방지).
+    public var onStarted: (@MainActor () -> Void)?
     /// 마지막으로 확인한 마이크 권한. 거부 상태면 화면이 녹음 버튼 대신 안내를 보여준다.
     public private(set) var permissionStatus: MicrophonePermissionStatus
 
@@ -228,6 +230,7 @@ public final class RecordingController {
         storageWarning = nil
         startStorageMonitor()
         sleepPreventer?.begin(reason: "수업 녹음 중")
+        onStarted?()
         do {
             try journal?.save(PendingRecording(relativePath: relativePath, subjectName: subject?.name, startedAt: startedAt))
         } catch {

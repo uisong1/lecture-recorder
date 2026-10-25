@@ -472,6 +472,28 @@ final class TestClock {
         try await controller.start()
         #expect(controller.bookmarkTimes.isEmpty)
     }
+
+    @Test func 녹음을_시작하면_시작_알림이_불린다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        var calls = 0
+        var wasRecording = false
+        controller.onStarted = {
+            calls += 1
+            wasRecording = controller.isRecording
+        }
+        try await controller.start()
+        #expect(calls == 1)
+        #expect(wasRecording)
+    }
+
+    @Test func 시작에_실패하면_시작_알림이_불리지_않는다() async throws {
+        recorder.startError = CocoaError(.fileWriteUnknown)
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        var calls = 0
+        controller.onStarted = { calls += 1 }
+        await #expect(throws: RecordingError.self) { try await controller.start() }
+        #expect(calls == 0)
+    }
 }
 
 @Suite struct ElapsedFormatTests {

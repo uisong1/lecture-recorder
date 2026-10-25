@@ -74,6 +74,9 @@ final class AppDependencies {
             Task { await compressor.compressPending() }
         }
         startupError = problems.isEmpty ? nil : problems.joined(separator: "\n")
+        // 녹음을 시작하면 재생 중인 소리를 멈춘다.
+        let player = playback
+        recording.onStarted = { player.pause() }
     }
 
     private static func makeContainer(problems: inout [String]) -> ModelContainer {
