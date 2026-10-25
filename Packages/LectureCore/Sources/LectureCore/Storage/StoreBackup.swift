@@ -89,7 +89,9 @@ public struct StoreBackup: Sendable {
                 throw CocoaError(.fileWriteUnknown)
             }
         } catch {
+#if canImport(os)
             Log.storage.error("저장소 백업 실패: \(error.localizedDescription, privacy: .public)")
+#endif
             // 끝나지 않은 사본이 남아 오늘 다시 시도하지 못하거나 개수 제한을 차지하지 않도록 치운다.
             try? files.removeItem(at: folder)
             return .failed(error.localizedDescription)
@@ -103,7 +105,9 @@ public struct StoreBackup: Sendable {
         do {
             entries = try files.contentsOfDirectory(at: backupsRoot)
         } catch {
+#if canImport(os)
             Log.storage.error("백업 목록을 읽지 못했습니다: \(error.localizedDescription, privacy: .public)")
+#endif
             return 0
         }
         let days = entries.map(\.lastPathComponent).filter(Self.isDayName).sorted(by: >)
@@ -113,7 +117,9 @@ public struct StoreBackup: Sendable {
                 try files.removeItem(at: backupsRoot.appending(path: old, directoryHint: .isDirectory))
                 removed += 1
             } catch {
+#if canImport(os)
                 Log.storage.error("오래된 백업을 지우지 못했습니다 \(old, privacy: .public): \(error.localizedDescription, privacy: .public)")
+#endif
             }
         }
         return removed
