@@ -133,7 +133,7 @@ public final class SubjectManager {
         let moved = storage.folderExists(oldFolder)
         if moved {
             do {
-                try storage.moveFolder(from: oldFolder, to: newFolder)
+                try storage.moveFolder(from: oldFolder, to: newFolder, protecting: active)
             } catch {
                 Log.storage.error("과목 폴더 이동 실패 \(oldFolder, privacy: .public): \(error.localizedDescription, privacy: .public)")
                 throw .moveFailed(error.localizedDescription)

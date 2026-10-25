@@ -137,6 +137,45 @@ import Testing
         #expect(files.fileExists(at: storage.url(for: "학기/과목/a.m4a")))
     }
 
+    @Test func 녹음_중인_파일이_들어갈_폴더는_비어_있어도_지우지_않는다() throws {
+        let (storage, files) = try store([], directories: ["학기/과목", "학기/다른과목"])
+        let removed = storage.removeEmptyFolders(protecting: ["학기/과목/03-02 월 10-00.caf"])
+        #expect(removed == 1)
+        #expect(files.isDirectory(at: storage.url(for: "학기/과목")))
+        #expect(!files.isDirectory(at: storage.url(for: "학기/다른과목")))
+    }
+
+    @Test func 녹음_중이_아니면_같은_폴더도_지운다() throws {
+        let (storage, files) = try store([], directories: ["학기/과목"])
+        #expect(storage.removeEmptyFolders(protecting: []) == 1)
+        #expect(!files.isDirectory(at: storage.url(for: "학기/과목")))
+    }
+
+    @Test func 폴더_아래에_녹음_중_파일이_있는지_경계를_구분한다() {
+        let active: Set<String> = ["학기/과목/a.caf"]
+        #expect(RecordingStorage.folder("학기/과목", containsActive: active))
+        #expect(RecordingStorage.folder("학기", containsActive: active))
+        #expect(!RecordingStorage.folder("학기/과", containsActive: active))
+        #expect(!RecordingStorage.folder("학기/과목2", containsActive: active))
+        #expect(!RecordingStorage.folder("학기/과목", containsActive: []))
+    }
+
+    @Test func 녹음_중인_폴더는_옮기지_않는다() throws {
+        let (storage, files) = try store(["학기/과목/a.caf"])
+        #expect(throws: StorageError.recordingInProgress) {
+            try storage.moveFolder(from: "학기/과목", to: "학기/새과목", protecting: ["학기/과목/a.caf"])
+        }
+        #expect(files.fileExists(at: storage.url(for: "학기/과목/a.caf")))
+        #expect(!storage.folderExists("학기/새과목"))
+    }
+
+    @Test func 옮길_자리가_녹음_중인_폴더여도_옮기지_않는다() throws {
+        let (storage, _) = try store(["학기/과목/a.m4a", "학기/새과목/b.caf"])
+        #expect(throws: StorageError.recordingInProgress) {
+            try storage.moveFolder(from: "학기/과목", to: "학기/새과목", protecting: ["학기/새과목/b.caf"])
+        }
+    }
+
     @Test func DS_Store만_있는_폴더는_비었다고_본다() throws {
         let (storage, files) = try store(["예전과목/.DS_Store"], directories: ["예전과목"])
         #expect(storage.removeEmptyFolders() == 1)

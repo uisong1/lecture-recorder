@@ -1015,6 +1015,24 @@ final class TestClock {
         #expect(controller.errorMessage?.hasPrefix("녹음을 다시 시작하지 못했습니다") == true)
     }
 
+    @Test func 저장에_실패해_저널이_남은_뒤_새_녹음을_시작해도_앞_녹음_기록은_보관된다() async throws {
+        let leftover = PendingRecording(relativePath: "학기 미정/자료구조/03-02 월 10-00.caf", subjectName: "자료구조", startedAt: date(2026, 3, 2, 10, 0), bookmarkTimes: [30], bookmarkNotes: ["정의"])
+        try journal.save(leftover)
+        let controller = makeController(at: date(2026, 3, 2, 14, 0))
+        try await controller.start()
+        #expect(journal.loadUnsaved() == [leftover])
+        #expect(journal.load()?.relativePath == "미분류/03-02 월 14-00.caf")
+        try controller.stop()
+        #expect(journal.load() == nil)
+        #expect(journal.loadUnsaved() == [leftover])
+    }
+
+    @Test func 남은_저널이_없으면_보관할_것도_없다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 14, 0))
+        try await controller.start()
+        #expect(journal.loadUnsaved().isEmpty)
+    }
+
     @Test func 녹음_중에는_저널에_남고_정상_저장되면_지워진다() async throws {
         _ = try addSubjectWithSlot()
         let controller = makeController(at: date(2026, 3, 2, 10, 0))

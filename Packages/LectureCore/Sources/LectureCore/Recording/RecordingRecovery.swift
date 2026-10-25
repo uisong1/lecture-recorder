@@ -31,19 +31,41 @@ public struct RecordingRecovery {
     }
 
     /// 저널에 남은 녹음이 있으면 되살린다. 되살린 녹음을 돌려주고, 할 일이 없으면 nil.
+    /// 저장에 실패한 뒤 새 녹음 때문에 따로 보관된 기록(`keepUnsaved`)도 함께 되살린다. 여럿이면 가장 먼저 되살린 녹음을 돌려준다.
     @discardableResult
     public func recoverIfNeeded() throws -> Recording? {
-        guard let pending = journal.load() else { return nil }
+        var first: Recording?
+        var firstError: Error?
+        var candidates: [(PendingRecording, () -> Void)] = []
+        if let pending = journal.load() { candidates.append((pending, { journal.clear() })) }
+        for pending in journal.loadUnsaved() {
+            let path = pending.relativePath
+            candidates.append((pending, { journal.clearUnsaved(relativePath: path) }))
+        }
+        for (pending, clearEntry) in candidates {
+            do {
+                if let recording = try recover(pending, clearing: clearEntry), first == nil { first = recording }
+            } catch {
+                // 한 건이 실패해도 나머지는 되살린다. 실패한 기록은 저널에 남아 다음 실행 때 다시 시도한다.
+                Log.recording.error("녹음 복구 실패 \(pending.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                firstError = firstError ?? error
+            }
+        }
+        if let firstError, first == nil { throw firstError }
+        return first
+    }
+
+    private func recover(_ pending: PendingRecording, clearing clearEntry: () -> Void) throws -> Recording? {
         let url = storage.url(for: pending.relativePath)
         guard files.fileExists(at: url) else {
             Log.recording.notice("복구할 파일 없음: \(pending.relativePath, privacy: .public)")
-            journal.clear()
+            clearEntry()
             return nil
         }
         let path = pending.relativePath
         let existing = try context.fetchCount(FetchDescriptor<Recording>(predicate: #Predicate { $0.relativePath == path }))
         guard existing == 0 else {
-            journal.clear()
+            clearEntry()
             return nil
         }
 
@@ -67,7 +89,7 @@ public struct RecordingRecovery {
             context.insert(Bookmark(time: min(max(time, 0), recording.duration), note: note, createdAt: pending.startedAt, recording: recording))
         }
         try context.save()
-        journal.clear()
+        clearEntry()
         Log.recording.notice("녹음 복구: \(pending.relativePath, privacy: .public)")
         return recording
     }
