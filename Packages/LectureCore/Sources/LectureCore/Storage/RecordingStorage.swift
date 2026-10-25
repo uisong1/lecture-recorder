@@ -160,7 +160,9 @@ public struct RecordingStorage: Sendable {
             do {
                 entries = try files.contentsOfDirectory(at: directory)
             } catch {
+#if canImport(os)
                 Log.storage.error("폴더를 읽지 못했습니다 \(directory.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+#endif
                 return
             }
             for entry in entries.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
@@ -216,7 +218,9 @@ public struct RecordingStorage: Sendable {
                 removed += 1
                 return true
             } catch {
+#if canImport(os)
                 Log.storage.error("빈 폴더를 지우지 못했습니다 \(directory.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+#endif
                 return false
             }
         }
