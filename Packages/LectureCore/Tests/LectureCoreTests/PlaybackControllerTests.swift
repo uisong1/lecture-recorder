@@ -120,7 +120,7 @@ import Testing
 
     func addBookmarks(_ times: [TimeInterval], to recording: Recording) {
         for time in times {
-            recording.bookmarks.append(Bookmark(time: time, createdAt: date(2026, 3, 2, 10, 30), recording: recording))
+            recording.bookmarks.append(Bookmark(time: time, createdAt: date(2026, 3, 2, 10, 30)))
         }
     }
 
