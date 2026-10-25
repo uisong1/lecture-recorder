@@ -4,7 +4,7 @@ import SwiftData
 import Testing
 @testable import LectureCore
 
-private struct FakeTimetableReader: TimetableImageReading {
+struct FakeTimetableReader: TimetableImageReading {
     var result: Result<TimetableDraft, any Error>
 
     func readTimetable(from imageData: Data) async throws -> TimetableDraft {
@@ -13,7 +13,7 @@ private struct FakeTimetableReader: TimetableImageReading {
 }
 
 @MainActor
-private final class ImportedCounter {
+final class ImportedCounter {
     var count = 0
 }
 
