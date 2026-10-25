@@ -17,6 +17,11 @@ struct RecordingView: View {
                         .accessibilityIdentifier("recordingSubject")
                     if recording.isRecording {
                         RecordingIndicator(isPaused: recording.isPaused)
+                    } else {
+                        Text("지금 녹음하면: \(recording.expectedSubjectName)")
+                            .designText(.caption)
+                            .foregroundStyle(Design.Palette.inkMuted)
+                            .accessibilityIdentifier("expectedSubject")
                     }
                     Text(recording.elapsedText)
                         .designText(.hero)

@@ -281,6 +281,49 @@ final class TestClock {
         #expect(recording.relativePath == "자료구조/2026-03-02_1000.caf")
     }
 
+    // MARK: 예상 과목 (3-8)
+
+    @Test func 수업_중이면_지금_녹음하면_그_과목이다() throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 10, 30))
+        #expect(controller.expectedSubjectName == "자료구조")
+        #expect(controller.expectedSubject()?.name == "자료구조")
+    }
+
+    @Test func 수업_시작_5분_전에도_그_과목이다() throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 9, 55))
+        #expect(controller.expectedSubjectName == "자료구조")
+    }
+
+    @Test func 수업이_없으면_미분류다() throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 12, 30))
+        #expect(controller.expectedSubjectName == "미분류")
+        #expect(controller.expectedSubject() == nil)
+    }
+
+    @Test func 시간표를_바꾸면_예상_과목도_바뀐다() throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 30))
+        #expect(controller.expectedSubjectName == "미분류")
+        let subject = try addSubjectWithSlot()
+        #expect(controller.expectedSubjectName == "자료구조")
+
+        let schedule = ScheduleManager(context: container.mainContext)
+        let slot = try #require(schedule.slots.first)
+        try schedule.delete(slot)
+        #expect(controller.expectedSubjectName == "미분류")
+        _ = subject
+    }
+
+    @Test func 녹음을_시작하면_예상_과목과_실제_과목이_같다() async throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 9, 55))
+        let expected = controller.expectedSubjectName
+        try await controller.start()
+        #expect(controller.currentSubjectName == expected)
+    }
+
     // MARK: 너무 짧은 녹음 (3-7)
 
     @Test func 기준_초는_5초다() {

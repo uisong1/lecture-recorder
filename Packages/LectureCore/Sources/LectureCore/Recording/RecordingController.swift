@@ -453,6 +453,17 @@ public final class RecordingController {
         return "\(subjectName) \(c.month ?? 0)월 \(c.day ?? 0)일 \(time)"
     }
 
+    /// 지금 녹음을 시작하면 분류될 과목. 시간표를 읽을 때마다 새로 계산하므로 시간표를 바꾸면 바로 반영된다.
+    /// 수업이 없으면 nil (미분류).
+    public func expectedSubject() -> Subject? {
+        subject(at: now())
+    }
+
+    /// 대기 화면에 보일 "지금 녹음하면 분류될 과목" 이름. 수업이 없으면 "미분류".
+    public var expectedSubjectName: String {
+        expectedSubject()?.name ?? SubjectManager.unclassifiedName
+    }
+
     private func subject(at date: Date) -> Subject? {
         do {
             let slots = try context.fetch(FetchDescriptor<TimeSlot>())
