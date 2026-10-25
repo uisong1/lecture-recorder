@@ -58,6 +58,22 @@ final class FakeFileStore: FileStoring, @unchecked Sendable {
         }
     }
 
+    /// 휴지통으로 보낸 파일 경로. 목록에서는 사라진다.
+    private(set) var trashed: [String] = []
+    var failNextTrash = false
+
+    func trashItem(at url: URL) throws {
+        try lock.withLock {
+            if failNextTrash {
+                failNextTrash = false
+                throw CocoaError(.fileWriteNoPermission)
+            }
+            let path = url.standardizedFileURL.path
+            guard paths.remove(path) != nil else { throw CocoaError(.fileNoSuchFile) }
+            trashed.append(path)
+        }
+    }
+
     func removeItem(at url: URL) throws {
         try lock.withLock {
             guard paths.remove(url.standardizedFileURL.path) != nil else { throw CocoaError(.fileNoSuchFile) }
