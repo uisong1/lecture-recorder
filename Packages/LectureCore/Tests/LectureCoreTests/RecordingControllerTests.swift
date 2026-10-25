@@ -79,6 +79,33 @@ import Testing
         #expect(recorder.startedURLs.isEmpty)
     }
 
+    @Test func 권한이_거부되어_있으면_처음부터_거부_상태다() {
+        permission.status = .denied
+        let controller = makeController(at: clock)
+        #expect(controller.isPermissionDenied)
+    }
+
+    @Test func 권한을_거절하면_거부_상태가_된다() async throws {
+        permission.status = .notDetermined
+        permission.answer = .denied
+        let controller = makeController(at: clock)
+        #expect(!controller.isPermissionDenied)
+        await controller.toggle()
+        #expect(controller.isPermissionDenied)
+        #expect(controller.errorMessage == RecordingError.permissionDenied.errorDescription)
+    }
+
+    @Test func 시스템_설정에서_허용하고_돌아오면_거부_상태가_풀린다() async {
+        permission.status = .denied
+        let controller = makeController(at: clock)
+        await controller.toggle()
+        #expect(controller.errorMessage != nil)
+        permission.status = .granted
+        controller.refreshPermission()
+        #expect(!controller.isPermissionDenied)
+        #expect(controller.errorMessage == nil)
+    }
+
     @Test func 저장_공간이_부족하면_시작하지_않는다() async throws {
         files.capacity = 10 * 1024 * 1024
         let controller = makeController(at: clock)

@@ -55,6 +55,8 @@ public final class RecordingController {
     /// 마지막으로 저장된 녹음.
     public private(set) var lastSaved: Recording?
     public var errorMessage: String?
+    /// 마지막으로 확인한 마이크 권한. 거부 상태면 화면이 녹음 버튼 대신 안내를 보여준다.
+    public private(set) var permissionStatus: MicrophonePermissionStatus
 
     private let context: ModelContext
     private let recorder: any AudioRecording
@@ -78,8 +80,20 @@ public final class RecordingController {
         self.storage = storage
         self.files = files
         self.permission = permission
+        self.permissionStatus = permission.currentStatus()
         self.calendar = calendar
         self.now = now
+    }
+
+    /// 마이크 권한이 거부되어 녹음할 수 없는 상태인지.
+    public var isPermissionDenied: Bool { permissionStatus == .denied }
+
+    /// 시스템 설정에서 권한을 바꾸고 돌아왔을 때 상태를 다시 읽는다.
+    public func refreshPermission() {
+        permissionStatus = permission.currentStatus()
+        if permissionStatus != .denied, errorMessage == RecordingError.permissionDenied.errorDescription {
+            errorMessage = nil
+        }
     }
 
     /// 일시정지 중에도 true다 (녹음 세션이 열려 있다).
@@ -109,7 +123,8 @@ public final class RecordingController {
 
     public func start() async throws(RecordingError) {
         guard !isRecording else { throw .alreadyRecording }
-        guard await permission.requestIfNeeded() == .granted else {
+        permissionStatus = await permission.requestIfNeeded()
+        guard permissionStatus == .granted else {
             Log.recording.notice("마이크 권한 없음")
             throw .permissionDenied
         }
