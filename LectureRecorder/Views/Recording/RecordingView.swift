@@ -8,6 +8,8 @@ struct RecordingView: View {
     let recording: RecordingController
     let playback: PlaybackController
     let manager: RecordingManager
+    /// 과목이 하나도 없을 때 보이는 첫 안내.
+    let showsFirstRunGuide: Bool
 
     @State private var isEditingSaved = false
     @State private var titleDraft = ""
@@ -75,6 +77,20 @@ struct RecordingView: View {
                         .designText(.caption)
                         .foregroundStyle(Design.Palette.danger)
                         .accessibilityIdentifier("silenceWarning")
+                }
+            }
+
+            if showsFirstRunGuide && !recording.isRecording {
+                VStack(spacing: Design.Spacing.sm) {
+                    Text(SubjectManager.firstRunGuideText)
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.inkMuted)
+                        .accessibilityIdentifier("firstRunGuide")
+                    SettingsLink {
+                        Text("과목과 시간표 설정 열기")
+                    }
+                    .buttonStyle(.pill)
+                    .accessibilityIdentifier("firstRunOpenSettings")
                 }
             }
 
