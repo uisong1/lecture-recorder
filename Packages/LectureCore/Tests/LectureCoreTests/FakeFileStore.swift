@@ -40,6 +40,8 @@ final class FakeFileStore: FileStoring, @unchecked Sendable {
     }
 
     var failNextCopy = false
+    /// true면 다음 복사본이 원본보다 1바이트 크게 만들어진다 (중간에 끊긴 복사를 흉내 낸다).
+    var corruptNextCopy = false
 
     func copyItem(at source: URL, to destination: URL) throws {
         try lock.withLock {
@@ -49,6 +51,10 @@ final class FakeFileStore: FileStoring, @unchecked Sendable {
             }
             guard paths.contains(source.standardizedFileURL.path) else { throw CocoaError(.fileNoSuchFile) }
             paths.insert(destination.standardizedFileURL.path)
+            if let size = sizes[source.standardizedFileURL.path] {
+                sizes[destination.standardizedFileURL.path] = size + (corruptNextCopy ? 1 : 0)
+            }
+            corruptNextCopy = false
         }
     }
 

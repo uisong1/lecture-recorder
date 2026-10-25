@@ -330,7 +330,7 @@ public final class RecordingController {
         shortRecordingPrompt = nil
         let startedAt = now()
         let subject = resolvedSubject(at: startedAt)
-        let relativePath = storage.newRelativePath(subjectName: subject?.name, startedAt: startedAt, calendar: calendar, fileExtension: RecordingStorage.workingExtension)
+        let relativePath = storage.newRelativePath(subjectName: subject?.name, semester: subject?.semester, startedAt: startedAt, calendar: calendar, fileExtension: RecordingStorage.workingExtension)
         do {
             try storage.prepareFolder(for: relativePath)
             try recorder.start(to: storage.url(for: relativePath))

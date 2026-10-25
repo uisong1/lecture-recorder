@@ -120,7 +120,7 @@ final class TestClock {
         let saved = try controller.stop()
 
         #expect(saved.subject?.name == "선형대수")
-        #expect(saved.relativePath.hasPrefix("선형대수/"))
+        #expect(saved.relativePath.hasPrefix("학기 미정/선형대수/"))
     }
 
     @Test func 수업_시간에도_미분류를_고를_수_있다() async throws {
@@ -256,12 +256,12 @@ final class TestClock {
 
         let saved = try controller.stop()
         // 압축이 끝나기 전에도 재생할 수 있는 CAF를 가리킨다.
-        #expect(saved.relativePath == "미분류/2026-03-02_1000.caf")
+        #expect(saved.relativePath == "미분류/03-02 월 10-00.caf")
 
         await controller.waitForCompression()
-        #expect(saved.relativePath == "미분류/2026-03-02_1000.m4a")
+        #expect(saved.relativePath == "미분류/03-02 월 10-00.m4a")
         #expect(saved.duration == FakeAudioConverter.duration)
-        #expect(files.fileExists(at: root.appending(path: "미분류/2026-03-02_1000.m4a")))
+        #expect(files.fileExists(at: root.appending(path: "미분류/03-02 월 10-00.m4a")))
         #expect(!files.fileExists(at: caf))
     }
 
@@ -275,7 +275,7 @@ final class TestClock {
         let saved = try controller.stop()
         await controller.waitForCompression()
 
-        #expect(saved.relativePath == "미분류/2026-03-02_1000.caf")
+        #expect(saved.relativePath == "미분류/03-02 월 10-00.caf")
         #expect(files.fileExists(at: caf))
         #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
     }
@@ -381,7 +381,7 @@ final class TestClock {
         try await controller.start()
         #expect(controller.isRecording)
         #expect(controller.currentSubjectName == "자료구조")
-        #expect(recorder.startedURLs.map(\.path) == ["/tmp/LectureRecorderTests/Recordings/자료구조/2026-03-02_1000.caf"])
+        #expect(recorder.startedURLs.map(\.path) == ["/tmp/LectureRecorderTests/Recordings/학기 미정/자료구조/03-02 월 10-00.caf"])
 
         recorder.currentTime = 4_500
         let saved = try controller.stop()
@@ -395,7 +395,7 @@ final class TestClock {
         #expect(recording.title == "자료구조 3월 2일 10:00")
         #expect(recording.duration == 4_500)
         #expect(recording.startedAt == date(2026, 3, 2, 10, 0))
-        #expect(recording.relativePath == "자료구조/2026-03-02_1000.caf")
+        #expect(recording.relativePath == "학기 미정/자료구조/03-02 월 10-00.caf")
     }
 
     // MARK: 예상 과목 (3-8)
@@ -536,7 +536,7 @@ final class TestClock {
         #expect(controller.currentSubjectName == "미분류")
         let recording = try controller.stop()
         #expect(recording.subject == nil)
-        #expect(recording.relativePath == "미분류/2026-03-02_1230.caf")
+        #expect(recording.relativePath == "미분류/03-02 월 12-30.caf")
     }
 
     @Test func 수업_시작_5분_전에_누른_녹음은_그_수업으로_저장된다() async throws {
@@ -546,7 +546,7 @@ final class TestClock {
         #expect(controller.currentSubjectName == "자료구조")
         let recording = try controller.stop()
         #expect(recording.subject?.name == "자료구조")
-        #expect(recording.relativePath == "자료구조/2026-03-02_0955.caf")
+        #expect(recording.relativePath == "학기 미정/자료구조/03-02 월 09-55.caf")
     }
 
     @Test func 권한이_없으면_시작하지_않는다() async throws {
@@ -667,7 +667,7 @@ final class TestClock {
         _ = try addSubjectWithSlot()
         let controller = makeController(at: date(2026, 3, 2, 10, 0))
         try await controller.start()
-        #expect(journal.load() == PendingRecording(relativePath: "자료구조/2026-03-02_1000.caf", subjectName: "자료구조", startedAt: date(2026, 3, 2, 10, 0)))
+        #expect(journal.load() == PendingRecording(relativePath: "학기 미정/자료구조/03-02 월 10-00.caf", subjectName: "자료구조", startedAt: date(2026, 3, 2, 10, 0)))
         try controller.stop()
         #expect(journal.load() == nil)
     }
@@ -679,7 +679,7 @@ final class TestClock {
         try controller.stop()
         try await controller.start()
         let second = try controller.stop()
-        #expect(second.relativePath == "미분류/2026-03-02_1000_2.caf")
+        #expect(second.relativePath == "미분류/03-02 월 10-00_2.caf")
     }
 
     @Test func 녹음_중_북마크를_찍으면_정지할_때_녹음에_저장된다() async throws {
@@ -754,7 +754,7 @@ final class TestClock {
         recorder.currentTime = 600
         controller.addBookmark()
         #expect(journal.load()?.bookmarkTimes == [65, 600])
-        #expect(journal.load()?.relativePath == "미분류/2026-03-02_1000.caf")
+        #expect(journal.load()?.relativePath == "미분류/03-02 월 10-00.caf")
     }
 
     @Test func 정상_저장되면_저널이_지워진다() async throws {

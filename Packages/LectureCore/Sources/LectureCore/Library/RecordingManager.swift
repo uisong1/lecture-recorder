@@ -57,7 +57,7 @@ public final class RecordingManager {
         let baseName = ((oldPath as NSString).lastPathComponent as NSString).deletingPathExtension
         // 아직 압축 중인 CAF는 확장자를 그대로 둔다. m4a 이름을 붙이면 압축 흐름이 작업 파일로 알아보지 못한다.
         let newPath = storage.availableRelativePath(
-            folder: RecordingStorage.folderName(for: subject?.name),
+            folder: RecordingStorage.folderPath(semester: subject?.semester, subjectName: subject?.name),
             baseName: baseName,
             fileExtension: (oldPath as NSString).pathExtension
         )

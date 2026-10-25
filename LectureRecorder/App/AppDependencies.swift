@@ -92,6 +92,9 @@ final class AppDependencies {
             problems.append("꺼진 녹음을 되살리지 못했습니다: \(error.localizedDescription)")
             recoveryNotice = nil
         }
+        let migrator = RecordingMigrator(context: container.mainContext, storage: storage)
+        // 예전 폴더 구조의 녹음을 학기/과목 폴더로 옮긴다. 복사해 확인한 뒤에만 원본을 지우고, 실패하면 그대로 둔다.
+        Task { await migrator.migrateIfNeeded() }
         if let compressor {
             // 지난 실행에서 압축하지 못한 CAF 녹음(꺼졌거나 실패한 것)을 이어서 압축한다.
             Task { await compressor.compressPending() }

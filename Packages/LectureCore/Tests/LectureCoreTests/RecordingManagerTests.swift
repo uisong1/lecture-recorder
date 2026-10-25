@@ -45,8 +45,8 @@ import Testing
         let recording = addRecording("미분류/2026-03-02_1000.m4a")
         try makeManager().move(recording, to: ds)
         #expect(recording.subject === ds)
-        #expect(recording.relativePath == "자료구조/2026-03-02_1000.m4a")
-        #expect(files.fileExists(at: storage.url(for: "자료구조/2026-03-02_1000.m4a")))
+        #expect(recording.relativePath == "학기 미정/자료구조/2026-03-02_1000.m4a")
+        #expect(files.fileExists(at: storage.url(for: "학기 미정/자료구조/2026-03-02_1000.m4a")))
         #expect(!files.fileExists(at: storage.url(for: "미분류/2026-03-02_1000.m4a")))
     }
 
@@ -54,8 +54,8 @@ import Testing
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         let recording = addRecording("미분류/a.caf")
         try makeManager().move(recording, to: ds)
-        #expect(recording.relativePath == "자료구조/a.caf")
-        #expect(files.fileExists(at: storage.url(for: "자료구조/a.caf")))
+        #expect(recording.relativePath == "학기 미정/자료구조/a.caf")
+        #expect(files.fileExists(at: storage.url(for: "학기 미정/자료구조/a.caf")))
     }
 
     @Test func 내보내면_원본은_그대로_두고_복사본이_생긴다() throws {
@@ -119,10 +119,11 @@ import Testing
 
     @Test func 옮길_곳에_같은_이름이_있으면_번호를_붙인다() throws {
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
-        _ = addRecording("자료구조/a.m4a", subject: ds)
+        ds.semester = "2026년 2학기"
+        _ = addRecording("2026년 2학기/자료구조/a.m4a", subject: ds)
         let recording = addRecording("미분류/a.m4a")
         try makeManager().move(recording, to: ds)
-        #expect(recording.relativePath == "자료구조/a_2.m4a")
+        #expect(recording.relativePath == "2026년 2학기/자료구조/a_2.m4a")
     }
 
     @Test func 같은_과목으로_옮기면_아무것도_하지_않는다() throws {
