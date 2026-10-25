@@ -283,7 +283,9 @@ import Testing
             storage: RecordingStorage(root: root, files: FakeFileStore()),
             savePosition: { saved += 1 }
         )
-        controller.select(makeRecording())
+        let recording = makeRecording()
+        recording.lastPlayedAt = date(2026, 3, 1, 9, 0)
+        controller.select(recording)
         controller.play()
         controller.pause()
         #expect(saved == 0)
@@ -292,6 +294,55 @@ import Testing
         controller.pause()
         controller.pause()
         #expect(saved == 1)
+    }
+
+    // MARK: 재생 기록 (안 들음 표시)
+
+    @Test func 재생을_시작하면_재생_시각을_적고_바로_저장을_요청한다() {
+        var saved = 0
+        let startedAt = date(2026, 4, 1, 20, 0)
+        let controller = PlaybackController(
+            player: player,
+            storage: RecordingStorage(root: root, files: FakeFileStore()),
+            now: { startedAt },
+            savePosition: { saved += 1 }
+        )
+        let recording = makeRecording()
+        controller.select(recording)
+        #expect(recording.lastPlayedAt == nil)
+        #expect(recording.isUnplayed)
+        controller.play()
+        #expect(recording.lastPlayedAt == startedAt)
+        #expect(!recording.isUnplayed)
+        #expect(saved == 1)
+    }
+
+    @Test func 녹음을_불러오기만_하면_들은_것으로_치지_않는다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        controller.select(recording)
+        #expect(recording.lastPlayedAt == nil)
+    }
+
+    @Test func 파일을_못_열어_재생하지_못하면_재생_시각을_적지_않는다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        player.loadError = CocoaError(.fileNoSuchFile)
+        controller.select(recording)
+        controller.play()
+        #expect(recording.lastPlayedAt == nil)
+    }
+
+    @Test func 끝까지_들어_위치가_0이어도_들은_녹음으로_남는다() {
+        let controller = makeController()
+        let recording = makeRecording()
+        controller.select(recording)
+        controller.play()
+        player.currentTime = 60
+        player.isPlaying = false
+        controller.refresh()
+        #expect(recording.lastPlayedPosition == 0)
+        #expect(!recording.isUnplayed)
     }
 
     // MARK: 건너뛰기

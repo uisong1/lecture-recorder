@@ -227,15 +227,20 @@ import Testing
 
     // MARK: 검색과 기간
 
-    func makeLibrary(now: Date = date(2026, 3, 30, 15, 0)) -> RecordingLibrary {
-        RecordingLibrary(context: context, now: { now }, calendar: seoulCalendar)
+    /// 테스트끼리 저장된 정렬 선택이 섞이지 않게 매번 새 저장소를 쓴다.
+    func makeDefaults() throws -> UserDefaults {
+        try #require(UserDefaults(suiteName: "RecordingLibraryTests-\(UUID().uuidString)"))
+    }
+
+    func makeLibrary(now: Date = date(2026, 3, 30, 15, 0), defaults: UserDefaults? = nil) throws -> RecordingLibrary {
+        RecordingLibrary(context: context, now: { now }, calendar: seoulCalendar, defaults: try defaults ?? makeDefaults())
     }
 
     @Test func 검색어를_넣으면_제목으로_걸러진다() throws {
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         addRecording("트리 복습", subject: ds, at: date(2026, 3, 29, 10, 0))
         addRecording("그래프", subject: ds, at: date(2026, 3, 28, 10, 0))
-        let library = makeLibrary()
+        let library = try makeLibrary()
         library.select(.subject(ds.persistentModelID))
 
         library.filter.query = "트리"
@@ -249,7 +254,7 @@ import Testing
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         addRecording("이번 주", subject: ds, at: date(2026, 3, 28, 10, 0))
         addRecording("지난달", subject: ds, at: date(2026, 2, 10, 10, 0))
-        let library = makeLibrary()
+        let library = try makeLibrary()
         library.select(.subject(ds.persistentModelID))
 
         library.filter.period = .last7Days
@@ -267,7 +272,7 @@ import Testing
         addRecording("트리", subject: ds, at: date(2026, 3, 29, 10, 0))
         addRecording("트리 구조", subject: os, at: date(2026, 3, 29, 11, 0))
         addRecording("프로세스", subject: os, at: date(2026, 3, 29, 12, 0))
-        let library = makeLibrary()
+        let library = try makeLibrary()
         library.filter.query = "트리"
 
         library.select(.subject(os.persistentModelID))
@@ -278,7 +283,7 @@ import Testing
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         addRecording("트리", subject: ds, at: date(2026, 3, 29, 10, 0))
         addRecording("그래프", subject: ds, at: date(2026, 3, 28, 10, 0))
-        let library = makeLibrary()
+        let library = try makeLibrary()
         library.filter.query = "트리"
         #expect(library.count(for: .subject(ds.persistentModelID)) == 2)
     }
@@ -286,12 +291,134 @@ import Testing
     @Test func 다시_읽어도_검색_조건이_적용된다() throws {
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         addRecording("트리", subject: ds, at: date(2026, 3, 29, 10, 0))
-        let library = makeLibrary()
+        let library = try makeLibrary()
         library.select(.subject(ds.persistentModelID))
         library.filter.query = "그래프"
         addRecording("그래프", subject: ds, at: date(2026, 3, 29, 11, 0))
         library.reload()
         #expect(library.recordings.map(\.title) == ["그래프"])
+    }
+
+    // MARK: 정렬과 안 들음
+
+    @Test func 기본은_최신순이다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        addRecording("월", subject: ds, at: date(2026, 3, 2, 10, 0))
+        addRecording("수", subject: ds, at: date(2026, 3, 4, 10, 0))
+        addRecording("화", subject: ds, at: date(2026, 3, 3, 10, 0))
+        let library = try makeLibrary()
+        library.select(.all)
+        #expect(library.sortOrder == .newestFirst)
+        #expect(library.recordings.map(\.title) == ["수", "화", "월"])
+    }
+
+    @Test func 오래된_순으로_바꾸면_바로_다시_정렬된다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        addRecording("월", subject: ds, at: date(2026, 3, 2, 10, 0))
+        addRecording("수", subject: ds, at: date(2026, 3, 4, 10, 0))
+        addRecording("화", subject: ds, at: date(2026, 3, 3, 10, 0))
+        let library = try makeLibrary()
+        library.select(.all)
+
+        library.sortOrder = .oldestFirst
+        #expect(library.recordings.map(\.title) == ["월", "화", "수"])
+        library.sortOrder = .newestFirst
+        #expect(library.recordings.map(\.title) == ["수", "화", "월"])
+    }
+
+    @Test func 오래된_순은_검색과_다시_읽기_뒤에도_유지된다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        addRecording("트리 1", subject: ds, at: date(2026, 3, 2, 10, 0))
+        addRecording("트리 2", subject: ds, at: date(2026, 3, 4, 10, 0))
+        addRecording("그래프", subject: ds, at: date(2026, 3, 3, 10, 0))
+        let library = try makeLibrary()
+        library.select(.all)
+        library.sortOrder = .oldestFirst
+
+        library.filter.query = "트리"
+        #expect(library.recordings.map(\.title) == ["트리 1", "트리 2"])
+        addRecording("트리 0", subject: ds, at: date(2026, 3, 1, 10, 0))
+        library.reload()
+        #expect(library.recordings.map(\.title) == ["트리 0", "트리 1", "트리 2"])
+    }
+
+    @Test func 정렬_선택은_앱을_다시_켜도_기억한다() throws {
+        let defaults = try makeDefaults()
+        let first = try makeLibrary(defaults: defaults)
+        first.sortOrder = .oldestFirst
+
+        let second = try makeLibrary(defaults: defaults)
+        #expect(second.sortOrder == .oldestFirst)
+    }
+
+    @Test func 저장된_정렬값이_이상하면_최신순으로_시작한다() throws {
+        let defaults = try makeDefaults()
+        defaults.set("엉뚱한 값", forKey: RecordingLibrary.sortOrderKey)
+        let library = try makeLibrary(defaults: defaults)
+        #expect(library.sortOrder == .newestFirst)
+    }
+
+    @Test func 정렬을_바꿔도_북마크_모아보기는_최근_녹음부터다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let old = addRecording("옛날", subject: ds, at: date(2026, 3, 2, 10, 0))
+        let recent = addRecording("최근", subject: ds, at: date(2026, 3, 4, 10, 0))
+        context.insert(Bookmark(time: 10, note: "a", createdAt: date(2026, 3, 2, 10, 1), recording: old))
+        context.insert(Bookmark(time: 10, note: "b", createdAt: date(2026, 3, 4, 10, 1), recording: recent))
+        let library = try makeLibrary()
+        library.select(.all)
+        library.sortOrder = .oldestFirst
+        #expect(library.bookmarkEntries.map(\.recording.title) == ["최근", "옛날"])
+    }
+
+    @Test func 재생_기록이_없고_위치도_없으면_안_들은_녹음이다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let fresh = addRecording("새것", subject: ds, at: date(2026, 3, 2, 10, 0))
+        let resumed = addRecording("듣던 것", subject: ds, at: date(2026, 3, 3, 10, 0))
+        resumed.lastPlayedPosition = 120
+        let finished = addRecording("끝까지 들은 것", subject: ds, at: date(2026, 3, 4, 10, 0))
+        finished.lastPlayedAt = date(2026, 3, 5, 9, 0)
+        finished.lastPlayedPosition = 0
+
+        #expect(fresh.isUnplayed)
+        #expect(!resumed.isUnplayed)
+        #expect(!finished.isUnplayed)
+    }
+
+    @Test func 안_들은_것만_보면_들은_녹음이_빠진다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        addRecording("새것", subject: ds, at: date(2026, 3, 2, 10, 0))
+        addRecording("듣던 것", subject: ds, at: date(2026, 3, 3, 10, 0)).lastPlayedPosition = 120
+        addRecording("끝까지 들은 것", subject: ds, at: date(2026, 3, 4, 10, 0)).lastPlayedAt = date(2026, 3, 5, 9, 0)
+        let library = try makeLibrary()
+        library.select(.all)
+
+        library.filter.unplayedOnly = true
+        #expect(library.recordings.map(\.title) == ["새것"])
+        library.filter.unplayedOnly = false
+        #expect(library.recordings.count == 3)
+    }
+
+    @Test func 안_들은_것만은_정렬_검색과_함께_적용된다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        addRecording("트리 1", subject: ds, at: date(2026, 3, 2, 10, 0))
+        addRecording("트리 2", subject: ds, at: date(2026, 3, 4, 10, 0))
+        addRecording("트리 들음", subject: ds, at: date(2026, 3, 3, 10, 0)).lastPlayedAt = date(2026, 3, 5, 9, 0)
+        addRecording("그래프", subject: ds, at: date(2026, 3, 1, 10, 0))
+        let library = try makeLibrary()
+        library.select(.all)
+        library.filter = RecordingFilter(query: "트리", unplayedOnly: true)
+        #expect(library.recordings.map(\.title) == ["트리 2", "트리 1"])
+        library.sortOrder = .oldestFirst
+        #expect(library.recordings.map(\.title) == ["트리 1", "트리 2"])
+    }
+
+    @Test func 안_들은_것만은_사이드바_개수에_영향이_없다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        addRecording("새것", subject: ds, at: date(2026, 3, 2, 10, 0))
+        addRecording("들은 것", subject: ds, at: date(2026, 3, 3, 10, 0)).lastPlayedAt = date(2026, 3, 5, 9, 0)
+        let library = try makeLibrary()
+        library.filter.unplayedOnly = true
+        #expect(library.count(for: .subject(ds.persistentModelID)) == 2)
     }
 }
 #endif

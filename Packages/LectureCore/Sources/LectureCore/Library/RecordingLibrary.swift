@@ -23,7 +23,7 @@ public struct BookmarkEntry: Identifiable {
 @Observable
 public final class RecordingLibrary {
     public private(set) var subjects: [Subject] = []
-    /// 고른 분류의 녹음. 최신순.
+    /// 고른 분류의 녹음. `sortOrder` 순서.
     public private(set) var recordings: [Recording] = []
     public private(set) var selection: LibrarySelection?
     public var errorMessage: String?
@@ -32,15 +32,33 @@ public final class RecordingLibrary {
         didSet { recordings = filtered(by: selection) }
     }
 
+    /// 목록 정렬 방향. 바꾸면 목록이 바로 다시 정렬되고 다음 실행에도 기억한다.
+    public var sortOrder: RecordingSortOrder = .newestFirst {
+        didSet {
+            defaults.set(sortOrder.rawValue, forKey: Self.sortOrderKey)
+            recordings = filtered(by: selection)
+        }
+    }
+
+    static let sortOrderKey = "recordingSortOrder"
+
     private var all: [Recording] = []
     private let context: ModelContext
     private let now: @MainActor () -> Date
     private let calendar: Calendar
+    private let defaults: UserDefaults
 
-    public init(context: ModelContext, now: @escaping @MainActor () -> Date = { Date() }, calendar: Calendar = .current) {
+    public init(
+        context: ModelContext,
+        now: @escaping @MainActor () -> Date = { Date() },
+        calendar: Calendar = .current,
+        defaults: UserDefaults = .standard
+    ) {
         self.context = context
         self.now = now
         self.calendar = calendar
+        self.defaults = defaults
+        sortOrder = defaults.string(forKey: Self.sortOrderKey).flatMap(RecordingSortOrder.init(rawValue:)) ?? .newestFirst
         reload()
     }
 
@@ -108,9 +126,11 @@ public final class RecordingLibrary {
 
     private func filtered(by selection: LibrarySelection?) -> [Recording] {
         let current = now()
-        return inCategory(selection).filter {
-            filter.matches(title: $0.title, startedAt: $0.startedAt, now: current, calendar: calendar)
+        let matching = inCategory(selection).filter {
+            filter.matches(title: $0.title, startedAt: $0.startedAt, isUnplayed: $0.isUnplayed, now: current, calendar: calendar)
         }
+        // `all`은 최신순으로 읽어 오므로 오래된 순일 때만 뒤집는다.
+        return sortOrder == .oldestFirst ? Array(matching.reversed()) : matching
     }
 }
 #endif
