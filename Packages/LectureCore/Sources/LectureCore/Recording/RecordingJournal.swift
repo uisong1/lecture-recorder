@@ -36,6 +36,13 @@ public protocol RecordingJournaling: Sendable {
     func load() -> PendingRecording?
     func save(_ pending: PendingRecording) throws
     func clear()
+
+    /// 정지할 때 DB 저장이 실패해 남은 기록처럼, 새 녹음이 `save`로 덮어쓰면 사라질 기록을 따로 보관한다. 같은 경로면 바꿔 쓴다.
+    func keepUnsaved(_ pending: PendingRecording) throws
+    /// `keepUnsaved`로 보관한 기록.
+    func loadUnsaved() -> [PendingRecording]
+    /// 복구했거나 복구할 파일이 없는 보관 기록을 지운다.
+    func clearUnsaved(relativePath: String)
 }
 
 /// JSON 파일 하나에 기록하는 저널.
@@ -63,6 +70,48 @@ public struct FileRecordingJournal: RecordingJournaling {
     }
 
     public func clear() {
+        remove(url)
+    }
+
+    /// 보관 기록은 저널 옆의 `<이름>-unsaved.json`에 목록으로 둔다.
+    var unsavedURL: URL {
+        url.deletingPathExtension().appendingPathExtension("unsaved.json")
+    }
+
+    public func keepUnsaved(_ pending: PendingRecording) throws {
+        var all = loadUnsaved().filter { $0.relativePath != pending.relativePath }
+        all.append(pending)
+        try JSONEncoder().encode(all).write(to: unsavedURL, options: .atomic)
+    }
+
+    public func loadUnsaved() -> [PendingRecording] {
+        guard let data = try? Data(contentsOf: unsavedURL) else { return [] }
+        do {
+            return try JSONDecoder().decode([PendingRecording].self, from: data)
+        } catch {
+            #if canImport(os)
+            Log.recording.error("보관한 녹음 저널을 읽지 못함: \(error.localizedDescription, privacy: .public)")
+            #endif
+            return []
+        }
+    }
+
+    public func clearUnsaved(relativePath: String) {
+        let rest = loadUnsaved().filter { $0.relativePath != relativePath }
+        if rest.isEmpty {
+            remove(unsavedURL)
+        } else {
+            do {
+                try JSONEncoder().encode(rest).write(to: unsavedURL, options: .atomic)
+            } catch {
+                #if canImport(os)
+                Log.recording.error("보관한 녹음 저널을 고치지 못함: \(error.localizedDescription, privacy: .public)")
+                #endif
+            }
+        }
+    }
+
+    private func remove(_ url: URL) {
         do {
             try FileManager.default.removeItem(at: url)
         } catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {
@@ -79,12 +128,22 @@ public struct FileRecordingJournal: RecordingJournaling {
 public final class InMemoryRecordingJournal: RecordingJournaling, @unchecked Sendable {
     private let lock = NSLock()
     private var pending: PendingRecording?
+    private var unsaved: [PendingRecording] = []
 
-    public init(pending: PendingRecording? = nil) {
+    public init(pending: PendingRecording? = nil, unsaved: [PendingRecording] = []) {
         self.pending = pending
+        self.unsaved = unsaved
     }
 
     public func load() -> PendingRecording? { lock.withLock { pending } }
     public func save(_ pending: PendingRecording) throws { lock.withLock { self.pending = pending } }
     public func clear() { lock.withLock { pending = nil } }
+    public func keepUnsaved(_ pending: PendingRecording) throws {
+        lock.withLock {
+            unsaved.removeAll { $0.relativePath == pending.relativePath }
+            unsaved.append(pending)
+        }
+    }
+    public func loadUnsaved() -> [PendingRecording] { lock.withLock { unsaved } }
+    public func clearUnsaved(relativePath: String) { lock.withLock { unsaved.removeAll { $0.relativePath == relativePath } } }
 }

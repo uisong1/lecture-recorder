@@ -572,6 +572,7 @@ public final class RecordingController {
         loadNextClassSnapshot()
         sleepPreventer?.begin(reason: "수업 녹음 중")
         onStarted?()
+        keepUnsavedLeftover()
         do {
             try journal?.save(pendingRecording(bookmarkTimes: []))
         } catch {
@@ -685,6 +686,18 @@ public final class RecordingController {
             try journal?.save(pendingRecording(bookmarkTimes: bookmarkTimes))
         } catch {
             Log.recording.error("북마크 저널 기록 실패: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// 저널에 다른 녹음의 기록이 남아 있으면(정지 때 DB 저장이 실패한 경우) 새 녹음이 덮어쓰기 전에 따로 보관한다.
+    /// 그래야 앱을 다시 켤 때 앞 녹음도 복구된다. 보관에 실패해도 새 녹음은 시작한다(파일은 남아 있어 "폴더 다시 읽기"로 되살릴 수 있다).
+    private func keepUnsavedLeftover() {
+        guard let leftover = journal?.load(), leftover.relativePath != currentRelativePath else { return }
+        do {
+            try journal?.keepUnsaved(leftover)
+            Log.recording.notice("저장되지 못한 앞 녹음의 저널을 보관: \(leftover.relativePath, privacy: .public)")
+        } catch {
+            Log.recording.error("앞 녹음의 저널을 보관하지 못함: \(error.localizedDescription, privacy: .public)")
         }
     }
 

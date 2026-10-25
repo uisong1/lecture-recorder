@@ -104,7 +104,7 @@ public struct RecordingRescanner {
                 throw .databaseFailed(error.localizedDescription)
             }
         }
-        report.removedEmptyFolders = storage.removeEmptyFolders()
+        report.removedEmptyFolders = storage.removeEmptyFolders(protecting: activePaths)
         if report.restored > 0 || report.unreadable > 0 {
             Log.storage.notice("녹음 폴더 다시 읽기: 되살림 \(report.restored, privacy: .public), 건너뜀 \(report.unreadable, privacy: .public)")
         }

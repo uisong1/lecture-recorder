@@ -152,9 +152,20 @@ public struct RecordingStorage: Sendable {
         return files.fileExists(at: url) || files.isDirectory(at: url)
     }
 
+    /// 지금 녹음 중이라 건드리면 안 되는 파일(`active`)이 `folder` 아래에 있는지.
+    /// 폴더를 옮기거나 지우는 기능은 이 검사를 거쳐야 한다. 녹음 중인 파일은 정지하기 전에는 DB에 없어서 DB의 녹음 목록으로는 알 수 없다.
+    public static func folder(_ folder: String, containsActive active: Set<String>) -> Bool {
+        let prefix = folder.hasSuffix("/") ? folder : folder + "/"
+        return active.contains { $0.hasPrefix(prefix) }
+    }
+
     /// 폴더를 통째로 다른 상대 경로로 옮긴다. 같은 볼륨 안의 이름 바꾸기라 파일을 복사하지 않고, 중간에 끊겨도 한쪽에 온전히 남는다.
     /// 대상 폴더가 이미 있으면 실패한다. 이름의 대소문자만 바꿀 때는 임시 이름을 거친다 (대소문자를 구분하지 않는 디스크 대응).
-    public func moveFolder(from oldFolder: String, to newFolder: String) throws {
+    /// - Parameter active: 지금 녹음 중인 파일의 상대 경로. 옛 폴더나 새 폴더 아래에 있으면 아무것도 옮기지 않고 `recordingInProgress`를 던진다.
+    public func moveFolder(from oldFolder: String, to newFolder: String, protecting active: Set<String> = []) throws {
+        guard !Self.folder(oldFolder, containsActive: active), !Self.folder(newFolder, containsActive: active) else {
+            throw StorageError.recordingInProgress
+        }
         let source = root.appending(path: oldFolder, directoryHint: .isDirectory)
         let destination = root.appending(path: newFolder, directoryHint: .isDirectory)
         try files.createDirectory(at: destination.deletingLastPathComponent())
@@ -215,11 +226,16 @@ public struct RecordingStorage: Sendable {
     /// 안에 아무것도 없는 폴더를 지운다 (`Recordings` 자체는 남긴다). 지운 폴더 수를 돌려준다.
     /// 파일이 하나라도 있으면(숨김 파일 포함, Finder의 `.DS_Store`만 예외) 그 폴더는 그대로 둔다.
     /// 지울 때는 안의 것을 따라 지우지 않는 방식을 써서, 목록에서 놓친 파일이 있어도 지워지지 않는다.
+    /// - Parameter active: 지금 녹음 중인 파일의 상대 경로. 녹음 폴더는 파일이 만들어지기 전에는 비어 있을 수 있어, 그 파일이 들어갈 폴더는 지우지 않는다.
     @discardableResult
-    public func removeEmptyFolders() -> Int {
+    public func removeEmptyFolders(protecting active: Set<String> = []) -> Int {
         var removed = 0
+        let rootPath = root.standardizedFileURL.path
         /// 폴더가 지워졌으면 true.
         func clean(_ directory: URL, isRoot: Bool) -> Bool {
+            // 녹음 중인 파일이 들어갈 폴더와 그 윗폴더는 지우지 않는다. 안의 다른 빈 폴더는 계속 정리한다.
+            let path = directory.standardizedFileURL.path
+            let isProtected = path.hasPrefix(rootPath + "/") && Self.folder(String(path.dropFirst(rootPath.count + 1)), containsActive: active)
             let entries: [URL]
             do {
                 entries = try files.contentsOfDirectory(at: directory)
@@ -237,7 +253,7 @@ public struct RecordingStorage: Sendable {
                     remaining += 1
                 }
             }
-            guard remaining == 0, !isRoot else { return false }
+            guard remaining == 0, !isRoot, !isProtected else { return false }
             do {
                 if let finder { try files.removeItem(at: finder) }
                 try files.removeEmptyDirectory(at: directory)
@@ -287,5 +303,17 @@ public struct RecordingStorage: Sendable {
         let target = url(for: relativePath)
         guard files.fileExists(at: target) else { return }
         try files.trashItem(at: target)
+    }
+}
+
+/// 저장 폴더 작업의 오류.
+public enum StorageError: Error, Equatable, LocalizedError {
+    /// 녹음 중인 파일이 들어 있는 폴더라 건드릴 수 없다.
+    case recordingInProgress
+
+    public var errorDescription: String? {
+        switch self {
+        case .recordingInProgress: "녹음 중인 폴더라 옮기거나 지울 수 없습니다. 녹음을 멈춘 뒤 다시 해 주세요."
+        }
     }
 }
