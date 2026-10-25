@@ -83,6 +83,35 @@ struct RecordingView: View {
                     .accessibilityIdentifier("inputDeviceWarning")
             }
 
+            if !recording.isRecording && !recording.isPermissionDenied {
+                VStack(spacing: Design.Spacing.xs) {
+                    Button(recording.isPreviewing ? "확인 중…" : "마이크 확인") {
+                        Task { await recording.startPreview() }
+                    }
+                    .buttonStyle(.pillSecondary)
+                    .disabled(recording.isPreviewing)
+                    .accessibilityIdentifier("checkMicrophone")
+                    if recording.isPreviewing {
+                        InputLevelBar(level: recording.previewLevel)
+                            .accessibilityIdentifier("previewLevel")
+                    }
+                    switch recording.previewOutcome {
+                    case .heard:
+                        Label("소리가 잘 들어옵니다", systemImage: "checkmark.circle")
+                            .designText(.caption)
+                            .foregroundStyle(Design.Palette.inkMuted)
+                            .accessibilityIdentifier("previewHeard")
+                    case .quiet:
+                        Label("소리가 거의 안 들려요. 마이크 위치나 입력 장치를 확인해 주세요.", systemImage: "mic.slash")
+                            .designText(.caption)
+                            .foregroundStyle(Design.Palette.inkMuted)
+                            .accessibilityIdentifier("previewSilenceHint")
+                    case nil:
+                        EmptyView()
+                    }
+                }
+            }
+
             if recording.isRecording {
                 InputLevelBar(level: recording.inputLevel)
                     .accessibilityIdentifier("inputLevel")
@@ -273,6 +302,7 @@ struct RecordingView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .designCanvas(Design.Palette.parchment)
         .onChange(of: recording.lastSaved) { isEditingSaved = false }
+        .onDisappear { recording.stopPreview() }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if playback.current != nil { PlaybackBar(playback: playback) }
         }

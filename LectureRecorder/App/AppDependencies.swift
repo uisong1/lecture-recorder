@@ -63,6 +63,7 @@ final class AppDependencies {
                 sleepPreventer: SystemSleepPreventer(),
                 powerStatus: SystemPowerStatus(),
                 inputMonitor: SystemAudioInput(),
+                levelPreview: SystemAudioLevelPreview(),
                 overrunNotifier: notifications,
                 lifecycle: SystemLifecycleEvents(),
                 compressor: compressor
