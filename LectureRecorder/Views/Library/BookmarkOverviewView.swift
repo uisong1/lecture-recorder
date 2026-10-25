@@ -17,6 +17,19 @@ struct BookmarkOverviewView: View {
                     .accessibilityIdentifier("emptyBookmarks")
             }
         } else {
+            VStack(spacing: 0) {
+            HStack {
+                Button {
+                    playback.startBookmarkTour(entries: entries)
+                } label: {
+                    Label("북마크만 이어 듣기", systemImage: "play.circle")
+                }
+                .buttonStyle(.pillSecondary)
+                .accessibilityIdentifier("startBookmarkTour")
+                Spacer()
+            }
+            .padding(.horizontal, Design.Spacing.md)
+            .padding(.top, Design.Spacing.xs)
             List(entries) { entry in
                 Button {
                     playback.select(entry.recording)
@@ -41,6 +54,7 @@ struct BookmarkOverviewView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("bookmarkOverviewRow")
+            }
             }
         }
     }

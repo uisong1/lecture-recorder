@@ -78,7 +78,7 @@ final class TestClock {
         clock.advance(by: 1)  // 11:25:00
         controller.checkOverrun()
         controller.checkOverrun()
-        try await Task.sleep(for: .milliseconds(50))
+        for _ in 0..<5 { await Task.yield() }
         #expect(controller.overrunNotice?.contains("자료구조 수업이 10분 전에 끝났습니다") == true)
         #expect(overrunNotifier.notified.count == 1)
     }
@@ -106,6 +106,115 @@ final class TestClock {
         _ = try controller.stop()
 
         #expect(controller.overrunNotice == nil)
+    }
+
+    /// 월 10:00~11:15 자료구조 다음에 월 11:15~12:30 선형대수.
+    func addBackToBackClasses() throws -> (first: Subject, second: Subject) {
+        let first = try addSubjectWithSlot()
+        let second = try SubjectManager(context: container.mainContext).add(name: "선형대수", color: .blue)
+        try ScheduleManager(context: container.mainContext)
+            .add(subject: second, weekday: .monday, start: TimeOfDay(hour: 11, minute: 15), end: TimeOfDay(hour: 12, minute: 30))
+        return (first, second)
+    }
+
+    @Test func 연강에서_다음_수업이_시작되면_안내하고_알림을_한_번_보낸다() async throws {
+        _ = try addBackToBackClasses()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+
+        clock.advance(by: 75 * 60 - 1)  // 11:14:59
+        controller.checkNextClass()
+        #expect(controller.nextClassNotice == nil)
+        #expect(overrunNotifier.notified.isEmpty)
+
+        clock.advance(by: 1)  // 11:15:00
+        controller.checkNextClass()
+        controller.checkNextClass()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(controller.nextClassNotice?.buttonTitle == "정지하고 선형대수 녹음 시작")
+        #expect(overrunNotifier.notified.count == 1)
+        #expect(overrunNotifier.notified.first?.title == "선형대수 수업이 시작됐습니다")
+        #expect(overrunNotifier.notifiedIdentifiers == ["class-next"])
+        // 다음 수업이 시작됐으면 "수업이 끝났습니다" 안내는 쓰지 않는다.
+        clock.advance(by: 20 * 60)
+        #expect(controller.overrunNotice == nil)
+    }
+
+    @Test func 다음_수업으로_넘어가면_앞_녹음을_저장하고_새_과목으로_바로_시작한다() async throws {
+        let (first, second) = try addBackToBackClasses()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+        clock.advance(by: 75 * 60 + 5)  // 11:15:05
+
+        await controller.switchToNextClass()
+
+        #expect(controller.isRecording)
+        #expect(controller.currentSubjectName == "선형대수")
+        #expect(controller.nextClassNotice == nil)
+        #expect(controller.errorMessage == nil)
+        let saved = try container.mainContext.fetch(FetchDescriptor<Recording>())
+        #expect(saved.count == 1)
+        #expect(saved.first?.subject === first)
+        #expect(recorder.startedURLs.count == 2)
+        let current = try controller.stop()
+        #expect(current.subject === second)
+        #expect(current.relativePath.hasPrefix("학기 미정/선형대수/"))
+    }
+
+    @Test func 넘어간_뒤에는_같은_안내를_다시_하지_않는다() async throws {
+        _ = try addBackToBackClasses()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+        clock.advance(by: 75 * 60)
+        controller.checkNextClass()
+        await controller.switchToNextClass()
+        try await Task.sleep(for: .milliseconds(50))
+
+        // 선형대수 수업이 계속되는 동안 또 안내하지 않는다.
+        controller.checkNextClass()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(controller.nextClassNotice == nil)
+        #expect(overrunNotifier.notified.count == 1)
+    }
+
+    @Test func 연강이_아닌_수업_사이에는_다음_수업_안내를_하지_않는다() async throws {
+        _ = try addSubjectWithSlot()  // 월 10:00~11:15만 있다.
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+        clock.advance(by: 80 * 60)
+
+        controller.checkNextClass()
+
+        #expect(controller.nextClassNotice == nil)
+        #expect(overrunNotifier.notified.isEmpty)
+    }
+
+    @Test func 과목을_직접_고른_녹음은_다음_수업_안내를_하지_않는다() async throws {
+        let (_, second) = try addBackToBackClasses()
+        let clock = TestClock(date(2026, 3, 2, 9, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        controller.subjectChoice = .subject(second.persistentModelID)
+        try await controller.start()
+        clock.advance(by: 2 * 3600)
+
+        #expect(controller.nextClassNotice == nil)
+    }
+
+    @Test func 정지하면_다음_수업_안내가_사라진다() async throws {
+        _ = try addBackToBackClasses()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+        clock.advance(by: 75 * 60)
+        #expect(controller.nextClassNotice != nil)
+
+        _ = try controller.stop()
+
+        #expect(controller.nextClassNotice == nil)
     }
 
     @Test func 시작_전에_고른_과목으로_저장한다() async throws {
@@ -236,7 +345,8 @@ final class TestClock {
         #expect(controller.interruptionNotice?.contains("종료") == true)
     }
 
-    @Test func 녹음기가_끝났다고_알리면_지금까지_녹음을_저장하고_크게_알린다() async throws {
+    @Test func 녹음기가_끝났다고_알리면_지금까지_녹음을_저장하고_새_파일로_이어_녹음한다() async throws {
+        let subject = try addSubjectWithSlot()
         let controller = makeController(at: date(2026, 3, 2, 10, 0))
         try await controller.start()
         let url = recorder.startedURLs[0]
@@ -247,17 +357,133 @@ final class TestClock {
 
         controller.checkRecorderHealth()
 
-        #expect(!controller.isRecording)
-        #expect(!sleep.isActive)
-        #expect(journal.load() == nil)
-        #expect(controller.recorderStallNotice?.contains("녹음이 멈춘 것 같습니다") == true)
+        // 앞 녹음은 길이 0이 아니라 파일 크기로 어림해 저장한다.
         let saved = try #require(try container.mainContext.fetch(FetchDescriptor<Recording>()).first)
-        // 길이 0으로 잡히지 않고 파일 크기로 어림한다.
         #expect(abs(saved.duration - 600) < 1)
         #expect(controller.lastSaved === saved)
+        #expect(saved.title.hasSuffix(RecordingController.continuationTitleSuffix) == false)
+        // 같은 과목으로 새 파일에 이어서 녹음한다.
+        #expect(controller.isRecording)
+        #expect(sleep.isActive)
+        #expect(recorder.startedURLs.count == 2)
+        #expect(recorder.startedURLs[1] != url)
+        #expect(controller.currentSubject === subject)
+        #expect(controller.recorderStallNotice == nil)
+        #expect(controller.stallResumeNotice?.contains("이어서 녹음") == true)
+        #expect(journal.load() != nil)
     }
 
-    @Test func 경과_시간이_연속_세_번_안_늘면_멈춘_것으로_보고_저장한다() async throws {
+    @Test func 이어_녹음한_파일은_같은_과목이고_제목에_이어서가_붙는다() async throws {
+        let subject = try addSubjectWithSlot()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+        recorder.hasEnded = true
+        clock.advance(by: 120)
+        controller.checkRecorderHealth()
+        recorder.hasEnded = false
+        recorder.currentTime = 300
+        clock.advance(by: 300)
+
+        let second = try controller.stop()
+
+        let all = try container.mainContext.fetch(FetchDescriptor<Recording>(sortBy: [SortDescriptor(\.startedAt)]))
+        #expect(all.count == 2)
+        #expect(all.allSatisfy { $0.subject === subject })
+        #expect(all[0].title == "자료구조 3월 2일 10:00")
+        #expect(second === all[1])
+        #expect(second.title == "자료구조 3월 2일 10:02" + RecordingController.continuationTitleSuffix)
+        #expect(second.title.hasSuffix(RecordingController.continuationTitleSuffix))
+        #expect(all[0].relativePath != all[1].relativePath)
+        #expect(controller.stallResumeNotice == nil)
+    }
+
+    @Test func 이어_녹음_중_북마크는_새_파일에_붙는다() async throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 50
+        controller.addBookmark()
+        recorder.hasEnded = true
+        controller.checkRecorderHealth()
+        #expect(controller.bookmarkTimes.isEmpty)
+        recorder.hasEnded = false
+        recorder.currentTime = 20
+        controller.addBookmark()
+        let second = try controller.stop()
+
+        let all = try container.mainContext.fetch(FetchDescriptor<Recording>(sortBy: [SortDescriptor(\.startedAt)]))
+        #expect(all.count == 2)
+        #expect(all[0].bookmarks.map(\.time) == [50])
+        #expect(second.bookmarks.map(\.time) == [20])
+    }
+
+    @Test func 이어_녹음은_알림을_한_번만_보내고_다시_멈추면_멈춘_알림을_보낸다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.hasEnded = true
+        controller.checkRecorderHealth()
+        for _ in 0..<5 { await Task.yield() }
+        #expect(overrunNotifier.notifiedIdentifiers == [RecordingAlert.recorderResumed.identifier])
+
+        controller.checkRecorderHealth()  // 이어 녹음도 멈췄다
+        for _ in 0..<5 { await Task.yield() }
+        #expect(overrunNotifier.notifiedIdentifiers == [RecordingAlert.recorderResumed.identifier, RecordingAlert.recorderStalled.identifier])
+    }
+
+    @Test func 이어_녹음도_멈추면_다시_이어_녹음하지_않고_멈춰서_크게_알린다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.hasEnded = true
+        controller.checkRecorderHealth()
+        #expect(controller.isRecording)
+
+        controller.checkRecorderHealth()  // 이어 녹음도 끝났다고 알린다
+
+        #expect(!controller.isRecording)
+        #expect(!sleep.isActive)
+        #expect(recorder.startedURLs.count == 2)
+        #expect(controller.recorderStallNotice?.contains("녹음이 멈춘 것 같습니다") == true)
+        #expect(controller.stallResumeNotice == nil)
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 2)
+    }
+
+    @Test func 사용자가_다시_시작하면_다음_멈춤에는_또_이어_녹음한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.hasEnded = true
+        controller.checkRecorderHealth()
+        controller.checkRecorderHealth()
+        #expect(!controller.isRecording)
+
+        recorder.hasEnded = false
+        try await controller.start()
+        #expect(controller.stallResumeNotice == nil)
+        recorder.hasEnded = true
+        controller.checkRecorderHealth()
+        #expect(controller.isRecording)
+        #expect(controller.stallResumeNotice != nil)
+        #expect(recorder.startedURLs.count == 4)
+    }
+
+    @Test func 이어_녹음을_시작하지_못하면_멈춘_채_크게_알린다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.hasEnded = true
+        recorder.startError = NSError(domain: "test", code: 1)
+
+        controller.checkRecorderHealth()
+
+        #expect(!controller.isRecording)
+        #expect(!sleep.isActive)
+        #expect(controller.errorMessage != nil)
+        #expect(controller.recorderStallNotice?.contains("여기까지 저장했습니다") == true)
+        #expect(controller.stallResumeNotice == nil)
+        // 앞 녹음은 저장돼 있다.
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
+    }
+
+    @Test func 경과_시간이_연속_세_번_안_늘면_멈춘_것으로_보고_저장한_뒤_이어_녹음한다() async throws {
         let controller = makeController(at: date(2026, 3, 2, 10, 0))
         try await controller.start()
         recorder.currentTime = 120
@@ -265,16 +491,15 @@ final class TestClock {
         controller.checkRecorderHealth()  // 기준
         controller.checkRecorderHealth()  // 10초
         controller.checkRecorderHealth()  // 20초
-        #expect(controller.isRecording)
-        #expect(controller.recorderStallNotice == nil)
+        #expect(recorder.startedURLs.count == 1)
+        #expect(controller.stallResumeNotice == nil)
 
         controller.checkRecorderHealth()  // 30초
-        #expect(!controller.isRecording)
-        #expect(controller.recorderStallNotice != nil)
+        #expect(controller.isRecording)
+        #expect(controller.stallResumeNotice != nil)
         #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
         #expect(try container.mainContext.fetch(FetchDescriptor<Recording>()).first?.duration == 120)
-        // 자동으로 새 녹음을 시작하지 않는다.
-        #expect(recorder.startedURLs.count == 1)
+        #expect(recorder.startedURLs.count == 2)
     }
 
     @Test func 정상으로_녹음되면_경고하지_않는다() async throws {
@@ -317,7 +542,8 @@ final class TestClock {
         let controller = makeController(at: date(2026, 3, 2, 10, 0))
         try await controller.start()
         recorder.hasEnded = true
-        controller.checkRecorderHealth()
+        controller.checkRecorderHealth()  // 이어 녹음
+        controller.checkRecorderHealth()  // 이어 녹음도 멈춤
         #expect(controller.recorderStallNotice != nil)
 
         recorder.hasEnded = false

@@ -39,3 +39,69 @@ public struct SilenceDetector: Sendable {
         silentSince = nil
     }
 }
+
+/// 녹음을 시작하기 전에 마이크 소리 크기만 미리 듣는 곳. 파일에는 아무것도 쓰지 않는다.
+/// 테스트에서는 가짜 구현을 쓴다.
+@MainActor
+public protocol AudioLevelPreviewing: AnyObject {
+    /// 지금 입력 크기 (0...1, `InputLevel` 참고). 켜져 있지 않으면 0.
+    var level: Float { get }
+    func start() throws
+    func stop()
+}
+
+#if canImport(AVFoundation) && os(macOS)
+import AVFoundation
+import os
+
+/// `AVAudioEngine`의 입력 탭으로 소리 크기를 읽는다. 마이크 권한이 있을 때만 켜야 한다.
+@MainActor
+public final class SystemAudioLevelPreview: AudioLevelPreviewing {
+    private let engine = AVAudioEngine()
+    private let latest = OSAllocatedUnfairLock<Float>(initialState: 0)
+    private var isRunning = false
+
+    public init() {}
+
+    public var level: Float { isRunning ? latest.withLock { $0 } : 0 }
+
+    public func start() throws {
+        guard !isRunning else { return }
+        let input = engine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        guard format.sampleRate > 0 else { throw PreviewError.noInput }
+        input.installTap(onBus: 0, bufferSize: 1024, format: format, block: Self.tapBlock(storing: latest))
+        do {
+            try engine.start()
+        } catch {
+            input.removeTap(onBus: 0)
+            throw error
+        }
+        isRunning = true
+    }
+
+    public func stop() {
+        guard isRunning else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        isRunning = false
+        latest.withLock { $0 = 0 }
+    }
+
+    /// 오디오 스레드에서 불리는 탭. 메인 액터 밖에서 만들어야 격리 검사에 걸리지 않는다.
+    nonisolated private static func tapBlock(storing latest: OSAllocatedUnfairLock<Float>) -> AVAudioNodeTapBlock {
+        { buffer, _ in
+            guard let samples = buffer.floatChannelData?[0] else { return }
+            let count = Int(buffer.frameLength)
+            guard count > 0 else { return }
+            var sum: Float = 0
+            for index in 0..<count { sum += samples[index] * samples[index] }
+            let rms = (sum / Float(count)).squareRoot()
+            let decibels = rms > 0 ? 20 * log10(rms) : -160
+            latest.withLock { $0 = InputLevel.normalize(decibels: decibels) }
+        }
+    }
+
+    enum PreviewError: Error { case noInput }
+}
+#endif

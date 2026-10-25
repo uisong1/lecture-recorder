@@ -8,6 +8,8 @@ struct LectureRecorderApp: App {
     @State private var dependencies: AppDependencies
     private let microphonePermission = SystemMicrophonePermission()
 
+    static let mainWindowID = "main"
+
     init() {
         let dependencies = AppDependencies()
         _dependencies = State(initialValue: dependencies)
@@ -15,7 +17,7 @@ struct LectureRecorderApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("수업 녹음") {
+        WindowGroup("수업 녹음", id: Self.mainWindowID) {
             ContentView(dependencies: dependencies)
                 .task {
                     // UI 테스트 중에는 권한 창이 화면을 가리지 않도록 묻지 않는다.
@@ -24,6 +26,13 @@ struct LectureRecorderApp: App {
                 }
         }
         .modelContainer(dependencies.container)
+
+        MenuBarExtra {
+            MenuBarContent(recording: dependencies.recording)
+        } label: {
+            MenuBarLabel(recording: dependencies.recording)
+        }
+        .menuBarExtraStyle(.window)
 
         Window("시간표 가져오기", id: TimetableImportView.windowID) {
             TimetableImportView(model: dependencies.timetableImport)

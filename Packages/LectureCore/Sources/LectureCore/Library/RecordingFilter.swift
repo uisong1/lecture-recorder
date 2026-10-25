@@ -5,19 +5,22 @@ public enum RecordingPeriod: CaseIterable, Sendable {
     case all
     case last7Days
     case last30Days
+    /// 시작일~끝일(둘 다 포함)을 직접 고른 기간. 날짜는 `RecordingFilter.customStart`/`customEnd`.
+    case custom
 
     public var label: String {
         switch self {
         case .all: "전체"
         case .last7Days: "최근 7일"
         case .last30Days: "최근 30일"
+        case .custom: "직접 지정…"
         }
     }
 
     /// 오늘을 포함한 일수. 전체는 nil.
     var days: Int? {
         switch self {
-        case .all: nil
+        case .all, .custom: nil
         case .last7Days: 7
         case .last30Days: 30
         }
@@ -43,11 +46,17 @@ public struct RecordingFilter: Equatable, Sendable {
     public var period: RecordingPeriod
     /// true면 아직 안 들은 녹음만 남긴다.
     public var unplayedOnly: Bool
+    /// `period`가 `.custom`일 때의 시작일과 끝일(둘 다 포함, 시각은 무시). 순서가 거꾸로여도 판정에서 바로잡는다.
+    /// 한쪽이 nil이면 그쪽은 제한하지 않는다.
+    public var customStart: Date?
+    public var customEnd: Date?
 
-    public init(query: String = "", period: RecordingPeriod = .all, unplayedOnly: Bool = false) {
+    public init(query: String = "", period: RecordingPeriod = .all, unplayedOnly: Bool = false, customStart: Date? = nil, customEnd: Date? = nil) {
         self.query = query
         self.period = period
         self.unplayedOnly = unplayedOnly
+        self.customStart = customStart
+        self.customEnd = customEnd
     }
 
     /// 걸러지는 조건이 하나라도 있는가.
@@ -77,10 +86,38 @@ public struct RecordingFilter: Equatable, Sendable {
 
     /// 오늘을 포함해 `days`일. 7일이면 오늘과 그 전 6일의 0시부터. 미래 시각은 포함한다.
     private func matchesPeriod(_ startedAt: Date, now: Date, calendar: Calendar) -> Bool {
+        if period == .custom {
+            let range = customRange(calendar: calendar)
+            return (range.start.map { startedAt >= $0 } ?? true) && (range.endExclusive.map { startedAt < $0 } ?? true)
+        }
         guard let days = period.days else { return true }
         let today = calendar.startOfDay(for: now)
         guard let cutoff = calendar.date(byAdding: .day, value: -(days - 1), to: today) else { return true }
         return startedAt >= cutoff
+    }
+
+    /// 직접 지정한 기간을 시작일 0시(포함)부터 끝일 다음 날 0시(미포함)로 바꾼다.
+    /// 시작일이 끝일보다 늦으면 둘을 맞바꾼다.
+    func customRange(calendar: Calendar) -> (start: Date?, endExclusive: Date?) {
+        var first = customStart.map { calendar.startOfDay(for: $0) }
+        var last = customEnd.map { calendar.startOfDay(for: $0) }
+        if let a = first, let b = last, a > b { (first, last) = (b, a) }
+        let endExclusive = last.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
+        return (first, endExclusive)
+    }
+
+    /// 화면과 내보내기 이름에 쓸 기간 문구. 직접 지정이면 "2026-10-01~2026-10-15".
+    public func periodLabel(calendar: Calendar) -> String {
+        guard period == .custom else { return period.label }
+        var first = customStart.map { calendar.startOfDay(for: $0) }
+        var last = customEnd.map { calendar.startOfDay(for: $0) }
+        if let a = first, let b = last, a > b { (first, last) = (b, a) }
+        func text(_ date: Date?) -> String {
+            guard let date else { return "" }
+            let c = calendar.dateComponents([.year, .month, .day], from: date)
+            return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+        }
+        return "\(text(first))~\(text(last))"
     }
 
     private static func normalize(_ text: String) -> String {

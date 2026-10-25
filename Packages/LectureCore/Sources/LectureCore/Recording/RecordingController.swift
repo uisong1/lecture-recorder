@@ -72,6 +72,8 @@ public final class RecordingController {
     public var interruptionNotice: String?
     /// 녹음기가 조용히 멈춰 녹음을 저장했을 때 보일 큰 경고. 멈추지 않았으면 nil. 새 녹음을 시작하면 사라진다.
     public private(set) var recorderStallNotice: String?
+    /// 녹음기가 멈춰 새 파일로 이어 녹음하는 중일 때의 안내. 이어 녹음하는 동안만 값이 있다.
+    public private(set) var stallResumeNotice: String?
     /// 녹음 중 저장 공간이 부족해질 때 보여줄 경고. 문제가 없으면 nil.
     public private(set) var storageWarning: String?
     /// 이 시간(초)보다 짧게 끝난 녹음은 저장할지 묻는다.
@@ -86,6 +88,21 @@ public final class RecordingController {
     }
     /// 지금 입력 크기 (0...1). 녹음 중이 아니거나 일시정지 중이면 0.
     public private(set) var inputLevel: Float = 0
+    /// 마이크 확인에 걸리는 시간(초).
+    public static let previewDuration: TimeInterval = 5
+    /// 마이크 확인 결과.
+    public enum PreviewOutcome: Equatable {
+        /// 소리가 들어옴.
+        case heard
+        /// 확인하는 동안 소리가 거의 안 들어옴.
+        case quiet
+    }
+    /// 마이크 확인 중인 입력 크기 (0...1). 확인 중이 아니면 0.
+    public private(set) var previewLevel: Float = 0
+    /// 마이크 확인이 진행 중인지.
+    public private(set) var isPreviewing = false
+    /// 방금 끝난 마이크 확인의 결과. 다시 확인하거나 녹음을 시작하면 지워진다.
+    public private(set) var previewOutcome: PreviewOutcome?
     /// 10초 넘게 거의 무음이면 true. 화면이 "소리가 거의 들어오지 않습니다"를 보인다.
     public private(set) var isInputSilent = false
     /// 지금 녹음에 찍은 북마크 시점(초). 정지하면 `Recording`의 북마크로 저장된다.
@@ -106,9 +123,17 @@ public final class RecordingController {
     private let sleepPreventer: (any SleepPreventing)?
     private let powerStatus: (any PowerStatusProviding)?
     private let inputMonitor: (any AudioInputMonitoring)?
+    private let levelPreview: (any AudioLevelPreviewing)?
+    private var previewMonitor: Task<Void, Never>?
+    private var previewStartedAt: Date?
+    private var previewPeak: Float = 0
     private let overrunNotifier: (any NotificationScheduling)?
     private var classEnd: Date?
     private var overrunNotified = false
+    /// 녹음을 시작할 때 읽어 둔 시간표와 과목 (화면이 자주 다시 읽어도 매번 DB를 조회하지 않는다).
+    private var scheduleSnapshot: ClassSchedule<PersistentIdentifier>?
+    private var subjectsByID: [PersistentIdentifier: Subject] = [:]
+    private var nextClassNotifiedID: PersistentIdentifier?
     private let alertRaiser: RecordingAlertRaiser
     private var recordingInputDevice: AudioInputDevice?
     private let compressor: RecordingCompressor?
@@ -120,6 +145,8 @@ public final class RecordingController {
     private let levelCheckInterval: Duration?
     private var silenceDetector = SilenceDetector()
     private var healthMonitor = RecorderHealthMonitor()
+    /// 지금 녹음이 멈춘 녹음을 이은 두 번째 파일인지. 사용자가 직접 시작하면 지워지고, 이어 녹음은 한 번만 한다.
+    private var isStallContinuation = false
     private let calendar: Calendar
     private let now: @MainActor () -> Date
 
@@ -133,6 +160,7 @@ public final class RecordingController {
         sleepPreventer: (any SleepPreventing)? = nil,
         powerStatus: (any PowerStatusProviding)? = nil,
         inputMonitor: (any AudioInputMonitoring)? = nil,
+        levelPreview: (any AudioLevelPreviewing)? = nil,
         overrunNotifier: (any NotificationScheduling)? = nil,
         lifecycle: (any LifecycleEventSource)? = nil,
         compressor: RecordingCompressor? = nil,
@@ -151,6 +179,7 @@ public final class RecordingController {
         self.sleepPreventer = sleepPreventer
         self.powerStatus = powerStatus
         self.inputMonitor = inputMonitor
+        self.levelPreview = levelPreview
         self.overrunNotifier = overrunNotifier
         alertRaiser = RecordingAlertRaiser(notifier: overrunNotifier)
         self.compressor = compressor
@@ -202,18 +231,50 @@ public final class RecordingController {
     }
 
     /// 녹음기가 실제로 녹음하고 있는지 확인한다. 녹음기가 끝났다고 알렸거나 경과 시간이 30초(연속 3번 점검) 동안
-    /// 늘지 않으면 지금까지의 녹음을 정상 파일로 닫아 저장하고 `recorderStallNotice`로 크게 알린다.
+    /// 늘지 않으면 지금까지의 녹음을 정상 파일로 닫아 저장한다. 처음 멈춘 것이면 같은 과목으로 새 파일에 한 번 이어 녹음하고
+    /// (`stallResumeNotice`), 이어 녹음하다 또 멈췄거나 이어 녹음을 시작하지 못하면 멈추고 `recorderStallNotice`로 크게 알린다.
     /// 일시정지 중에는 확인하지 않는다. 녹음 중에는 10초마다 불린다.
-    /// 자동으로 새 파일에 이어 녹음하지는 않는다 (사용자가 다시 시작한다).
     public func checkRecorderHealth() {
         guard isRecording else { return }
         guard let reason = healthMonitor.check(recorder, isPaused: isPaused) else { return }
         Log.recording.fault("녹음기가 멈춤 (\(String(describing: reason), privacy: .public)), 지금까지 녹음을 저장")
+        if !isStallContinuation {
+            resumeAfterStall()
+            return
+        }
         stopAndNotify(because: "녹음기가 멈춰서", advice: "녹음을 다시 시작하세요.", alert: .recorderStalled, recorderStalled: true)
         if recorderStallNotice == nil {
             // 저장 자체가 실패한 경우에도 멈춘 사실은 크게 보인다. 이유는 errorMessage에 있다.
             recorderStallNotice = RecorderHealthMonitor.unsavedNotice
         }
+    }
+
+    /// 멈춘 녹음을 저장하고 같은 과목으로 새 파일에 이어 녹음한다.
+    /// 저장하지 못했거나 새 녹음을 시작하지 못하면 녹음은 멈춘 채로 크게 알린다.
+    private func resumeAfterStall() {
+        let subject = currentSubject
+        let saved: Recording
+        do {
+            saved = try finishRecording(recorderStalled: true)
+        } catch {
+            // 저장이 실패했으면 이어 녹음하지 않고 멈춘 사실을 크게 알린다.
+            raise(.recorderStalled)
+            errorMessage = error.errorDescription
+            recorderStallNotice = RecorderHealthMonitor.unsavedNotice
+            return
+        }
+        do {
+            try beginRecording(subject: subject, startedAt: now(), isContinuation: true)
+        } catch {
+            Log.recording.fault("멈춘 녹음 뒤 이어 녹음 시작 실패: \(error.localizedDescription, privacy: .public)")
+            raise(.recorderStalled)
+            errorMessage = error.errorDescription
+            // finishRecording이 남긴 "여기까지 저장했습니다. 다시 시작하세요" 안내를 그대로 둔다.
+            return
+        }
+        recorderStallNotice = nil
+        stallResumeNotice = RecorderHealthMonitor.resumedNotice(title: saved.title)
+        raise(.recorderResumed)
     }
 
     /// 입력 크기를 읽어 막대와 무음 경고를 갱신한다. 녹음 중에는 주기적으로 불린다.
@@ -230,13 +291,67 @@ public final class RecordingController {
         if isInputSilent { raise(.inputSilent) }
     }
 
+    /// "마이크 확인"을 누르면 불린다. `previewDuration`초 동안 마이크 소리 크기를 보여 주고 스스로 끝난다.
+    /// 녹음 중이면 아무 일도 하지 않는다. 아직 권한을 묻지 않았으면 이때 묻고, 거부돼 있으면 켜지 않는다
+    /// (화면이 기존 권한 안내를 보인다). 켜지 못해도 녹음에는 영향이 없다.
+    public func startPreview() async {
+        guard let levelPreview, !isRecording, !isPreviewing else { return }
+        permissionStatus = await permission.requestIfNeeded()
+        guard permissionStatus == .granted, !isRecording, !isPreviewing else { return }
+        do {
+            try levelPreview.start()
+        } catch {
+            Log.recording.error("마이크 확인 실패: \(error.localizedDescription, privacy: .public)")
+            errorMessage = "마이크 소리를 확인하지 못했습니다. 입력 장치를 확인해 주세요."
+            return
+        }
+        isPreviewing = true
+        previewOutcome = nil
+        previewPeak = 0
+        previewStartedAt = now()
+        guard let interval = levelCheckInterval else { return }
+        previewMonitor = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled else { return }
+                self?.samplePreviewLevel()
+            }
+        }
+    }
+
+    /// 확인을 바로 끝낸다. 결과는 남기지 않는다.
+    public func stopPreview() {
+        endPreview()
+        previewOutcome = nil
+    }
+
+    private func endPreview() {
+        previewMonitor?.cancel()
+        previewMonitor = nil
+        levelPreview?.stop()
+        isPreviewing = false
+        previewLevel = 0
+        previewStartedAt = nil
+    }
+
+    /// 확인 중 입력 크기를 읽어 막대를 갱신하고, `previewDuration`초가 지나면 끝내며 결과를 정한다.
+    /// 확인하는 동안 한 번이라도 무음 기준을 넘는 소리가 있었으면 `.heard`, 아니면 `.quiet`.
+    public func samplePreviewLevel() {
+        guard isPreviewing, let levelPreview, let startedAt = previewStartedAt else { return }
+        previewLevel = levelPreview.level
+        previewPeak = max(previewPeak, previewLevel)
+        guard now().timeIntervalSince(startedAt) >= Self.previewDuration else { return }
+        previewOutcome = previewPeak >= InputLevel.silenceThreshold ? .heard : .quiet
+        endPreview()
+    }
+
     private func raise(_ alert: RecordingAlert, body: String? = nil) {
         alertRaiser.raise(alert, body: body)
     }
 
     /// 녹음 중인 수업이 끝난 지 10분이 지났을 때 화면에 보일 안내. 아직이거나 수업을 모르면 nil.
     public var overrunNotice: String? {
-        guard isRecording else { return nil }
+        guard isRecording, nextClassSubject == nil else { return nil }
         return ClassOverrunAdvice.notice(subjectName: currentSubjectName, classEnd: classEnd, now: now())
     }
 
@@ -247,6 +362,51 @@ public final class RecordingController {
         Log.recording.notice("수업이 끝난 뒤에도 녹음 중: \(notice, privacy: .public)")
         guard let overrunNotifier else { return }
         Task { await overrunNotifier.notify(title: "수업이 끝났습니다", body: notice) }
+    }
+
+    /// 녹음 중인 수업이 끝나고 다른 과목의 수업이 시작됐으면 그 과목. 아니면 nil.
+    /// 시간표에서 시작한 녹음(수업 종료 시각을 아는 녹음)만 본다. 과목을 직접 골랐거나 미분류인 녹음은 건드리지 않는다.
+    private var nextClassSubject: Subject? {
+        guard isRecording, let classEnd, let current = currentSubject, let scheduleSnapshot,
+              let id = scheduleSnapshot.nextClassStarted(
+                replacing: current.persistentModelID, classEnd: classEnd, now: now(), calendar: calendar)
+        else { return nil }
+        return subjectsByID[id]
+    }
+
+    /// "○○ 수업이 시작됐습니다"와 "정지하고 ○○ 녹음 시작" 버튼에 쓸 안내. 해당하지 않으면 nil.
+    public var nextClassNotice: NextClassNotice? {
+        nextClassSubject.map { NextClassNotice(subjectName: $0.name) }
+    }
+
+    /// 다음 수업이 시작됐으면 시스템 알림도 한 번 보낸다 (과목마다 한 번). 주기적으로 불린다.
+    public func checkNextClass() {
+        guard let next = nextClassSubject, nextClassNotifiedID != next.persistentModelID else { return }
+        nextClassNotifiedID = next.persistentModelID
+        let notice = NextClassNotice(subjectName: next.name)
+        Log.recording.notice("녹음 중 다음 수업 시작: \(next.name, privacy: .public)")
+        guard let overrunNotifier else { return }
+        Task { await overrunNotifier.notify(title: notice.notificationTitle, body: notice.notificationBody, identifier: "class-next") }
+    }
+
+    /// 지금 녹음을 정상 저장하고 다음 수업 과목으로 새 녹음을 바로 시작한다.
+    /// 정지에 실패하면 녹음을 그대로 이어 간다. 새 녹음을 시작하지 못하면 앞 녹음은 저장된 채로 오류를 알린다.
+    public func switchToNextClass() async {
+        guard let next = nextClassSubject else { return }
+        do {
+            try stop()
+        } catch {
+            errorMessage = error.errorDescription
+            return
+        }
+        subjectChoice = .subject(next.persistentModelID)
+        do {
+            try await start()
+            errorMessage = nil
+        } catch {
+            subjectChoice = .automatic
+            errorMessage = error.errorDescription
+        }
     }
 
     private func scheduledEnd(of subject: Subject, startedAt: Date) -> Date? {
@@ -291,6 +451,7 @@ public final class RecordingController {
                 self?.checkRecorderHealth()
                 self?.checkStorage()
                 self?.checkOverrun()
+                self?.checkNextClass()
             }
         }
     }
@@ -357,8 +518,14 @@ public final class RecordingController {
         }
 
         shortRecordingPrompt = nil
+        stopPreview()
         let startedAt = now()
-        let subject = resolvedSubject(at: startedAt)
+        try beginRecording(subject: resolvedSubject(at: startedAt), startedAt: startedAt, isContinuation: false)
+    }
+
+    /// 새 파일에 녹음을 시작하고 모니터를 켠다. `isContinuation`이면 멈춘 녹음을 이은 것이라
+    /// 사용자가 이미 본 알림·수업 종료 안내는 다시 내보내지 않는다.
+    private func beginRecording(subject: Subject?, startedAt: Date, isContinuation: Bool) throws(RecordingError) {
         let relativePath = storage.newRelativePath(subjectName: subject?.name, semester: subject?.semester, startedAt: startedAt, calendar: calendar, fileExtension: RecordingStorage.workingExtension)
         do {
             try storage.prepareFolder(for: relativePath)
@@ -373,10 +540,12 @@ public final class RecordingController {
         bookmarkTimes = []
         bookmarkNotes = []
         state = .recording(startedAt: startedAt)
+        isStallContinuation = isContinuation
         interruptionNotice = nil
         recorderStallNotice = nil
+        stallResumeNotice = nil
         healthMonitor.reset()
-        alertRaiser.reset()
+        if !isContinuation { alertRaiser.reset() }
         storageWarning = nil
         startStorageMonitor()
         silenceDetector.reset()
@@ -384,7 +553,11 @@ public final class RecordingController {
         recordingInputDevice = inputMonitor?.currentDevice()
         inputDeviceWarning = nil
         classEnd = subject.flatMap { scheduledEnd(of: $0, startedAt: startedAt) }
-        overrunNotified = false
+        if !isContinuation {
+            overrunNotified = false
+            nextClassNotifiedID = nil
+        }
+        loadNextClassSnapshot()
         sleepPreventer?.begin(reason: "수업 녹음 중")
         onStarted?()
         do {
@@ -400,11 +573,15 @@ public final class RecordingController {
         try finishRecording(recorderStalled: false)
     }
 
+    /// 멈춘 녹음을 이어 녹음한 파일의 제목 끝에 붙는다. 같은 수업의 앞 파일과 같은 과목 목록에서 이어져 보인다.
+    public static let continuationTitleSuffix = " (이어서)"
+
     /// 녹음을 닫고 저장한다. 녹음기가 멈춘 경우 `currentTime`이 0으로 돌아갈 수 있으니 실제 파일 크기로 길이를 어림한다.
     private func finishRecording(recorderStalled: Bool) throws(RecordingError) -> Recording {
         guard let startedAt = state.startedAt, let relativePath = currentRelativePath else {
             throw .notRecording
         }
+        stallResumeNotice = nil
         var duration = recorder.stop()
         if recorderStalled {
             let bytes = files.fileSize(at: storage.url(for: relativePath)) ?? 0
@@ -418,8 +595,10 @@ public final class RecordingController {
         recordingInputDevice = nil
         inputDeviceWarning = nil
         classEnd = nil
+        scheduleSnapshot = nil
+        subjectsByID = [:]
         let recording = Recording(
-            title: Self.defaultTitle(subjectName: currentSubjectName, startedAt: startedAt, calendar: calendar),
+            title: Self.defaultTitle(subjectName: currentSubjectName, startedAt: startedAt, calendar: calendar) + (isStallContinuation ? Self.continuationTitleSuffix : ""),
             subject: currentSubject,
             startedAt: startedAt,
             duration: duration,
@@ -618,6 +797,19 @@ public final class RecordingController {
     /// 대기 화면에 보일 "지금 녹음하면 분류될 과목" 이름. 수업이 없으면 "미분류".
     public var expectedSubjectName: String {
         expectedSubject()?.name ?? SubjectManager.unclassifiedName
+    }
+
+    private func loadNextClassSnapshot() {
+        guard classEnd != nil, let (schedule, slots) = loadSchedule() else {
+            scheduleSnapshot = nil
+            subjectsByID = [:]
+            return
+        }
+        scheduleSnapshot = schedule
+        subjectsByID = Dictionary(
+            slots.compactMap { slot in slot.subject.map { ($0.persistentModelID, $0) } },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
     private func loadSchedule() -> (ClassSchedule<PersistentIdentifier>, [TimeSlot])? {

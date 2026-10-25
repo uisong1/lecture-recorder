@@ -16,6 +16,11 @@ public struct BookmarkEntry: Identifiable {
     public let bookmark: Bookmark
     public let recording: Recording
     public var id: PersistentIdentifier { bookmark.persistentModelID }
+
+    public init(bookmark: Bookmark, recording: Recording) {
+        self.bookmark = bookmark
+        self.recording = recording
+    }
 }
 
 /// 과목별 녹음 목록을 보여주는 뷰모델.
@@ -29,14 +34,21 @@ public final class RecordingLibrary {
     public var errorMessage: String?
     /// 제목 검색어와 기간. 바꾸면 목록이 바로 다시 걸러진다.
     public var filter = RecordingFilter() {
-        didSet { recordings = filtered(by: selection) }
+        didSet {
+            recordings = filtered(by: selection)
+            pruneSelection()
+        }
     }
+
+    /// 목록에서 ⌘클릭·Shift클릭으로 고른 녹음. 과목을 바꾸면 비워지고, 목록에서 사라진 녹음은 빠진다.
+    public var selectedIDs: Set<PersistentIdentifier> = []
 
     /// 목록 정렬 방향. 바꾸면 목록이 바로 다시 정렬되고 다음 실행에도 기억한다.
     public var sortOrder: RecordingSortOrder = .newestFirst {
         didSet {
             defaults.set(sortOrder.rawValue, forKey: Self.sortOrderKey)
             recordings = filtered(by: selection)
+            pruneSelection()
         }
     }
 
@@ -104,6 +116,7 @@ public final class RecordingLibrary {
         })
         statusCache = [:]
         recordings = filtered(by: selection)
+        pruneSelection()
     }
 
     private static func count(_ recordings: [Recording]) -> Counts {
@@ -134,7 +147,31 @@ public final class RecordingLibrary {
 
     public func select(_ selection: LibrarySelection?) {
         self.selection = selection
+        selectedIDs = []
         recordings = filtered(by: selection)
+    }
+
+    /// 고른 녹음. 목록 순서를 따른다.
+    public var selectedRecordings: [Recording] {
+        recordings.filter { selectedIDs.contains($0.persistentModelID) }
+    }
+
+    /// 둘 이상 골랐는가. 하나만 고른 것은 그냥 눌러 본 것이라 여러 건 동작의 대상으로 보지 않는다.
+    public var isMultiSelecting: Bool { selectedRecordings.count > 1 }
+
+    /// 내보낼 녹음: 둘 이상 골랐으면 그것만, 아니면 지금 목록 전체.
+    public var exportRecordings: [Recording] {
+        isMultiSelecting ? selectedRecordings : recordings
+    }
+
+    public func clearSelection() {
+        selectedIDs = []
+    }
+
+    private func pruneSelection() {
+        guard !selectedIDs.isEmpty else { return }
+        let visible = Set(recordings.map(\.persistentModelID))
+        selectedIDs.formIntersection(visible)
     }
 
     /// 분류에 들어 있는 녹음 수. 검색·기간 조건과 상관없는 전체 수다.
@@ -183,13 +220,14 @@ public final class RecordingLibrary {
 
     /// 지금 목록을 묶어 내보낼 때 쓸 이름: 고른 분류 + 기간 (예: "자료구조", "모든 녹음 최근 7일").
     public var exportLabel: String {
+        if isMultiSelecting { return "선택한 녹음 \(selectedRecordings.count)개" }
         var name: String
         switch selection {
         case nil, .all: name = "모든 녹음"
         case .unclassified: name = SubjectManager.unclassifiedName
         case .subject(let id): name = subjects.first { $0.persistentModelID == id }?.name ?? "모든 녹음"
         }
-        if filter.period != .all { name += " \(filter.period.label)" }
+        if filter.period != .all { name += " \(filter.periodLabel(calendar: calendar))" }
         return name
     }
 

@@ -50,6 +50,18 @@ public final class PlaybackController {
         didSet { defaults.set(continuousPlayback, forKey: Self.continuousPlaybackKey) }
     }
 
+    /// 북마크 이어 듣기의 구간들. 이어 듣는 중이 아니면 비어 있다.
+    public private(set) var tourStops: [BookmarkTourStop] = []
+    /// 지금 듣는 구간의 순번 (`tourStops` 안).
+    public private(set) var tourIndex = 0
+    /// 북마크만 이어 듣는 중인지.
+    public var isTouring: Bool { !tourStops.isEmpty }
+    /// "3/12 북마크 구간". 이어 듣는 중이 아니면 nil.
+    public var tourPositionText: String? {
+        isTouring ? "\(tourIndex + 1)/\(tourStops.count) 북마크 구간" : nil
+    }
+    private var isSteppingTour = false
+
     static let continuousPlaybackKey = "continuousPlayback"
     static let rateKey = "playbackRate"
 
@@ -104,6 +116,7 @@ public final class PlaybackController {
 
     /// 녹음을 불러온다. 같은 녹음이면 다시 불러오지 않는다.
     public func select(_ recording: Recording?) {
+        if !isSteppingTour { endTour() }
         guard recording !== current else { return }
         rememberPosition()
         player.stop()
@@ -187,6 +200,7 @@ public final class PlaybackController {
     /// 북마크 시점 `bookmarkLeadIn`초 앞으로 이동해 그곳부터 재생한다.
     public func play(from bookmark: Bookmark) {
         guard current != nil else { return }
+        endTour()
         seek(to: Self.playbackStart(forBookmarkAt: bookmark.time, duration: duration))
         play()
     }
@@ -229,10 +243,79 @@ public final class PlaybackController {
         }
     }
 
+    /// 목록의 북마크를 날짜순으로 차례로 듣는다. 각 북마크는 `bookmarkLeadIn`초 앞에서 `BookmarkTour.segmentLength`초 재생한다.
+    /// 파일이 없는 녹음은 건너뛴다. 들을 구간이 없으면 안내만 남긴다.
+    public func startBookmarkTour(entries: [BookmarkEntry]) {
+        let stops = BookmarkTour.stops(for: entries, isPlayable: isPlayable)
+        guard !stops.isEmpty else {
+            errorMessage = "이어 들을 북마크가 없습니다."
+            return
+        }
+        tourStops = stops
+        tourIndex = 0
+        errorMessage = nil
+        playTourStop()
+    }
+
+    /// 이어 듣기를 끝낸다. 재생 중이던 소리는 그대로 두지 않고 멈춘다.
+    public func stopBookmarkTour() {
+        guard isTouring else { return }
+        endTour()
+        pause()
+    }
+
+    /// 다음 구간으로. 마지막이면 이어 듣기를 끝내고 멈춘다.
+    public func nextTourStop() {
+        guard isTouring else { return }
+        guard tourIndex + 1 < tourStops.count else {
+            stopBookmarkTour()
+            return
+        }
+        tourIndex += 1
+        playTourStop()
+    }
+
+    /// 이전 구간으로. 첫 구간이면 그 구간 처음부터 다시 듣는다.
+    public func previousTourStop() {
+        guard isTouring else { return }
+        tourIndex = max(tourIndex - 1, 0)
+        playTourStop()
+    }
+
+    private func endTour() {
+        tourStops = []
+        tourIndex = 0
+    }
+
+    /// `tourIndex`의 구간을 불러와 튼다. 불러오지 못하는 녹음은 건너뛰고, 모두 못 열면 끝낸다.
+    private func playTourStop() {
+        while tourIndex < tourStops.count {
+            let stop = tourStops[tourIndex]
+            isSteppingTour = true
+            select(stop.recording)
+            isSteppingTour = false
+            if current === stop.recording {
+                seek(to: stop.start)
+                play()
+                return
+            }
+            tourIndex += 1
+        }
+        endTour()
+    }
+
     /// 재생이 끝났는지 화면 갱신 때 확인한다.
     public func refresh() {
         let wasPlaying = isPlaying
         isPlaying = player.isPlaying
+        if isTouring {
+            // 구간 끝에 닿았거나, 녹음 끝에서 스스로 멈췄으면 다음 구간으로 넘어간다. 사용자가 멈춘 것은 `isPlaying`이 먼저 꺼져 여기 오지 않는다.
+            let stop = tourStops[tourIndex]
+            if isPlaying && player.currentTime >= stop.end || wasPlaying && !isPlaying {
+                nextTourStop()
+            }
+            return
+        }
         guard wasPlaying && !isPlaying else { return }
         let finished = hasReachedEnd
         rememberPosition()
