@@ -63,6 +63,10 @@ public final class RecordingController {
     public var interruptionNotice: String?
     /// 녹음 중 저장 공간이 부족해질 때 보여줄 경고. 문제가 없으면 nil.
     public private(set) var storageWarning: String?
+    /// 이 시간(초)보다 짧게 끝난 녹음은 저장할지 묻는다.
+    public static let shortRecordingSeconds: TimeInterval = 5
+    /// 방금 정지한, 너무 짧아서 저장할지 묻는 중인 녹음. 없으면 nil.
+    public private(set) var shortRecordingPrompt: Recording?
     /// 지금 입력 크기 (0...1). 녹음 중이 아니거나 일시정지 중이면 0.
     public private(set) var inputLevel: Float = 0
     /// 10초 넘게 거의 무음이면 true. 화면이 "소리가 거의 들어오지 않습니다"를 보인다.
@@ -85,6 +89,7 @@ public final class RecordingController {
     private var compressionTask: Task<Void, Never>?
     private var storageMonitor: Task<Void, Never>?
     private let storageCheckInterval: Duration?
+    private var discardTask: Task<Void, Never>?
     private var levelMonitor: Task<Void, Never>?
     private let levelCheckInterval: Duration?
     private var silenceDetector = SilenceDetector()
@@ -254,6 +259,7 @@ public final class RecordingController {
             throw .insufficientStorage
         }
 
+        shortRecordingPrompt = nil
         let startedAt = now()
         let subject = subject(at: startedAt)
         let relativePath = storage.newRelativePath(subjectName: subject?.name, startedAt: startedAt, calendar: calendar, fileExtension: RecordingStorage.workingExtension)
@@ -398,7 +404,10 @@ public final class RecordingController {
     public func toggle() async {
         do {
             if isRecording {
-                try stop()
+                let saved = try stop()
+                if saved.duration < Self.shortRecordingSeconds {
+                    shortRecordingPrompt = saved
+                }
             } else {
                 try await start()
             }
@@ -406,6 +415,35 @@ public final class RecordingController {
         } catch {
             errorMessage = error.errorDescription
         }
+    }
+
+    /// 너무 짧은 녹음을 그대로 둔다.
+    public func keepShortRecording() {
+        shortRecordingPrompt = nil
+    }
+
+    /// 너무 짧은 녹음을 파일과 DB 기록 모두 지운다. 압축이 끝난 뒤에 지워야 파일이 남지 않는다.
+    /// 지우지 못하면 녹음은 그대로 두고 `errorMessage`에 이유를 남긴다.
+    public func discardShortRecording() {
+        guard let recording = shortRecordingPrompt else { return }
+        shortRecordingPrompt = nil
+        let previous = compressionTask
+        discardTask = Task { [weak self] in
+            await previous?.value
+            guard let self else { return }
+            do {
+                try RecordingManager(context: context, storage: storage).delete(recording)
+                if lastSaved === recording { lastSaved = nil }
+            } catch {
+                Log.recording.error("짧은 녹음 삭제 실패: \(error.localizedDescription, privacy: .public)")
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// 진행 중인 버리기가 끝날 때까지 기다린다. 주로 테스트에서 쓴다.
+    public func waitForDiscard() async {
+        await discardTask?.value
     }
 
     /// "자료구조 3월 2일 10:00"

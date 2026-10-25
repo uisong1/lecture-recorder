@@ -281,6 +281,94 @@ final class TestClock {
         #expect(recording.relativePath == "자료구조/2026-03-02_1000.caf")
     }
 
+    // MARK: 너무 짧은 녹음 (3-7)
+
+    @Test func 기준_초는_5초다() {
+        #expect(RecordingController.shortRecordingSeconds == 5)
+    }
+
+    @Test func 정지한_녹음이_5초_미만이면_저장할지_묻는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        await controller.toggle()
+        recorder.currentTime = 4.9
+        await controller.toggle()
+        #expect(controller.shortRecordingPrompt != nil)
+        #expect(controller.shortRecordingPrompt === controller.lastSaved)
+    }
+
+    @Test func 정확히_5초면_묻지_않는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        await controller.toggle()
+        recorder.currentTime = 5
+        await controller.toggle()
+        #expect(controller.shortRecordingPrompt == nil)
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
+    }
+
+    @Test func 저장을_고르면_녹음이_그대로_남는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        await controller.toggle()
+        recorder.currentTime = 2
+        await controller.toggle()
+        controller.keepShortRecording()
+        #expect(controller.shortRecordingPrompt == nil)
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
+        #expect(controller.lastSaved != nil)
+    }
+
+    @Test func 버리기를_고르면_파일과_기록이_모두_지워진다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        await controller.toggle()
+        let caf = recorder.startedURLs[0]
+        files.add(caf)
+        recorder.currentTime = 2
+        controller.addBookmark()
+        await controller.toggle()
+
+        controller.discardShortRecording()
+        #expect(controller.shortRecordingPrompt == nil)
+        await controller.waitForDiscard()
+
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 0)
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Bookmark>()) == 0)
+        #expect(!files.fileExists(at: caf))
+        #expect(controller.lastSaved == nil)
+        #expect(controller.errorMessage == nil)
+    }
+
+    @Test func 압축이_진행_중이어도_버리면_압축된_파일까지_지운다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0), compressing: true)
+        await controller.toggle()
+        let caf = recorder.startedURLs[0]
+        files.add(caf)
+        recorder.currentTime = 3
+        await controller.toggle()
+
+        controller.discardShortRecording()
+        await controller.waitForDiscard()
+
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 0)
+        #expect(files.allPaths.filter { $0.hasSuffix(".caf") || $0.hasSuffix(".m4a") }.isEmpty)
+    }
+
+    @Test func 새_녹음을_시작하면_이전_질문은_사라진다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        await controller.toggle()
+        recorder.currentTime = 1
+        await controller.toggle()
+        try await controller.start()
+        #expect(controller.shortRecordingPrompt == nil)
+    }
+
+    @Test func 종료나_잠자기로_멈춘_짧은_녹음은_묻지_않고_저장한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        recorder.currentTime = 1
+        try controller.stop()
+        #expect(controller.shortRecordingPrompt == nil)
+        #expect(try container.mainContext.fetchCount(FetchDescriptor<Recording>()) == 1)
+    }
+
     @Test func 수업_없는_시간이면_미분류로_저장된다() async throws {
         _ = try addSubjectWithSlot()
         let controller = makeController(at: date(2026, 3, 2, 12, 30))

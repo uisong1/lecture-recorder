@@ -23,6 +23,7 @@ final class RecordingUITests: XCTestCase {
         XCTAssertTrue(wait(for: elapsed, matching: NSPredicate(format: "value BEGINSWITH '00:0' AND value != '00:00'"), timeout: 6))
 
         button.click()
+        app.keepShortRecordingIfAsked()
         let saved = app.staticTexts["lastSavedTitle"]
         XCTAssertTrue(saved.waitForExistence(timeout: 5))
         XCTAssertTrue(text(of: saved).hasPrefix("저장됨: 미분류"))

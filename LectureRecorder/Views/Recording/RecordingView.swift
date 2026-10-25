@@ -135,6 +135,17 @@ struct RecordingView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if playback.current != nil { PlaybackBar(playback: playback) }
         }
+        .alert(
+            "너무 짧은 녹음입니다",
+            isPresented: Binding(get: { recording.shortRecordingPrompt != nil }, set: { _ in })
+        ) {
+            Button("저장", role: .cancel) { recording.keepShortRecording() }
+                .accessibilityIdentifier("keepShortRecording")
+            Button("버리기", role: .destructive) { recording.discardShortRecording() }
+                .accessibilityIdentifier("discardShortRecording")
+        } message: {
+            Text("\(Int(RecordingController.shortRecordingSeconds))초가 안 되는 녹음입니다. 저장할까요?")
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             recording.refreshPermission()
         }
