@@ -1,0 +1,205 @@
+import Foundation
+import Testing
+@testable import LectureCore
+
+@Suite struct ClassReminderPlanningTests {
+    private func schedule(_ entries: [(Weekday, (Int, Int), (Int, Int), String)]) throws -> ClassSchedule<String> {
+        ClassSchedule(entries: try entries.map { .init(period: try period($0.0, $0.1, $0.2), subjectID: $0.3) })
+    }
+
+    @Test func 수업_시작_2분_전에_알린다() throws {
+        let reminders = try schedule([(.monday, (10, 30), (11, 45), "자료구조")]).weeklyReminders()
+        #expect(reminders.count == 1)
+        #expect(reminders[0].weekday == .monday)
+        #expect(reminders[0].time.description == "10:28")
+        #expect(reminders[0].classStart.description == "10:30")
+    }
+
+    @Test func 시간표가_비었으면_알림이_없다() {
+        #expect(ClassSchedule<String>().weeklyReminders().isEmpty)
+    }
+
+    @Test func 요일과_시각_순으로_정렬한다() throws {
+        let reminders = try schedule([
+            (.friday, (13, 0), (16, 0), "실험"),
+            (.monday, (10, 30), (11, 45), "자료구조"),
+            (.monday, (9, 0), (10, 15), "운영체제"),
+        ]).weeklyReminders()
+        #expect(reminders.map(\.subjectID) == ["운영체제", "자료구조", "실험"])
+    }
+
+    @Test func 연강은_수업마다_알린다() throws {
+        let reminders = try schedule([
+            (.monday, (9, 0), (10, 0), "운영체제"),
+            (.monday, (10, 0), (11, 0), "자료구조"),
+        ]).weeklyReminders()
+        #expect(reminders.map(\.time.description) == ["08:58", "09:58"])
+    }
+
+    @Test func 같은_과목이_이어진_칸은_한_번만_알린다() throws {
+        let reminders = try schedule([
+            (.friday, (13, 0), (14, 0), "실험"),
+            (.friday, (14, 0), (16, 0), "실험"),
+        ]).weeklyReminders()
+        #expect(reminders.map(\.classStart.description) == ["13:00"])
+    }
+
+    @Test func 쉬는_시간을_두고_다시_시작하는_같은_과목은_각각_알린다() throws {
+        let reminders = try schedule([
+            (.friday, (9, 0), (10, 0), "실험"),
+            (.friday, (10, 15), (11, 0), "실험"),
+        ]).weeklyReminders()
+        #expect(reminders.count == 2)
+    }
+
+    @Test func 자정_직후_수업은_전날_밤에_알린다() throws {
+        let reminders = try schedule([(.monday, (0, 1), (1, 0), "새벽")]).weeklyReminders()
+        #expect(reminders[0].weekday == .sunday)
+        #expect(reminders[0].time.description == "23:59")
+    }
+
+    @Test func 여유_분을_바꿀_수_있고_0이면_정각에_알린다() throws {
+        let s = try schedule([(.monday, (10, 30), (11, 45), "자료구조")])
+        #expect(s.weeklyReminders(leadMinutes: 5)[0].time.description == "10:25")
+        #expect(s.weeklyReminders(leadMinutes: 0)[0].time.description == "10:30")
+    }
+
+    // MARK: 다음 알림 시각 (2026-03-02는 월요일)
+
+    @Test func 오늘_아직_안_지났으면_오늘_울린다() throws {
+        let reminder = try #require(try schedule([(.monday, (10, 30), (11, 45), "자료구조")]).weeklyReminders().first)
+        let next = reminder.nextFireDate(after: date(2026, 3, 2, 9, 0), calendar: seoulCalendar)
+        #expect(next == date(2026, 3, 2, 10, 28))
+    }
+
+    @Test func 정각에_이미_울렸으면_다음_주다() throws {
+        let reminder = try #require(try schedule([(.monday, (10, 30), (11, 45), "자료구조")]).weeklyReminders().first)
+        let next = reminder.nextFireDate(after: date(2026, 3, 2, 10, 28), calendar: seoulCalendar)
+        #expect(next == date(2026, 3, 9, 10, 28))
+    }
+
+    @Test func 다른_요일이면_그_요일로_넘어간다() throws {
+        let reminder = try #require(try schedule([(.wednesday, (10, 30), (11, 45), "자료구조")]).weeklyReminders().first)
+        let next = reminder.nextFireDate(after: date(2026, 3, 2, 12, 0), calendar: seoulCalendar)
+        #expect(next == date(2026, 3, 4, 10, 28))
+    }
+
+    @Test func 월요일_자정_직후_수업의_알림은_일요일_밤에_울린다() throws {
+        let reminder = try #require(try schedule([(.monday, (0, 1), (1, 0), "새벽")]).weeklyReminders().first)
+        let next = reminder.nextFireDate(after: date(2026, 3, 2, 12, 0), calendar: seoulCalendar)
+        #expect(next == date(2026, 3, 8, 23, 59))
+    }
+}
+
+@Test func 전날은_일요일_앞이_토요일이고_월요일_앞이_일요일이다() {
+    #expect(Weekday.monday.previous == .sunday)
+    #expect(Weekday.sunday.previous == .saturday)
+    #expect(Weekday.wednesday.previous == .tuesday)
+}
+
+#if canImport(SwiftData)
+import SwiftData
+
+@MainActor
+final class FakeNotificationScheduler: NotificationScheduling {
+    var authorized = true
+    private(set) var authorizationRequests = 0
+    private(set) var scheduled: [ScheduledNotification] = []
+    private(set) var replaceCount = 0
+
+    func requestAuthorization() async -> Bool {
+        authorizationRequests += 1
+        return authorized
+    }
+
+    func replaceAll(with notifications: [ScheduledNotification]) async {
+        replaceCount += 1
+        scheduled = notifications
+    }
+}
+
+@MainActor
+@Suite struct ClassReminderControllerTests {
+    let container: ModelContainer
+    let notifications = FakeNotificationScheduler()
+    let defaults: UserDefaults
+    let controller: ClassReminderController
+
+    init() throws {
+        container = try LectureModelContainer.make(inMemory: true)
+        let suite = "ClassReminderControllerTests-\(UUID().uuidString)"
+        defaults = try #require(UserDefaults(suiteName: suite))
+        controller = ClassReminderController(context: container.mainContext, notifications: notifications, defaults: defaults)
+    }
+
+    private func addClass(_ name: String, _ weekday: Weekday, hour: Int, minute: Int = 0, endHour: Int) throws -> Subject {
+        let subject = try SubjectManager(context: container.mainContext).add(name: name, color: .green)
+        try ScheduleManager(context: container.mainContext)
+            .add(subject: subject, weekday: weekday, start: TimeOfDay(hour: hour, minute: minute), end: TimeOfDay(hour: endHour))
+        return subject
+    }
+
+    @Test func 기본은_꺼져_있고_아무것도_예약하지_않는다() async throws {
+        _ = try addClass("자료구조", .monday, hour: 10, endHour: 11)
+        #expect(!controller.isEnabled)
+        await controller.reschedule()
+        #expect(notifications.replaceCount == 0)
+        #expect(notifications.authorizationRequests == 0)
+    }
+
+    @Test func 켜면_권한을_요청하고_시간표대로_예약한다() async throws {
+        _ = try addClass("자료구조", .monday, hour: 10, minute: 30, endHour: 12)
+        await controller.setEnabled(true)
+        #expect(controller.isEnabled)
+        #expect(controller.message == nil)
+        #expect(notifications.authorizationRequests == 1)
+        #expect(notifications.scheduled.count == 1)
+        let notification = try #require(notifications.scheduled.first)
+        #expect(notification.body == "자료구조 수업이 곧 시작됩니다. 녹음할까요?")
+        #expect(notification.weekday == .monday)
+        #expect(notification.hour == 10 && notification.minute == 28)
+    }
+
+    @Test func 권한을_거부하면_꺼진_채로_이유를_알린다() async throws {
+        _ = try addClass("자료구조", .monday, hour: 10, endHour: 11)
+        notifications.authorized = false
+        await controller.setEnabled(true)
+        #expect(!controller.isEnabled)
+        #expect(controller.message != nil)
+        #expect(notifications.scheduled.isEmpty)
+        #expect(!defaults.bool(forKey: ClassReminderController.defaultsKey))
+    }
+
+    @Test func 끄면_예약을_모두_지운다() async throws {
+        _ = try addClass("자료구조", .monday, hour: 10, endHour: 11)
+        await controller.setEnabled(true)
+        await controller.setEnabled(false)
+        #expect(!controller.isEnabled)
+        #expect(notifications.scheduled.isEmpty)
+    }
+
+    @Test func 시간표가_바뀌면_예약을_다시_만든다() async throws {
+        _ = try addClass("자료구조", .monday, hour: 10, endHour: 11)
+        await controller.setEnabled(true)
+        _ = try addClass("운영체제", .tuesday, hour: 9, endHour: 10)
+        await controller.reschedule()
+        #expect(notifications.scheduled.count == 2)
+
+        let schedule = ScheduleManager(context: container.mainContext)
+        try schedule.delete(try #require(schedule.slots.first))
+        await controller.reschedule()
+        #expect(notifications.scheduled.count == 1)
+    }
+
+    @Test func 켜둔_설정은_다시_실행해도_유지된다() async throws {
+        await controller.setEnabled(true)
+        let again = ClassReminderController(context: container.mainContext, notifications: notifications, defaults: defaults)
+        #expect(again.isEnabled)
+    }
+
+    @Test func 시간표가_비었으면_예약이_비어_있다() async throws {
+        await controller.setEnabled(true)
+        #expect(notifications.scheduled.isEmpty)
+    }
+}
+#endif

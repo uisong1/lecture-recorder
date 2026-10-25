@@ -26,7 +26,11 @@ public final class SubjectManager {
     /// 시간표가 없는 녹음이 들어가는 분류 이름. 과목 이름으로 쓸 수 없다.
     public static let unclassifiedName = "미분류"
 
-    public private(set) var subjects: [Subject] = []
+    public private(set) var subjects: [Subject] = [] {
+        didSet { onChange?() }
+    }
+    /// 과목 목록이 다시 읽힐 때마다 불린다 (수업 시작 알림 문구를 새로 만드는 데 쓴다).
+    public var onChange: (@MainActor () -> Void)?
     /// 화면에 보여줄 마지막 오류.
     public var errorMessage: String?
 

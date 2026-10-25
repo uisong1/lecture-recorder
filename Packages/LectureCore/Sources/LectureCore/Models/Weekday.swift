@@ -22,5 +22,10 @@ public enum Weekday: Int, CaseIterable, Comparable, Sendable {
         lhs.mondayIndex < rhs.mondayIndex
     }
 
+    /// 전날. 월요일의 전날은 일요일.
+    public var previous: Weekday {
+        Weekday(rawValue: rawValue == 1 ? 7 : rawValue - 1) ?? .sunday
+    }
+
     private var mondayIndex: Int { (rawValue + 5) % 7 }
 }
