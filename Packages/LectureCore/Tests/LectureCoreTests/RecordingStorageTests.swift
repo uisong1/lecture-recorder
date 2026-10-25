@@ -138,7 +138,7 @@ import Testing
     }
 
     @Test func 녹음_중인_파일이_들어갈_폴더는_비어_있어도_지우지_않는다() throws {
-        let (storage, files) = try store([], directories: ["학기/과목", "학기/다른과목"])
+        let (storage, files) = try store([], directories: ["학기", "학기/과목", "학기/다른과목"])
         let removed = storage.removeEmptyFolders(protecting: ["학기/과목/03-02 월 10-00.caf"])
         #expect(removed == 1)
         #expect(files.isDirectory(at: storage.url(for: "학기/과목")))
@@ -146,8 +146,8 @@ import Testing
     }
 
     @Test func 녹음_중이_아니면_같은_폴더도_지운다() throws {
-        let (storage, files) = try store([], directories: ["학기/과목"])
-        #expect(storage.removeEmptyFolders(protecting: []) == 1)
+        let (storage, files) = try store([], directories: ["학기", "학기/과목"])
+        #expect(storage.removeEmptyFolders(protecting: []) == 2)
         #expect(!files.isDirectory(at: storage.url(for: "학기/과목")))
     }
 
