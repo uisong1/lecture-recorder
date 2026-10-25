@@ -21,6 +21,7 @@ final class AppDependencies {
     let library: RecordingLibrary
     let manager: RecordingManager
     let timetableImport: TimetableImportModel
+    let rescan: RecordingRescanModel
 
     init() {
         var problems: [String] = []
@@ -94,11 +95,20 @@ final class AppDependencies {
             recoveryNotice = nil
         }
         let migrator = RecordingMigrator(context: container.mainContext, storage: storage)
+        let recording = recording
         // 예전 폴더 구조의 녹음을 학기/과목 폴더로 옮긴다. 복사해 확인한 뒤에만 원본을 지우고, 실패하면 그대로 둔다.
-        Task { await migrator.migrateIfNeeded() }
+        // 옮기고 남은 빈 예전 폴더는 정리한다. 녹음이 막 시작된 폴더를 지우지 않도록 녹음 중이면 건너뛴다.
+        Task {
+            if await migrator.migrateIfNeeded().moved > 0, !recording.isRecording { storage.removeEmptyFolders() }
+        }
         let subjects = subjects
         let schedule = schedule
         let library = library
+        rescan = RecordingRescanModel(
+            rescanner: RecordingRescanner(context: context, storage: storage, durations: SystemAudioDurationReader()),
+            activePaths: { recording.currentRelativePath.map { [$0] } ?? [] },
+            onFinished: { library.reload() }
+        )
         timetableImport = TimetableImportModel(
             reader: VisionTimetableReader(),
             importer: TimetableImporter(context: context),
@@ -108,7 +118,7 @@ final class AppDependencies {
                 schedule.reload()
                 library.reload()
                 await reminders.reschedule()
-                await migrator.migrateIfNeeded()
+                if await migrator.migrateIfNeeded().moved > 0, !recording.isRecording { storage.removeEmptyFolders() }
                 library.reload()
             }
         )

@@ -105,3 +105,7 @@
 ## 2026-10-25 3-40 삭제를 휴지통으로
 - 한 일: `FileStoring.trashItem`, `RecordingStorage.trashFile`, `RecordingManager.trash`. 목록 삭제가 휴지통으로 가고 확인 창·메뉴 문구를 "휴지통으로 이동"으로 바꿈. 짧은 녹음 버리기는 영구 삭제 그대로. 1-16 결정을 DECISIONS.md에서 갱신. 단위 테스트 4개.
 - Mac에서 확인 필요: 녹음 우클릭 → "휴지통으로 이동…"을 하고 Finder 휴지통에 파일이 들어가는지, 목록에서 사라지는지. 샌드박스에서 휴지통 이동이 막히면 오류 문구가 뜹니다.
+## 2026-10-25 3-35 녹음 폴더 다시 읽기
+- 한 일: `RecordingRescanner`(목록에 없는 m4a·caf를 `Recording`으로 되살림), `RecordingFileName`(파일 이름에서 시작 시각), `AudioDurationReading`(파일을 열어 길이, 못 읽으면 크기로 어림), `RecordingStorage.audioFilePaths/removeEmptyFolders`, 설정의 "녹음 파일" 탭과 `RecordingRescanModel`. 폴더 옮기기 뒤에도 비어 남은 예전 과목 폴더를 정리한다.
+- Mac에서 확인 필요: 설정 → 녹음 파일 → "녹음 폴더 다시 읽기". 휴지통에서 되돌린 파일이나, 목록에서 일부러 지운 기록의 파일이 목록에 다시 나타나는지. 실제 m4a의 길이가 맞게 읽히는지.
+- 다음: 3-39 목록 줄 정리.
