@@ -163,6 +163,16 @@ struct PlaybackBar: View {
             }
         }
         .confirmationDialog(
+            RecordingPlaybackGuard.confirmationTitle,
+            isPresented: Binding(get: { playback.isConfirmingPlayback }, set: { if !$0 { playback.cancelPlaybackConfirmation() } }),
+            titleVisibility: .visible
+        ) {
+            Button(RecordingPlaybackGuard.confirmButton) { playback.confirmPlaybackDuringRecording() }
+            Button("취소", role: .cancel) {}
+        } message: {
+            Text(RecordingPlaybackGuard.confirmationMessage)
+        }
+        .confirmationDialog(
             "이 북마크를 삭제할까요?",
             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
             titleVisibility: .visible

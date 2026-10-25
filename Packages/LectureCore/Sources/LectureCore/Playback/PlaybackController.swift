@@ -74,11 +74,20 @@ public final class PlaybackController {
     private let queue: @MainActor () -> [Recording]
     private let isPlayable: @MainActor (Recording) -> Bool
     private let allowsAdvance: @MainActor () -> Bool
+    private let isRecording: @MainActor () -> Bool
+    private let outputInspector: (any AudioOutputInspecting)?
+
+    /// 녹음 중에 재생해도 되는지 사용자에게 확인을 받는 중인지. 화면이 확인 창을 띄운다.
+    public private(set) var isConfirmingPlayback = false
+    /// 이번 녹음 중에 "그래도 재생"을 이미 눌렀는지. 녹음이 시작될 때 지운다.
+    private var confirmedDuringRecording = false
 
     /// - Parameters:
     ///   - queue: 지금 화면에 보이는 목록(정렬·필터 반영). 이어서 재생할 때 다음 녹음을 여기서 고른다.
     ///   - isPlayable: 파일이 있어 재생할 수 있는 녹음인지. 아니면 건너뛴다.
     ///   - allowsAdvance: false면 이어서 재생하지 않는다 (예: 녹음 중).
+    ///   - isRecording: 지금 녹음 중(일시정지 포함)인지. 이때 스피커로 재생하면 확인을 받는다.
+    ///   - outputInspector: 소리가 나가는 곳을 알려 준다. nil이면 알 수 없는 것으로 보고 녹음 중에는 확인한다.
     public init(
         player: any AudioPlaying,
         storage: RecordingStorage,
@@ -88,7 +97,9 @@ public final class PlaybackController {
         defaults: UserDefaults = .standard,
         queue: @escaping @MainActor () -> [Recording] = { [] },
         isPlayable: @escaping @MainActor (Recording) -> Bool = { _ in true },
-        allowsAdvance: @escaping @MainActor () -> Bool = { true }
+        allowsAdvance: @escaping @MainActor () -> Bool = { true },
+        isRecording: @escaping @MainActor () -> Bool = { false },
+        outputInspector: (any AudioOutputInspecting)? = nil
     ) {
         self.player = player
         self.storage = storage
@@ -99,6 +110,8 @@ public final class PlaybackController {
         self.queue = queue
         self.isPlayable = isPlayable
         self.allowsAdvance = allowsAdvance
+        self.isRecording = isRecording
+        self.outputInspector = outputInspector
         continuousPlayback = defaults.bool(forKey: Self.continuousPlaybackKey)
         // 저장된 값이 없거나(0) 알 수 없는 값이면 보통 속도로 시작한다.
         let global = PlaybackRate(rawValue: defaults.float(forKey: Self.rateKey)) ?? .normal
@@ -126,6 +139,7 @@ public final class PlaybackController {
         rememberPosition()
         player.stop()
         isPlaying = false
+        isConfirmingPlayback = false
         current = nil
         guard let recording else { return }
         do {
@@ -141,7 +155,43 @@ public final class PlaybackController {
         }
     }
 
+    /// 지금 재생을 시작하면 녹음에 소리가 섞일 수 있어 확인이 필요한지.
+    public var playbackNeedsConfirmation: Bool {
+        guard !confirmedDuringRecording else { return false }
+        return RecordingPlaybackGuard.needsConfirmation(isRecording: isRecording(), output: outputInspector?.currentOutput() ?? .unknown)
+    }
+
+    /// 재생을 시작한다. 녹음 중에 스피커로 나가면 시작하지 않고 확인을 요청한다 (`isConfirmingPlayback`).
     public func play() {
+        guard current != nil else { return }
+        if playbackNeedsConfirmation {
+            isConfirmingPlayback = true
+            return
+        }
+        startPlayback()
+    }
+
+    /// 확인 창에서 "그래도 재생"을 눌렀을 때. 이번 녹음이 끝날 때까지는 다시 묻지 않는다.
+    public func confirmPlaybackDuringRecording() {
+        guard isConfirmingPlayback else { return }
+        isConfirmingPlayback = false
+        confirmedDuringRecording = isRecording()
+        startPlayback()
+    }
+
+    /// 확인 창을 닫는다. 재생하지 않는다.
+    public func cancelPlaybackConfirmation() {
+        isConfirmingPlayback = false
+    }
+
+    /// 녹음이 시작됐을 때: 재생 중인 소리를 멈추고, 이전 녹음에서 받아 둔 확인은 잊는다.
+    public func recordingDidStart() {
+        confirmedDuringRecording = false
+        isConfirmingPlayback = false
+        pause()
+    }
+
+    private func startPlayback() {
         guard let current else { return }
         player.play()
         isPlaying = player.isPlaying
