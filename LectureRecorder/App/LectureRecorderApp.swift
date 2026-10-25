@@ -8,7 +8,7 @@ struct LectureRecorderApp: App {
 
     var body: some Scene {
         WindowGroup("수업 녹음") {
-            ContentView(startupError: dependencies.startupError)
+            ContentView(dependencies: dependencies)
                 .task {
                     // UI 테스트 중에는 권한 창이 화면을 가리지 않도록 묻지 않는다.
                     guard !AppDependencies.isUITesting else { return }

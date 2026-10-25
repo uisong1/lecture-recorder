@@ -1,25 +1,24 @@
+import LectureCore
 import SwiftUI
 
 struct ContentView: View {
-    let startupError: String?
+    let dependencies: AppDependencies
 
     var body: some View {
-        VStack(spacing: 12) {
-            if let startupError {
+        VStack(spacing: 0) {
+            if let startupError = dependencies.startupError {
                 Label(startupError, systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
+                    .padding(8)
             }
-            Text("수업 녹음")
-                .accessibilityIdentifier("mainWindowContent")
+            RecordingView(recording: dependencies.recording, playback: dependencies.playback)
+        }
+        .frame(minWidth: 600, minHeight: 400)
+        .toolbar {
             SettingsLink {
                 Label("과목과 시간표 설정", systemImage: "gearshape")
             }
             .accessibilityIdentifier("openSettings")
         }
-        .frame(minWidth: 600, minHeight: 400)
     }
-}
-
-#Preview {
-    ContentView(startupError: nil)
 }

@@ -12,6 +12,6 @@ final class LectureRecorderUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["mainWindowContent"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["recordButton"].waitForExistence(timeout: 5))
     }
 }
