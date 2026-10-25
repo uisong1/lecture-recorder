@@ -104,9 +104,8 @@ struct PlaybackBar: View {
                 Picker("배속", selection: Binding(get: { playback.rate }, set: { playback.setRate($0) })) {
                     ForEach(PlaybackRate.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 320)
+                .pickerStyle(.menu)
+                .fixedSize()
                 .accessibilityIdentifier("ratepicker")
                 Toggle("다음 녹음으로 이어서 재생", isOn: Binding(get: { playback.continuousPlayback }, set: { playback.continuousPlayback = $0 }))
                     .toggleStyle(.checkbox)
