@@ -61,6 +61,76 @@ final class TestClock {
         return subject
     }
 
+    @Test func 시작_전에_고른_과목으로_저장한다() async throws {
+        _ = try addSubjectWithSlot()
+        let other = try SubjectManager(context: container.mainContext).add(name: "선형대수", color: .blue)
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        controller.subjectChoice = .subject(other.persistentModelID)
+        #expect(controller.expectedSubjectName == "선형대수")
+
+        try await controller.start()
+        #expect(controller.currentSubjectName == "선형대수")
+        let saved = try controller.stop()
+
+        #expect(saved.subject?.name == "선형대수")
+        #expect(saved.relativePath.hasPrefix("선형대수/"))
+    }
+
+    @Test func 수업_시간에도_미분류를_고를_수_있다() async throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        controller.subjectChoice = .unclassified
+        #expect(controller.expectedSubjectName == "미분류")
+
+        try await controller.start()
+        let saved = try controller.stop()
+
+        #expect(saved.subject == nil)
+    }
+
+    @Test func 고르지_않으면_시간표로_분류한다() async throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        #expect(controller.subjectChoice == .automatic)
+
+        try await controller.start()
+
+        #expect(controller.currentSubjectName == "자료구조")
+    }
+
+    @Test func 고른_과목은_한_번만_쓰고_자동으로_돌아간다() async throws {
+        _ = try addSubjectWithSlot()
+        let other = try SubjectManager(context: container.mainContext).add(name: "선형대수", color: .blue)
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        controller.subjectChoice = .subject(other.persistentModelID)
+        try await controller.start()
+        _ = try controller.stop()
+
+        #expect(controller.subjectChoice == .automatic)
+        #expect(controller.expectedSubjectName == "자료구조")
+    }
+
+    @Test func 고른_과목이_지워졌으면_시간표로_분류한다() async throws {
+        _ = try addSubjectWithSlot()
+        let subjects = SubjectManager(context: container.mainContext)
+        let gone = try subjects.add(name: "선형대수", color: .blue)
+        let id = gone.persistentModelID
+        try subjects.delete(gone)
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        controller.subjectChoice = .subject(id)
+
+        #expect(controller.expectedSubjectName == "자료구조")
+    }
+
+    @Test func 고를_수_있는_과목은_이름순이다() throws {
+        let subjects = SubjectManager(context: container.mainContext)
+        _ = try subjects.add(name: "자료구조", color: .green)
+        _ = try subjects.add(name: "가정학", color: .blue)
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+
+        #expect(controller.availableSubjects().map(\.name) == ["가정학", "자료구조"])
+    }
+
     @Test func 녹음하는_동안만_잠자기를_막는다() async throws {
         let controller = makeController(at: date(2026, 3, 2, 10, 0))
         #expect(!sleep.isActive)

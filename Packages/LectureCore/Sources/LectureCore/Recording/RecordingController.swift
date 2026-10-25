@@ -27,6 +27,13 @@ public enum RecordingError: Error, Equatable, LocalizedError {
     }
 }
 
+/// 녹음을 시작하기 전에 고른 과목. 고르지 않으면 시간표로 자동 분류한다.
+public enum SubjectChoice: Equatable {
+    case automatic
+    case unclassified
+    case subject(PersistentIdentifier)
+}
+
 /// 녹음 시작·정지 흐름을 맡는 뷰모델.
 /// 시작할 때 시간표로 과목을 정하고, 정지하면 `Recording`을 저장한다.
 @MainActor
@@ -53,6 +60,8 @@ public final class RecordingController {
     }
 
     public private(set) var state: State = .idle
+    /// 시작 전에 직접 고른 과목 (보강·휴강으로 시간표와 다른 날). 녹음을 시작하면 자동으로 돌아간다.
+    public var subjectChoice: SubjectChoice = .automatic
     /// 녹음 중인 과목. nil이면 미분류.
     public private(set) var currentSubject: Subject?
     public private(set) var currentRelativePath: String?
@@ -294,7 +303,7 @@ public final class RecordingController {
 
         shortRecordingPrompt = nil
         let startedAt = now()
-        let subject = subject(at: startedAt)
+        let subject = resolvedSubject(at: startedAt)
         let relativePath = storage.newRelativePath(subjectName: subject?.name, startedAt: startedAt, calendar: calendar, fileExtension: RecordingStorage.workingExtension)
         do {
             try storage.prepareFolder(for: relativePath)
@@ -304,6 +313,7 @@ public final class RecordingController {
             throw .startFailed(error.localizedDescription)
         }
         currentSubject = subject
+        subjectChoice = .automatic
         currentRelativePath = relativePath
         bookmarkTimes = []
         state = .recording(startedAt: startedAt)
@@ -493,7 +503,26 @@ public final class RecordingController {
     /// 지금 녹음을 시작하면 분류될 과목. 시간표를 읽을 때마다 새로 계산하므로 시간표를 바꾸면 바로 반영된다.
     /// 수업이 없으면 nil (미분류).
     public func expectedSubject() -> Subject? {
-        subject(at: now())
+        resolvedSubject(at: now())
+    }
+
+    /// 고를 수 있는 과목 (이름순). 조회에 실패하면 빈 목록.
+    public func availableSubjects() -> [Subject] {
+        do {
+            return try context.fetch(FetchDescriptor<Subject>(sortBy: [SortDescriptor(\.name)]))
+        } catch {
+            Log.data.error("과목 조회 실패: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
+    }
+
+    /// 직접 고른 과목이 있으면 그것을, 없으면(또는 그 사이 지워졌으면) 시간표로 정한 과목을 쓴다.
+    private func resolvedSubject(at date: Date) -> Subject? {
+        switch subjectChoice {
+        case .automatic: return subject(at: date)
+        case .unclassified: return nil
+        case .subject(let id): return availableSubjects().first { $0.persistentModelID == id } ?? subject(at: date)
+        }
     }
 
     /// 대기 화면에 보일 "지금 녹음하면 분류될 과목" 이름. 수업이 없으면 "미분류".
