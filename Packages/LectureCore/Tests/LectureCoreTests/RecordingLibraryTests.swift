@@ -18,6 +18,8 @@ import Testing
         os = Subject(name: "운영체제")
         context.insert(ds)
         context.insert(os)
+        // 저장 전의 임시 ID는 저장하면 바뀌므로 먼저 저장한다.
+        try context.save()
     }
 
     private func add(_ title: String, _ subject: Subject?, at seconds: TimeInterval) {
