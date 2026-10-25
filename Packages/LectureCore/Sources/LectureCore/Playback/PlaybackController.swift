@@ -126,10 +126,18 @@ public final class PlaybackController {
         return bookmarks.map { min(max($0.time / duration, 0), 1) }
     }
 
-    /// 북마크 시점으로 이동해 그곳부터 재생한다.
+    /// 북마크로 이동할 때 시점보다 이만큼(초) 앞에서 튼다. 북마크는 소리를 들은 뒤에 누르므로 정확한 시점부터 틀면 중요한 말이 이미 지나가 있다.
+    public static let bookmarkLeadIn: TimeInterval = 5
+
+    /// 북마크 시점에서 `bookmarkLeadIn`초 앞. 0 밑으로 내려가지 않고 길이를 넘지 않는다. 저장된 시점은 바꾸지 않는다.
+    public static func playbackStart(forBookmarkAt time: TimeInterval, duration: TimeInterval) -> TimeInterval {
+        min(max(time - bookmarkLeadIn, 0), max(duration, 0))
+    }
+
+    /// 북마크 시점 `bookmarkLeadIn`초 앞으로 이동해 그곳부터 재생한다.
     public func play(from bookmark: Bookmark) {
         guard current != nil else { return }
-        seek(to: bookmark.time)
+        seek(to: Self.playbackStart(forBookmarkAt: bookmark.time, duration: duration))
         play()
     }
 
