@@ -19,7 +19,7 @@ struct SubjectSettingsView: View {
             if let message = manager.errorMessage {
                 Text(message)
                     .designText(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Design.Palette.danger)
                     .accessibilityIdentifier("subjectError")
             }
 

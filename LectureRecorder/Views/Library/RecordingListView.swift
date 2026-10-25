@@ -84,7 +84,7 @@ struct RecordingListView: View {
             if let message = manager.errorMessage ?? library.errorMessage ?? playback.errorMessage {
                 Label(message, systemImage: "exclamationmark.triangle")
                     .designText(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Design.Palette.danger)
                     .padding(8)
             }
         }

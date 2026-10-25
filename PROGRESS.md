@@ -1,5 +1,9 @@
 # PROGRESS
 
+## 2026-10-25 3-30 남은 DESIGN.md 어긋남 정리
+- 한 일: `Palette.danger`·`Text.hero` 토큰 추가, `.red`/`.orange` 오류 글자를 토큰으로 통일, 녹음 화면에 빨간 "녹음 중" 표시(일시정지 중엔 회색), 정지 버튼을 파랑 pill로, 파란 pill 포커스 링(2px). 결정은 DECISIONS.md에 기록.
+- 확인 필요: 모양은 CI로 볼 수 없으니 Mac에서 녹음 화면과 Tab 포커스 링을 한 번 봐 주세요.
+
 ## 2026-10-25 2-5 재생 중 북마크 추가·메모 수정·삭제
 - 한 일: `PlaybackController.addBookmarkAtCurrentTime/updateNote/delete`(저장은 `BookmarkManager`, 1초 이내 중복 추가 방지)와 재생 막대의 "지금 위치에 북마크" 버튼(⇧⌘B, 녹음 중 ⌘B와 겹치지 않게), 북마크 버튼 우클릭의 메모 수정·삭제(확인 창). 테스트 6개.
 
