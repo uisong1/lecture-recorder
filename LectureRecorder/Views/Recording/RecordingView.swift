@@ -31,6 +31,20 @@ struct RecordingView: View {
                 }
             }
 
+            if let device = recording.inputDeviceName {
+                Label("마이크: \(device)", systemImage: "mic")
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.inkMuted)
+                    .accessibilityIdentifier("inputDevice")
+            }
+
+            if let warning = recording.inputDeviceWarning {
+                Label(warning, systemImage: "exclamationmark.triangle")
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.danger)
+                    .accessibilityIdentifier("inputDeviceWarning")
+            }
+
             if recording.isRecording {
                 InputLevelBar(level: recording.inputLevel)
                     .accessibilityIdentifier("inputLevel")
