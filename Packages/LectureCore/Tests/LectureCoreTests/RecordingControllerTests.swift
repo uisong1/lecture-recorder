@@ -108,6 +108,115 @@ final class TestClock {
         #expect(controller.overrunNotice == nil)
     }
 
+    /// 월 10:00~11:15 자료구조 다음에 월 11:15~12:30 선형대수.
+    func addBackToBackClasses() throws -> (first: Subject, second: Subject) {
+        let first = try addSubjectWithSlot()
+        let second = try SubjectManager(context: container.mainContext).add(name: "선형대수", color: .blue)
+        try ScheduleManager(context: container.mainContext)
+            .add(subject: second, weekday: .monday, start: TimeOfDay(hour: 11, minute: 15), end: TimeOfDay(hour: 12, minute: 30))
+        return (first, second)
+    }
+
+    @Test func 연강에서_다음_수업이_시작되면_안내하고_알림을_한_번_보낸다() async throws {
+        _ = try addBackToBackClasses()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+
+        clock.advance(by: 75 * 60 - 1)  // 11:14:59
+        controller.checkNextClass()
+        #expect(controller.nextClassNotice == nil)
+        #expect(overrunNotifier.notified.isEmpty)
+
+        clock.advance(by: 1)  // 11:15:00
+        controller.checkNextClass()
+        controller.checkNextClass()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(controller.nextClassNotice?.buttonTitle == "정지하고 선형대수 녹음 시작")
+        #expect(overrunNotifier.notified.count == 1)
+        #expect(overrunNotifier.notified.first?.title == "선형대수 수업이 시작됐습니다")
+        #expect(overrunNotifier.notifiedIdentifiers == ["class-next"])
+        // 다음 수업이 시작됐으면 "수업이 끝났습니다" 안내는 쓰지 않는다.
+        clock.advance(by: 20 * 60)
+        #expect(controller.overrunNotice == nil)
+    }
+
+    @Test func 다음_수업으로_넘어가면_앞_녹음을_저장하고_새_과목으로_바로_시작한다() async throws {
+        let (first, second) = try addBackToBackClasses()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+        clock.advance(by: 75 * 60 + 5)  // 11:15:05
+
+        await controller.switchToNextClass()
+
+        #expect(controller.isRecording)
+        #expect(controller.currentSubjectName == "선형대수")
+        #expect(controller.nextClassNotice == nil)
+        #expect(controller.errorMessage == nil)
+        let saved = try container.mainContext.fetch(FetchDescriptor<Recording>())
+        #expect(saved.count == 1)
+        #expect(saved.first?.subject === first)
+        #expect(recorder.startedURLs.count == 2)
+        let current = try controller.stop()
+        #expect(current.subject === second)
+        #expect(current.relativePath.hasPrefix("학기 미정/선형대수/"))
+    }
+
+    @Test func 넘어간_뒤에는_같은_안내를_다시_하지_않는다() async throws {
+        _ = try addBackToBackClasses()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+        clock.advance(by: 75 * 60)
+        controller.checkNextClass()
+        await controller.switchToNextClass()
+        try await Task.sleep(for: .milliseconds(50))
+
+        // 선형대수 수업이 계속되는 동안 또 안내하지 않는다.
+        controller.checkNextClass()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(controller.nextClassNotice == nil)
+        #expect(overrunNotifier.notified.count == 1)
+    }
+
+    @Test func 연강이_아닌_수업_사이에는_다음_수업_안내를_하지_않는다() async throws {
+        _ = try addSubjectWithSlot()  // 월 10:00~11:15만 있다.
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+        clock.advance(by: 80 * 60)
+
+        controller.checkNextClass()
+
+        #expect(controller.nextClassNotice == nil)
+        #expect(overrunNotifier.notified.isEmpty)
+    }
+
+    @Test func 과목을_직접_고른_녹음은_다음_수업_안내를_하지_않는다() async throws {
+        let (_, second) = try addBackToBackClasses()
+        let clock = TestClock(date(2026, 3, 2, 9, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        controller.subjectChoice = .subject(second.persistentModelID)
+        try await controller.start()
+        clock.advance(by: 2 * 3600)
+
+        #expect(controller.nextClassNotice == nil)
+    }
+
+    @Test func 정지하면_다음_수업_안내가_사라진다() async throws {
+        _ = try addBackToBackClasses()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+        clock.advance(by: 75 * 60)
+        #expect(controller.nextClassNotice != nil)
+
+        _ = try controller.stop()
+
+        #expect(controller.nextClassNotice == nil)
+    }
+
     @Test func 시작_전에_고른_과목으로_저장한다() async throws {
         _ = try addSubjectWithSlot()
         let other = try SubjectManager(context: container.mainContext).add(name: "선형대수", color: .blue)

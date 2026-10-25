@@ -62,6 +62,20 @@ struct RecordingView: View {
                     .accessibilityIdentifier("classOverrunNotice")
             }
 
+            if let next = recording.nextClassNotice {
+                VStack(spacing: Design.Spacing.sm) {
+                    Label(next.message, systemImage: "bell")
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.primary)
+                        .accessibilityIdentifier("nextClassNotice")
+                    Button(next.buttonTitle) {
+                        Task { await recording.switchToNextClass() }
+                    }
+                    .buttonStyle(.pill)
+                    .accessibilityIdentifier("switchToNextClass")
+                }
+            }
+
             if let warning = recording.inputDeviceWarning {
                 Label(warning, systemImage: "exclamationmark.triangle")
                     .designText(.caption)

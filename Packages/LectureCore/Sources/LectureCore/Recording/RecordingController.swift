@@ -111,6 +111,10 @@ public final class RecordingController {
     private let overrunNotifier: (any NotificationScheduling)?
     private var classEnd: Date?
     private var overrunNotified = false
+    /// 녹음을 시작할 때 읽어 둔 시간표와 과목 (화면이 자주 다시 읽어도 매번 DB를 조회하지 않는다).
+    private var scheduleSnapshot: ClassSchedule<PersistentIdentifier>?
+    private var subjectsByID: [PersistentIdentifier: Subject] = [:]
+    private var nextClassNotifiedID: PersistentIdentifier?
     private let alertRaiser: RecordingAlertRaiser
     private var recordingInputDevice: AudioInputDevice?
     private let compressor: RecordingCompressor?
@@ -272,7 +276,7 @@ public final class RecordingController {
 
     /// 녹음 중인 수업이 끝난 지 10분이 지났을 때 화면에 보일 안내. 아직이거나 수업을 모르면 nil.
     public var overrunNotice: String? {
-        guard isRecording else { return nil }
+        guard isRecording, nextClassSubject == nil else { return nil }
         return ClassOverrunAdvice.notice(subjectName: currentSubjectName, classEnd: classEnd, now: now())
     }
 
@@ -283,6 +287,51 @@ public final class RecordingController {
         Log.recording.notice("수업이 끝난 뒤에도 녹음 중: \(notice, privacy: .public)")
         guard let overrunNotifier else { return }
         Task { await overrunNotifier.notify(title: "수업이 끝났습니다", body: notice) }
+    }
+
+    /// 녹음 중인 수업이 끝나고 다른 과목의 수업이 시작됐으면 그 과목. 아니면 nil.
+    /// 시간표에서 시작한 녹음(수업 종료 시각을 아는 녹음)만 본다. 과목을 직접 골랐거나 미분류인 녹음은 건드리지 않는다.
+    private var nextClassSubject: Subject? {
+        guard isRecording, let classEnd, let current = currentSubject, let scheduleSnapshot,
+              let id = scheduleSnapshot.nextClassStarted(
+                replacing: current.persistentModelID, classEnd: classEnd, now: now(), calendar: calendar)
+        else { return nil }
+        return subjectsByID[id]
+    }
+
+    /// "○○ 수업이 시작됐습니다"와 "정지하고 ○○ 녹음 시작" 버튼에 쓸 안내. 해당하지 않으면 nil.
+    public var nextClassNotice: NextClassNotice? {
+        nextClassSubject.map { NextClassNotice(subjectName: $0.name) }
+    }
+
+    /// 다음 수업이 시작됐으면 시스템 알림도 한 번 보낸다 (과목마다 한 번). 주기적으로 불린다.
+    public func checkNextClass() {
+        guard let next = nextClassSubject, nextClassNotifiedID != next.persistentModelID else { return }
+        nextClassNotifiedID = next.persistentModelID
+        let notice = NextClassNotice(subjectName: next.name)
+        Log.recording.notice("녹음 중 다음 수업 시작: \(next.name, privacy: .public)")
+        guard let overrunNotifier else { return }
+        Task { await overrunNotifier.notify(title: notice.notificationTitle, body: notice.notificationBody, identifier: "class-next") }
+    }
+
+    /// 지금 녹음을 정상 저장하고 다음 수업 과목으로 새 녹음을 바로 시작한다.
+    /// 정지에 실패하면 녹음을 그대로 이어 간다. 새 녹음을 시작하지 못하면 앞 녹음은 저장된 채로 오류를 알린다.
+    public func switchToNextClass() async {
+        guard let next = nextClassSubject else { return }
+        do {
+            try stop()
+        } catch {
+            errorMessage = error.errorDescription
+            return
+        }
+        subjectChoice = .subject(next.persistentModelID)
+        do {
+            try await start()
+            errorMessage = nil
+        } catch {
+            subjectChoice = .automatic
+            errorMessage = error.errorDescription
+        }
     }
 
     private func scheduledEnd(of subject: Subject, startedAt: Date) -> Date? {
@@ -327,6 +376,7 @@ public final class RecordingController {
                 self?.checkRecorderHealth()
                 self?.checkStorage()
                 self?.checkOverrun()
+                self?.checkNextClass()
             }
         }
     }
@@ -427,7 +477,11 @@ public final class RecordingController {
         recordingInputDevice = inputMonitor?.currentDevice()
         inputDeviceWarning = nil
         classEnd = subject.flatMap { scheduledEnd(of: $0, startedAt: startedAt) }
-        if !isContinuation { overrunNotified = false }
+        if !isContinuation {
+            overrunNotified = false
+            nextClassNotifiedID = nil
+        }
+        loadNextClassSnapshot()
         sleepPreventer?.begin(reason: "수업 녹음 중")
         onStarted?()
         do {
@@ -465,6 +519,8 @@ public final class RecordingController {
         recordingInputDevice = nil
         inputDeviceWarning = nil
         classEnd = nil
+        scheduleSnapshot = nil
+        subjectsByID = [:]
         let recording = Recording(
             title: Self.defaultTitle(subjectName: currentSubjectName, startedAt: startedAt, calendar: calendar) + (isStallContinuation ? Self.continuationTitleSuffix : ""),
             subject: currentSubject,
@@ -665,6 +721,19 @@ public final class RecordingController {
     /// 대기 화면에 보일 "지금 녹음하면 분류될 과목" 이름. 수업이 없으면 "미분류".
     public var expectedSubjectName: String {
         expectedSubject()?.name ?? SubjectManager.unclassifiedName
+    }
+
+    private func loadNextClassSnapshot() {
+        guard classEnd != nil, let (schedule, slots) = loadSchedule() else {
+            scheduleSnapshot = nil
+            subjectsByID = [:]
+            return
+        }
+        scheduleSnapshot = schedule
+        subjectsByID = Dictionary(
+            slots.compactMap { slot in slot.subject.map { ($0.persistentModelID, $0) } },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
     private func loadSchedule() -> (ClassSchedule<PersistentIdentifier>, [TimeSlot])? {

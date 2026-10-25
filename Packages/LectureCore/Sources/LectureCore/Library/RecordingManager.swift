@@ -21,6 +21,26 @@ public enum RecordingManagerError: Error, Equatable, LocalizedError {
     }
 }
 
+/// 여러 녹음을 한꺼번에 처리한 결과. 한 건이 실패해도 나머지는 계속하고, 실패한 제목을 모아 둔다.
+public struct RecordingBatchResult: Equatable, Sendable {
+    public var succeededCount = 0
+    public var failedTitles: [String] = []
+
+    public init(succeededCount: Int = 0, failedTitles: [String] = []) {
+        self.succeededCount = succeededCount
+        self.failedTitles = failedTitles
+    }
+
+    public var hasFailures: Bool { !failedTitles.isEmpty }
+
+    /// 실패한 건이 있을 때 보여 줄 안내. 모두 성공했으면 nil.
+    /// `done`은 한 일을 끝맺는 말이다 (예: "휴지통으로 이동했고", "옮겼고").
+    public func failureNotice(done: String) -> String? {
+        guard hasFailures else { return nil }
+        return "\(succeededCount)개를 \(done) \(failedTitles.count)개는 하지 못했습니다: " + failedTitles.joined(separator: ", ")
+    }
+}
+
 /// 녹음의 이름 변경·과목 이동·삭제를 맡는다. DB와 실제 파일 위치를 함께 바꾼다.
 @MainActor
 @Observable
@@ -161,6 +181,32 @@ public final class RecordingManager {
     /// 휴지통에서 되돌린 파일은 폴더 다시 읽기(3-35)로 목록에 되살릴 수 있다.
     public func trash(_ recording: Recording) throws {
         try remove(recording) { try storage.trashFile(at: $0) }
+    }
+
+    /// 여러 녹음을 휴지통으로 보낸다. 한 건이 실패해도 나머지는 계속하고, 실패한 제목을 결과에 모은다.
+    public func trash(_ recordings: [Recording]) -> RecordingBatchResult {
+        applyToEach(recordings) { try trash($0) }
+    }
+
+    /// 여러 녹음을 다른 과목(nil이면 미분류)으로 옮긴다. 한 건이 실패해도 나머지는 계속한다.
+    public func move(_ recordings: [Recording], to subject: Subject?) -> RecordingBatchResult {
+        applyToEach(recordings) { try move($0, to: subject) }
+    }
+
+    /// 건별 오류 문구는 결과의 실패 제목으로 대신 알리므로 `errorMessage`에는 남기지 않는다.
+    private func applyToEach(_ recordings: [Recording], _ action: (Recording) throws -> Void) -> RecordingBatchResult {
+        var result = RecordingBatchResult()
+        for recording in recordings {
+            let title = recording.title
+            do {
+                try action(recording)
+                result.succeededCount += 1
+            } catch {
+                result.failedTitles.append(title)
+            }
+        }
+        errorMessage = nil
+        return result
     }
 
     private func remove(_ recording: Recording, removingFile: (String) throws -> Void) throws {
