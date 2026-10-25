@@ -33,21 +33,27 @@ public final class PlaybackController {
     /// 이 간격(초) 안에 이미 북마크가 있으면 같은 자리로 보고 새로 만들지 않는다.
     public static let duplicateBookmarkWindow: TimeInterval = 1
 
+    /// 끝에서 이 시간(초) 안쪽까지 들었으면 다 들은 것으로 보고 다음엔 처음부터 듣는다.
+    public static let finishedMargin: TimeInterval = 3
+
     private let player: any AudioPlaying
     private let storage: RecordingStorage
     private let bookmarkManager: BookmarkManager?
     private let now: @MainActor () -> Date
+    private let savePosition: @MainActor () -> Void
 
     public init(
         player: any AudioPlaying,
         storage: RecordingStorage,
         bookmarkManager: BookmarkManager? = nil,
-        now: @escaping @MainActor () -> Date = { Date() }
+        now: @escaping @MainActor () -> Date = { Date() },
+        savePosition: @escaping @MainActor () -> Void = {}
     ) {
         self.player = player
         self.storage = storage
         self.bookmarkManager = bookmarkManager
         self.now = now
+        self.savePosition = savePosition
     }
 
     public var currentTime: TimeInterval { player.currentTime }
@@ -56,6 +62,7 @@ public final class PlaybackController {
     /// 녹음을 불러온다. 같은 녹음이면 다시 불러오지 않는다.
     public func select(_ recording: Recording?) {
         guard recording !== current else { return }
+        rememberPosition()
         player.stop()
         isPlaying = false
         current = nil
@@ -65,6 +72,7 @@ public final class PlaybackController {
             try player.load(storage.url(for: recording.relativePath))
             current = recording
             errorMessage = nil
+            resume(recording)
         } catch {
             Log.playback.error("녹음 불러오기 실패 \(recording.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
             errorMessage = "녹음 파일을 열 수 없습니다. 파일이 옮겨졌거나 지워졌을 수 있습니다."
@@ -80,6 +88,7 @@ public final class PlaybackController {
     public func pause() {
         player.pause()
         isPlaying = false
+        rememberPosition()
     }
 
     public func togglePlayPause() {
@@ -153,7 +162,26 @@ public final class PlaybackController {
 
     /// 재생이 끝났는지 화면 갱신 때 확인한다.
     public func refresh() {
+        let wasPlaying = isPlaying
         isPlaying = player.isPlaying
+        if wasPlaying && !isPlaying { rememberPosition() }
+    }
+
+    /// 저장해 둔 위치가 있으면 거기로 옮겨 둔다.
+    private func resume(_ recording: Recording) {
+        let position = recording.lastPlayedPosition
+        guard position > 0, position < player.duration - Self.finishedMargin else { return }
+        player.seek(to: position)
+    }
+
+    /// 지금 위치를 녹음에 적어 둔다. 처음이거나 끝에 가까우면 0으로 둔다.
+    private func rememberPosition() {
+        guard let current else { return }
+        let time = player.currentTime
+        let position = time <= 0 || time >= player.duration - Self.finishedMargin ? 0 : time
+        guard current.lastPlayedPosition != position else { return }
+        current.lastPlayedPosition = position
+        savePosition()
     }
 }
 #endif

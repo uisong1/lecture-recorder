@@ -16,6 +16,8 @@ public final class Recording {
     /// 녹음을 지우면 북마크도 함께 지운다.
     @Relationship(deleteRule: .cascade, inverse: \Bookmark.recording)
     public var bookmarks: [Bookmark] = []
+    /// 마지막으로 듣던 위치(초). 0이면 처음부터 듣는다.
+    public var lastPlayedPosition: TimeInterval = 0
 
     public init(title: String, subject: Subject?, startedAt: Date, duration: TimeInterval, relativePath: String) {
         self.title = title
