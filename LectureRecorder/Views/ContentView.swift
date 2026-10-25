@@ -48,7 +48,7 @@ struct ContentView: View {
                 }
                 switch sidebar {
                 case .library:
-                    RecordingListView(library: dependencies.library, playback: dependencies.playback)
+                    RecordingListView(library: dependencies.library, playback: dependencies.playback, manager: dependencies.manager)
                 default:
                     RecordingView(recording: dependencies.recording, playback: dependencies.playback)
                 }

@@ -71,4 +71,17 @@ public struct RecordingStorage: Sendable {
     public func prepareFolder(for relativePath: String) throws {
         try files.createDirectory(at: url(for: relativePath).deletingLastPathComponent())
     }
+
+    /// 파일을 다른 상대 경로로 옮긴다. 대상 폴더는 먼저 만든다.
+    public func moveFile(from oldPath: String, to newPath: String) throws {
+        try prepareFolder(for: newPath)
+        try files.moveItem(at: url(for: oldPath), to: url(for: newPath))
+    }
+
+    /// 파일을 지운다. 이미 없으면 지울 것이 없으므로 넘어간다.
+    public func removeFile(at relativePath: String) throws {
+        let target = url(for: relativePath)
+        guard files.fileExists(at: target) else { return }
+        try files.removeItem(at: target)
+    }
 }

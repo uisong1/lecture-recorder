@@ -1,5 +1,9 @@
 # PROGRESS
 
+## 2026-10-25 1-16 이름 변경 / 삭제 / 과목 이동
+- 한 일: `RecordingManager`(이름 변경·과목 이동·삭제, 파일과 DB 함께 처리)와 `RecordingStorage.moveFile/removeFile`, 목록 행 우클릭 메뉴(이름 변경 창, 삭제 확인 창, 과목 이동). 단위 테스트 9개. 결정은 DECISIONS.md에 기록.
+- 확인 필요: 우클릭 메뉴와 대화 상자는 Mac에서 직접 눌러 확인해 주세요.
+
 ## 2026-10-25 1-15 탐색 슬라이더와 배속
 - 한 일: `AudioPlaying`에 `rate`·`seek(to:)` 추가, `PlaybackController.seek/setRate`와 `PlaybackRate`(1.0/1.25/1.5/2.0), 목록 아래 `PlaybackBar`(슬라이더 + 배속 선택, DESIGN.md 토큰 사용). 단위 테스트 5개 추가.
 - 확인 필요: 실제 소리 속도와 슬라이더 드래그는 Mac에서 직접 확인해 주세요 (CI는 빌드·단위 테스트만).

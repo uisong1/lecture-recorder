@@ -18,6 +18,7 @@ final class AppDependencies {
     let recording: RecordingController
     let playback: PlaybackController
     let library: RecordingLibrary
+    let manager: RecordingManager
 
     init() {
         var problems: [String] = []
@@ -50,6 +51,7 @@ final class AppDependencies {
             )
         }
         library = RecordingLibrary(context: container.mainContext)
+        manager = RecordingManager(context: container.mainContext, storage: storage)
         playback = PlaybackController(player: SystemAudioPlayer(), storage: storage)
         do {
             let recovery = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal)
