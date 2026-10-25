@@ -8,5 +8,6 @@ public enum Log {
     public static let recording = Logger(subsystem: subsystem, category: "recording")
     public static let playback = Logger(subsystem: subsystem, category: "playback")
     public static let storage = Logger(subsystem: subsystem, category: "storage")
+    public static let app = Logger(subsystem: subsystem, category: "app")
 }
 #endif

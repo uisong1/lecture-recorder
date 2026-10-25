@@ -33,7 +33,7 @@ public final class PlaybackController {
     public private(set) var current: Recording?
     public private(set) var isPlaying = false
     public var errorMessage: String?
-    /// 고른 재생 속도. 다른 녹음을 골라도, 앱을 다시 켜도 유지한다.
+    /// 지금 재생 속도. 과목마다 마지막에 고른 속도를 기억하고, 정한 적 없는 과목(과 미분류)은 마지막으로 고른 속도를 쓴다. 앱을 다시 켜도 유지한다.
     public private(set) var rate: PlaybackRate
 
     /// 이 간격(초) 안에 이미 북마크가 있으면 같은 자리로 보고 새로 만들지 않는다.
@@ -101,8 +101,13 @@ public final class PlaybackController {
         self.allowsAdvance = allowsAdvance
         continuousPlayback = defaults.bool(forKey: Self.continuousPlaybackKey)
         // 저장된 값이 없거나(0) 알 수 없는 값이면 보통 속도로 시작한다.
-        rate = PlaybackRate(rawValue: defaults.float(forKey: Self.rateKey)) ?? .normal
+        let global = PlaybackRate(rawValue: defaults.float(forKey: Self.rateKey)) ?? .normal
+        globalRate = global
+        rate = global
     }
+
+    /// 과목에 기억해 둔 속도가 없을 때 쓰는, 마지막으로 고른 속도.
+    private var globalRate: PlaybackRate
 
     /// 목록에서 `current` 다음으로 틀 녹음. 재생할 수 없는 녹음은 건너뛴다.
     /// `current`가 목록에 없거나(검색 조건이 바뀌어 빠진 경우 등) 마지막이면 nil이다.
@@ -124,6 +129,7 @@ public final class PlaybackController {
         current = nil
         guard let recording else { return }
         do {
+            rate = recording.subject?.playbackRate ?? globalRate
             player.rate = rate.rawValue
             try player.load(storage.url(for: recording.relativePath))
             current = recording
@@ -174,10 +180,16 @@ public final class PlaybackController {
     public func skipForward() { skip(by: Self.skipInterval) }
     public func skipBackward() { skip(by: -Self.skipInterval) }
 
+    /// 속도를 바꾼다. 지금 녹음의 과목에 기억해 두고, 과목이 없는 녹음이나 기억이 없는 과목을 위해 전체 기본으로도 남긴다.
     public func setRate(_ newRate: PlaybackRate) {
         rate = newRate
+        globalRate = newRate
         player.rate = newRate.rawValue
         defaults.set(newRate.rawValue, forKey: Self.rateKey)
+        if let subject = current?.subject, subject.playbackRate != newRate {
+            subject.playbackRate = newRate
+            savePosition()
+        }
     }
 
     /// 불러온 녹음의 북마크. 시점 순서.
