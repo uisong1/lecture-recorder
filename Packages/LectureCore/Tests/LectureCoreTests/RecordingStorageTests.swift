@@ -138,7 +138,7 @@ import Testing
     }
 
     @Test func DS_Store만_있는_폴더는_비었다고_본다() throws {
-        let (storage, files) = try store(["예전과목/.DS_Store"])
+        let (storage, files) = try store(["예전과목/.DS_Store"], directories: ["예전과목"])
         #expect(storage.removeEmptyFolders() == 1)
         #expect(!files.isDirectory(at: storage.url(for: "예전과목")))
     }
