@@ -58,6 +58,46 @@ import Testing
         #expect(files.fileExists(at: storage.url(for: "자료구조/a.caf")))
     }
 
+    @Test func 내보내면_원본은_그대로_두고_복사본이_생긴다() throws {
+        let recording = addRecording("자료구조/a.m4a")
+        let destination = URL(filePath: "/tmp/내보내기/a.m4a")
+        try makeManager().export(recording, to: destination)
+        #expect(files.fileExists(at: destination))
+        #expect(files.fileExists(at: storage.url(for: "자료구조/a.m4a")))
+    }
+
+    @Test func 원본이_없으면_내보내지_않고_안내한다() throws {
+        let recording = addRecording("자료구조/a.m4a")
+        try files.removeItem(at: storage.url(for: "자료구조/a.m4a"))
+        let manager = makeManager()
+        #expect(throws: RecordingManagerError.fileMissing) { try manager.export(recording, to: URL(filePath: "/tmp/내보내기/a.m4a")) }
+        #expect(manager.errorMessage == "녹음 파일을 찾을 수 없습니다.")
+    }
+
+    @Test func 복사에_실패하면_이유를_알리고_원본은_남는다() throws {
+        let recording = addRecording("자료구조/a.m4a")
+        files.failNextCopy = true
+        let manager = makeManager()
+        #expect(throws: (any Error).self) { try manager.export(recording, to: URL(filePath: "/tmp/내보내기/a.m4a")) }
+        #expect(manager.errorMessage?.hasPrefix("녹음을 저장하지 못했습니다") == true)
+        #expect(files.fileExists(at: storage.url(for: "자료구조/a.m4a")))
+        #expect(!files.fileExists(at: URL(filePath: "/tmp/내보내기/a.m4a")))
+    }
+
+    @Test func 저장_대화상자의_기본_이름은_제목과_확장자다() throws {
+        let recording = addRecording("자료구조/a.m4a")
+        recording.title = "자료구조 3/2 1주차"
+        #expect(makeManager().suggestedExportName(for: recording) == "자료구조 3-2 1주차.m4a")
+        let working = addRecording("자료구조/b.caf")
+        working.title = "작업 중"
+        #expect(makeManager().suggestedExportName(for: working) == "작업 중.caf")
+    }
+
+    @Test func 파일_위치를_돌려준다() throws {
+        let recording = addRecording("자료구조/a.m4a")
+        #expect(makeManager().fileURL(for: recording) == storage.url(for: "자료구조/a.m4a"))
+    }
+
     @Test func 미분류로_옮길_수_있다() throws {
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         let recording = addRecording("자료구조/a.m4a", subject: ds)

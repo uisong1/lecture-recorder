@@ -1,3 +1,4 @@
+import AppKit
 import LectureCore
 import SwiftUI
 
@@ -50,6 +51,11 @@ struct RecordingListView: View {
                             Button(RecordingStorage.unclassifiedFolder) { perform { try manager.move(recording, to: nil) } }
                         }
                         Divider()
+                        Button("Finder에서 보기") {
+                            NSWorkspace.shared.activateFileViewerSelecting([manager.fileURL(for: recording)])
+                        }
+                        Button("다른 곳에 저장…") { export(recording) }
+                        Divider()
                         Button("삭제…", role: .destructive) { deleting = recording }
                     }
                 }
@@ -101,6 +107,15 @@ struct RecordingListView: View {
                     .padding(8)
             }
         }
+    }
+
+    /// 저장 위치를 고르는 대화상자를 열고 녹음 파일을 복사한다.
+    private func export(_ recording: Recording) {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = manager.suggestedExportName(for: recording)
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let destination = panel.url else { return }
+        perform { try manager.export(recording, to: destination) }
     }
 
     /// 동작을 실행하고 목록을 다시 읽는다. 오류 문구는 `manager.errorMessage`에 남는다.
