@@ -1,10 +1,18 @@
 import LectureCore
+import AppKit
 import SwiftUI
 
 @main
 struct LectureRecorderApp: App {
-    @State private var dependencies = AppDependencies()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var dependencies: AppDependencies
     private let microphonePermission = SystemMicrophonePermission()
+
+    init() {
+        let dependencies = AppDependencies()
+        _dependencies = State(initialValue: dependencies)
+        AppDelegate.quitGuard = QuitGuard(target: dependencies.recording)
+    }
 
     var body: some Scene {
         WindowGroup("수업 녹음") {

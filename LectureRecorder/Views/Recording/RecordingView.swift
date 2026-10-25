@@ -72,6 +72,13 @@ struct RecordingView: View {
                 .accessibilityIdentifier("bookmarkButton")
             }
 
+            if recording.isRecording {
+                Text("창을 닫아도 녹음은 계속됩니다. Dock 아이콘을 누르면 창이 다시 열립니다.")
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.inkMuted)
+                    .accessibilityIdentifier("windowCloseHint")
+            }
+
             if let message = recording.errorMessage {
                 Label(message, systemImage: "exclamationmark.triangle")
                     .designText(.caption)
