@@ -79,16 +79,16 @@ final class AppDependencies {
             player: SystemAudioPlayer(),
             storage: storage,
             bookmarkManager: BookmarkManager(context: context),
-            queue: { library.recordings },
-            isPlayable: { manager.status(for: $0).isPlayable },
-            allowsAdvance: { !recording.isRecording },
             savePosition: {
                 do {
                     try context.save()
                 } catch {
                     Log.playback.error("재생 위치 저장 실패: \(error.localizedDescription, privacy: .public)")
                 }
-            }
+            },
+            queue: { library.recordings },
+            isPlayable: { manager.status(for: $0).isPlayable },
+            allowsAdvance: { !recording.isRecording }
         )
         do {
             let recovery = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal)
