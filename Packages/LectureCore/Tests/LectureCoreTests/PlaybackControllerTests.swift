@@ -345,6 +345,215 @@ import Testing
         #expect(!recording.isUnplayed)
     }
 
+    // MARK: 이어서 재생
+
+    func makeDefaults() throws -> UserDefaults {
+        try #require(UserDefaults(suiteName: "PlaybackControllerTests-\(UUID().uuidString)"))
+    }
+
+    func makeRecordings(_ count: Int) -> [Recording] {
+        (0..<count).map { makeRecording("과목/\($0).m4a") }
+    }
+
+    /// 목록을 보여 주는 중이라고 가정한 컨트롤러. 이어서 재생은 켠 상태다.
+    func makeQueueController(
+        _ list: @escaping @MainActor () -> [Recording],
+        defaults: UserDefaults? = nil,
+        isPlayable: @escaping @MainActor (Recording) -> Bool = { _ in true },
+        allowsAdvance: @escaping @MainActor () -> Bool = { true }
+    ) throws -> PlaybackController {
+        let controller = PlaybackController(
+            player: player,
+            storage: RecordingStorage(root: root, files: FakeFileStore()),
+            defaults: try defaults ?? makeDefaults(),
+            queue: list,
+            isPlayable: isPlayable,
+            allowsAdvance: allowsAdvance
+        )
+        controller.continuousPlayback = true
+        return controller
+    }
+
+    /// 지금 녹음이 끝까지 재생되어 재생기가 스스로 멈춘 상황을 만든다.
+    func finishPlayback(_ controller: PlaybackController) {
+        player.currentTime = player.duration
+        player.isPlaying = false
+        controller.refresh()
+    }
+
+    @Test func 이어서_재생은_기본이_꺼져_있다() throws {
+        let controller = PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()), defaults: try makeDefaults())
+        #expect(!controller.continuousPlayback)
+    }
+
+    @Test func 이어서_재생_선택은_다시_켜도_기억한다() throws {
+        let defaults = try makeDefaults()
+        let first = PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()), defaults: defaults)
+        first.continuousPlayback = true
+        let second = PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()), defaults: defaults)
+        #expect(second.continuousPlayback)
+        second.continuousPlayback = false
+        let third = PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()), defaults: defaults)
+        #expect(!third.continuousPlayback)
+    }
+
+    @Test func 녹음이_끝나면_목록의_다음_녹음을_이어서_튼다() throws {
+        let list = makeRecordings(3)
+        let controller = try makeQueueController { list }
+        controller.select(list[0])
+        controller.play()
+        finishPlayback(controller)
+        #expect(controller.current === list[1])
+        #expect(controller.isPlaying)
+        #expect(player.loadedURLs.last?.lastPathComponent == "1.m4a")
+    }
+
+    @Test func 다음_녹음도_끝나면_그_다음으로_계속_넘어간다() throws {
+        let list = makeRecordings(3)
+        let controller = try makeQueueController { list }
+        controller.select(list[0])
+        controller.play()
+        finishPlayback(controller)
+        finishPlayback(controller)
+        #expect(controller.current === list[2])
+        #expect(controller.isPlaying)
+    }
+
+    @Test func 마지막_녹음이_끝나면_멈춘다() throws {
+        let list = makeRecordings(2)
+        let controller = try makeQueueController { list }
+        controller.select(list[1])
+        controller.play()
+        finishPlayback(controller)
+        #expect(controller.current === list[1])
+        #expect(!controller.isPlaying)
+    }
+
+    @Test func 토글이_꺼져_있으면_이어_틀지_않는다() throws {
+        let list = makeRecordings(2)
+        let controller = try makeQueueController { list }
+        controller.continuousPlayback = false
+        controller.select(list[0])
+        controller.play()
+        finishPlayback(controller)
+        #expect(controller.current === list[0])
+        #expect(!controller.isPlaying)
+    }
+
+    @Test func 파일이_없는_녹음은_건너뛴다() throws {
+        let list = makeRecordings(4)
+        let controller = try makeQueueController({ list }, isPlayable: { $0 !== list[1] && $0 !== list[2] })
+        controller.select(list[0])
+        controller.play()
+        finishPlayback(controller)
+        #expect(controller.current === list[3])
+        #expect(controller.isPlaying)
+    }
+
+    @Test func 뒤에_재생할_수_있는_녹음이_하나도_없으면_멈춘다() throws {
+        let list = makeRecordings(3)
+        let controller = try makeQueueController({ list }, isPlayable: { $0 === list[0] })
+        controller.select(list[0])
+        controller.play()
+        finishPlayback(controller)
+        #expect(controller.current === list[0])
+        #expect(!controller.isPlaying)
+    }
+
+    @Test func 목록이_비어_있으면_멈춘다() throws {
+        let recording = makeRecording()
+        let controller = try makeQueueController { [] }
+        controller.select(recording)
+        controller.play()
+        finishPlayback(controller)
+        #expect(controller.current === recording)
+        #expect(!controller.isPlaying)
+    }
+
+    @Test func 지금_녹음이_목록에서_빠졌으면_이어_틀지_않는다() throws {
+        let list = makeRecordings(3)
+        let controller = try makeQueueController { Array(list.dropFirst()) }
+        controller.select(list[0])
+        controller.play()
+        finishPlayback(controller)
+        #expect(controller.current === list[0])
+        #expect(!controller.isPlaying)
+    }
+
+    @Test func 목록이_바뀌면_바뀐_순서의_다음_녹음을_튼다() throws {
+        let list = makeRecordings(3)
+        var shown = list
+        let controller = try makeQueueController { shown }
+        controller.select(list[0])
+        controller.play()
+        shown = [list[0], list[2], list[1]]
+        finishPlayback(controller)
+        #expect(controller.current === list[2])
+    }
+
+    @Test func 사용자가_멈춘_녹음은_이어_틀지_않는다() throws {
+        let list = makeRecordings(2)
+        let controller = try makeQueueController { list }
+        controller.select(list[0])
+        controller.play()
+        controller.pause()
+        controller.refresh()
+        #expect(controller.current === list[0])
+        #expect(!controller.isPlaying)
+    }
+
+    @Test func 사용자가_다른_녹음을_고르면_그_녹음에_머문다() throws {
+        let list = makeRecordings(3)
+        let controller = try makeQueueController { list }
+        controller.select(list[0])
+        controller.play()
+        controller.select(list[2])
+        controller.refresh()
+        #expect(controller.current === list[2])
+        #expect(!controller.isPlaying)
+    }
+
+    @Test func 녹음_중에는_이어_틀지_않는다() throws {
+        let list = makeRecordings(2)
+        var recording = false
+        let controller = try makeQueueController({ list }, allowsAdvance: { !recording })
+        controller.select(list[0])
+        controller.play()
+        recording = true
+        finishPlayback(controller)
+        #expect(controller.current === list[0])
+        #expect(!controller.isPlaying)
+    }
+
+    @Test func 다음_녹음을_열지_못하면_오류를_보이고_멈춘다() throws {
+        let list = makeRecordings(2)
+        let controller = try makeQueueController { list }
+        controller.select(list[0])
+        controller.play()
+        player.loadError = CocoaError(.fileNoSuchFile)
+        finishPlayback(controller)
+        #expect(controller.current == nil)
+        #expect(!controller.isPlaying)
+        #expect(controller.errorMessage != nil)
+    }
+
+    @Test func 이어_튼_녹음은_들은_것으로_기록된다() throws {
+        let list = makeRecordings(2)
+        let controller = try makeQueueController { list }
+        controller.select(list[0])
+        controller.play()
+        finishPlayback(controller)
+        #expect(!list[1].isUnplayed)
+    }
+
+    @Test func 다음_녹음_고르기는_현재_녹음_바로_뒤의_재생_가능한_녹음이다() {
+        let list = makeRecordings(3)
+        #expect(PlaybackController.nextRecording(after: list[0], in: list, isPlayable: { _ in true }) === list[1])
+        #expect(PlaybackController.nextRecording(after: list[2], in: list, isPlayable: { _ in true }) == nil)
+        #expect(PlaybackController.nextRecording(after: list[0], in: list, isPlayable: { $0 === list[2] }) === list[2])
+        #expect(PlaybackController.nextRecording(after: list[0], in: [], isPlayable: { _ in true }) == nil)
+    }
+
     // MARK: 건너뛰기
 
     @Test func 앞으로_건너뛰면_15초_뒤로_간다() {

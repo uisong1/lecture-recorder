@@ -39,24 +39,55 @@ public final class PlaybackController {
     /// 끝에서 이 시간(초) 안쪽까지 들었으면 다 들은 것으로 보고 다음엔 처음부터 듣는다.
     public static let finishedMargin: TimeInterval = 3
 
+    /// 켜면 한 녹음이 끝났을 때 목록의 다음 녹음을 이어서 튼다. 선택은 기억한다.
+    public var continuousPlayback: Bool {
+        didSet { defaults.set(continuousPlayback, forKey: Self.continuousPlaybackKey) }
+    }
+
+    static let continuousPlaybackKey = "continuousPlayback"
+
     private let player: any AudioPlaying
     private let storage: RecordingStorage
     private let bookmarkManager: BookmarkManager?
     private let now: @MainActor () -> Date
     private let savePosition: @MainActor () -> Void
+    private let defaults: UserDefaults
+    private let queue: @MainActor () -> [Recording]
+    private let isPlayable: @MainActor (Recording) -> Bool
+    private let allowsAdvance: @MainActor () -> Bool
 
+    /// - Parameters:
+    ///   - queue: 지금 화면에 보이는 목록(정렬·필터 반영). 이어서 재생할 때 다음 녹음을 여기서 고른다.
+    ///   - isPlayable: 파일이 있어 재생할 수 있는 녹음인지. 아니면 건너뛴다.
+    ///   - allowsAdvance: false면 이어서 재생하지 않는다 (예: 녹음 중).
     public init(
         player: any AudioPlaying,
         storage: RecordingStorage,
         bookmarkManager: BookmarkManager? = nil,
         now: @escaping @MainActor () -> Date = { Date() },
-        savePosition: @escaping @MainActor () -> Void = {}
+        savePosition: @escaping @MainActor () -> Void = {},
+        defaults: UserDefaults = .standard,
+        queue: @escaping @MainActor () -> [Recording] = { [] },
+        isPlayable: @escaping @MainActor (Recording) -> Bool = { _ in true },
+        allowsAdvance: @escaping @MainActor () -> Bool = { true }
     ) {
         self.player = player
         self.storage = storage
         self.bookmarkManager = bookmarkManager
         self.now = now
         self.savePosition = savePosition
+        self.defaults = defaults
+        self.queue = queue
+        self.isPlayable = isPlayable
+        self.allowsAdvance = allowsAdvance
+        continuousPlayback = defaults.bool(forKey: Self.continuousPlaybackKey)
+    }
+
+    /// 목록에서 `current` 다음으로 틀 녹음. 재생할 수 없는 녹음은 건너뛴다.
+    /// `current`가 목록에 없거나(검색 조건이 바뀌어 빠진 경우 등) 마지막이면 nil이다.
+    public static func nextRecording(after current: Recording, in list: [Recording], isPlayable: (Recording) -> Bool) -> Recording? {
+        guard let index = list.firstIndex(where: { $0 === current }) else { return nil }
+        return list[(index + 1)...].first(where: isPlayable)
     }
 
     public var currentTime: TimeInterval { player.currentTime }
@@ -192,7 +223,25 @@ public final class PlaybackController {
     public func refresh() {
         let wasPlaying = isPlaying
         isPlaying = player.isPlaying
-        if wasPlaying && !isPlaying { rememberPosition() }
+        guard wasPlaying && !isPlaying else { return }
+        let finished = hasReachedEnd
+        rememberPosition()
+        // 사용자가 멈추거나 다른 녹음을 고르면 `isPlaying`이 먼저 꺼지므로 여기에 오지 않는다. 끝까지 재생된 경우만 이어 튼다.
+        if finished { advanceToNextRecording() }
+    }
+
+    /// 재생이 스스로 멈췄을 때 끝까지 들은 것인지 (끝 가까이거나 처음 위치로 돌아감).
+    private var hasReachedEnd: Bool {
+        let time = player.currentTime
+        return time <= 0 || time >= player.duration - Self.finishedMargin
+    }
+
+    /// 이어서 재생이 켜져 있으면 목록의 다음 녹음을 불러와 튼다. 마지막이거나 녹음 중이면 멈춘 채 둔다.
+    private func advanceToNextRecording() {
+        guard continuousPlayback, allowsAdvance(), let current,
+              let next = Self.nextRecording(after: current, in: queue(), isPlayable: isPlayable) else { return }
+        select(next)
+        play()
     }
 
     /// 저장해 둔 위치가 있으면 거기로 옮겨 둔다.

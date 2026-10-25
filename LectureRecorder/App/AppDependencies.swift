@@ -72,6 +72,9 @@ final class AppDependencies {
         library = RecordingLibrary(context: container.mainContext)
         manager = RecordingManager(context: container.mainContext, storage: storage)
         let context = container.mainContext
+        let library = library
+        let manager = manager
+        let recording = recording
         playback = PlaybackController(
             player: SystemAudioPlayer(),
             storage: storage,
@@ -82,7 +85,10 @@ final class AppDependencies {
                 } catch {
                     Log.playback.error("재생 위치 저장 실패: \(error.localizedDescription, privacy: .public)")
                 }
-            }
+            },
+            queue: { library.recordings },
+            isPlayable: { manager.status(for: $0).isPlayable },
+            allowsAdvance: { !recording.isRecording }
         )
         do {
             let recovery = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal)
@@ -95,7 +101,6 @@ final class AppDependencies {
             recoveryNotice = nil
         }
         let migrator = RecordingMigrator(context: container.mainContext, storage: storage)
-        let recording = recording
         // 예전 폴더 구조의 녹음을 학기/과목 폴더로 옮긴다. 복사해 확인한 뒤에만 원본을 지우고, 실패하면 그대로 둔다.
         // 옮기고 남은 빈 예전 폴더는 정리한다. 녹음이 막 시작된 폴더를 지우지 않도록 녹음 중이면 건너뛴다.
         Task {
@@ -103,7 +108,6 @@ final class AppDependencies {
         }
         let subjects = subjects
         let schedule = schedule
-        let library = library
         rescan = RecordingRescanModel(
             rescanner: RecordingRescanner(context: context, storage: storage, durations: SystemAudioDurationReader()),
             activePaths: { recording.currentRelativePath.map { [$0] } ?? [] },
