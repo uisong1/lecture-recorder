@@ -99,6 +99,13 @@ import Testing
         let recovered = try #require(try makeRecovery(journal: InMemoryRecordingJournal(pending: p)).recoverIfNeeded())
         #expect(recovered.sortedBookmarks.map(\.time) == [30, 45, 60])
     }
+
+    @Test func 되살린_북마크에_메모도_되살린다() throws {
+        let p = PendingRecording(relativePath: "자료구조/2026-03-02_1000.caf", subjectName: nil, startedAt: startedAt, bookmarkTimes: [30, 45, 50], bookmarkNotes: ["정의", ""])
+        addFile(p, bytes: 1_920_000)
+        let recovered = try #require(try makeRecovery(journal: InMemoryRecordingJournal(pending: p)).recoverIfNeeded())
+        #expect(recovered.sortedBookmarks.map(\.note) == ["정의", "", ""])
+    }
 }
 
 @Suite struct FileRecordingJournalTests {
@@ -119,6 +126,7 @@ import Testing
         let json = #"{"relativePath":"a/b.m4a","startedAt":0}"#
         let decoded = try JSONDecoder().decode(PendingRecording.self, from: Data(json.utf8))
         #expect(decoded.bookmarkTimes.isEmpty)
+        #expect(decoded.bookmarkNotes.isEmpty)
         #expect(decoded.subjectName == nil)
     }
 
@@ -126,7 +134,7 @@ import Testing
         let url = FileManager.default.temporaryDirectory.appending(path: "journal-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: url) }
         let journal = FileRecordingJournal(url: url)
-        let p = PendingRecording(relativePath: "a/b.caf", subjectName: "자료구조", startedAt: Date(timeIntervalSince1970: 1_000), bookmarkTimes: [12.5, 99])
+        let p = PendingRecording(relativePath: "a/b.caf", subjectName: "자료구조", startedAt: Date(timeIntervalSince1970: 1_000), bookmarkTimes: [12.5, 99], bookmarkNotes: ["메모", ""])
         try journal.save(p)
         #expect(journal.load() == p)
     }

@@ -150,6 +150,10 @@ struct RecordingView: View {
             }
 
             if recording.isRecording {
+                BookmarkNoteField(recording: recording)
+            }
+
+            if recording.isRecording {
                 Text(BatteryAdvice.lidNotice)
                     .designText(.caption)
                     .foregroundStyle(Design.Palette.inkMuted)
