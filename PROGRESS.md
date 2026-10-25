@@ -68,3 +68,7 @@
 - 한 일: 1-10 일시정지 / 재개 (`AudioRecording.pause/resume`, `RecordingController.pause/resume/togglePause`, 녹음 화면 버튼 ⌘P, 단위 테스트 6개). CI(Linux + macOS) 통과 확인.
 - 막힌 것: 없음. (이 환경엔 swift/docker가 없어 CI로만 검증)
 - 다음 실행: 1-11 마이크 권한 거부 처리부터.
+
+## 2026-10-25 3-32 파일 내보내기 권한
+- 한 일: entitlements에 `files.user-selected.read-write` 추가, `scripts/check-entitlements.sh`(필요·금지 키 점검)를 Linux·macOS CI에 연결, macOS CI는 빌드된 앱의 서명 권한도 확인.
+- Mac에서 확인 필요: 녹음 우클릭 → "다른 곳에 저장…"으로 바탕화면 등을 골라 실제로 파일이 생기는지 한 번 눌러 보세요. 시간표 이미지 열기도 같은 권한을 씁니다.

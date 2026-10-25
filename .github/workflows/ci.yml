@@ -12,6 +12,8 @@ jobs:
     container: swift:6.1-noble
     steps:
       - uses: actions/checkout@v5
+      - name: 샌드박스 권한 점검
+        run: scripts/check-entitlements.sh
       - name: swift test
         run: |
           if [ -d Packages/LectureCore ]; then
