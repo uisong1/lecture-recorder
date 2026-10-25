@@ -15,6 +15,12 @@ struct RecordingView: View {
                         .designText(.tagline)
                         .foregroundStyle(Design.Palette.ink)
                         .accessibilityIdentifier("recordingSubject")
+                    if !recording.isRecording {
+                        Text("지금 녹음하면: \(recording.expectedSubjectName)")
+                            .designText(.caption)
+                            .foregroundStyle(Design.Palette.inkMuted)
+                            .accessibilityIdentifier("expectedSubject")
+                    }
                     Text(recording.elapsedText)
                         .font(.system(size: 56, weight: .semibold))
                         .tracking(-0.28)
