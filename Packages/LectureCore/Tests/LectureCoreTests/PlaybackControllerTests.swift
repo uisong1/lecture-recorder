@@ -8,8 +8,10 @@ import Testing
     let player = FakeAudioPlayer()
     let root = URL(filePath: "/tmp/LectureRecorderTests/Recordings", directoryHint: .isDirectory)
 
+    /// 속도·이어서 재생 선택이 테스트끼리 섞이지 않게 매번 새 저장소를 쓴다.
     func makeController() -> PlaybackController {
-        PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()))
+        let defaults = UserDefaults(suiteName: "PlaybackControllerTests-\(UUID().uuidString)") ?? .standard
+        return PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()), defaults: defaults)
     }
 
     func makeRecording(_ path: String = "자료구조/2026-03-02_1000.m4a") -> Recording {
@@ -98,8 +100,9 @@ import Testing
         #expect(player.currentTime == 0)
     }
 
-    @Test func 배속은_네_단계를_고를_수_있다() {
-        #expect(PlaybackRate.allCases.map(\.rawValue) == [1.0, 1.25, 1.5, 2.0])
+    @Test func 배속은_일곱_단계를_고를_수_있다() {
+        #expect(PlaybackRate.allCases.map(\.rawValue) == [0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0])
+        #expect(PlaybackRate.allCases.map(\.label) == ["0.75배", "1.0배", "1.25배", "1.5배", "2.0배", "2.5배", "3.0배"])
         let controller = makeController()
         controller.select(makeRecording())
         for rate in PlaybackRate.allCases {
@@ -116,6 +119,34 @@ import Testing
         controller.select(makeRecording("a/2.m4a"))
         #expect(controller.rate == .x150)
         #expect(player.rate == 1.5)
+    }
+
+    @Test func 고른_배속은_앱을_다시_켜도_기억한다() throws {
+        let defaults = try makeDefaults()
+        for rate in PlaybackRate.allCases {
+            let first = PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()), defaults: defaults)
+            first.setRate(rate)
+            let second = PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()), defaults: defaults)
+            #expect(second.rate == rate)
+        }
+    }
+
+    @Test func 기억한_배속은_녹음을_불러올_때_플레이어에_전달된다() throws {
+        let defaults = try makeDefaults()
+        PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()), defaults: defaults).setRate(.x250)
+        player.rate = 1
+        let controller = PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()), defaults: defaults)
+        controller.select(makeRecording())
+        #expect(player.rate == 2.5)
+    }
+
+    @Test func 저장된_배속이_없거나_이상하면_보통_속도다() throws {
+        let fresh = PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()), defaults: try makeDefaults())
+        #expect(fresh.rate == .normal)
+        let defaults = try makeDefaults()
+        defaults.set(Float(1.7), forKey: PlaybackController.rateKey)
+        let odd = PlaybackController(player: player, storage: RecordingStorage(root: root, files: FakeFileStore()), defaults: defaults)
+        #expect(odd.rate == .normal)
     }
 
     func addBookmarks(_ times: [TimeInterval], to recording: Recording) {

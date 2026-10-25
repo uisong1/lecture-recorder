@@ -4,17 +4,23 @@ import Observation
 
 /// 고를 수 있는 재생 속도.
 public enum PlaybackRate: Float, CaseIterable, Sendable {
+    case x075 = 0.75
     case normal = 1.0
     case x125 = 1.25
     case x150 = 1.5
     case x200 = 2.0
+    case x250 = 2.5
+    case x300 = 3.0
 
     public var label: String {
         switch self {
+        case .x075: "0.75배"
         case .normal: "1.0배"
         case .x125: "1.25배"
         case .x150: "1.5배"
         case .x200: "2.0배"
+        case .x250: "2.5배"
+        case .x300: "3.0배"
         }
     }
 }
@@ -27,8 +33,8 @@ public final class PlaybackController {
     public private(set) var current: Recording?
     public private(set) var isPlaying = false
     public var errorMessage: String?
-    /// 고른 재생 속도. 다른 녹음을 골라도 유지한다.
-    public private(set) var rate: PlaybackRate = .normal
+    /// 고른 재생 속도. 다른 녹음을 골라도, 앱을 다시 켜도 유지한다.
+    public private(set) var rate: PlaybackRate
 
     /// 이 간격(초) 안에 이미 북마크가 있으면 같은 자리로 보고 새로 만들지 않는다.
     public static let duplicateBookmarkWindow: TimeInterval = 1
@@ -45,6 +51,7 @@ public final class PlaybackController {
     }
 
     static let continuousPlaybackKey = "continuousPlayback"
+    static let rateKey = "playbackRate"
 
     private let player: any AudioPlaying
     private let storage: RecordingStorage
@@ -81,6 +88,8 @@ public final class PlaybackController {
         self.isPlayable = isPlayable
         self.allowsAdvance = allowsAdvance
         continuousPlayback = defaults.bool(forKey: Self.continuousPlaybackKey)
+        // 저장된 값이 없거나(0) 알 수 없는 값이면 보통 속도로 시작한다.
+        rate = PlaybackRate(rawValue: defaults.float(forKey: Self.rateKey)) ?? .normal
     }
 
     /// 목록에서 `current` 다음으로 틀 녹음. 재생할 수 없는 녹음은 건너뛴다.
@@ -155,6 +164,7 @@ public final class PlaybackController {
     public func setRate(_ newRate: PlaybackRate) {
         rate = newRate
         player.rate = newRate.rawValue
+        defaults.set(newRate.rawValue, forKey: Self.rateKey)
     }
 
     /// 불러온 녹음의 북마크. 시점 순서.
