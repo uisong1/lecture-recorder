@@ -26,7 +26,11 @@ final class AppDependencies {
     init() {
         var problems: [String] = []
         let container = Self.makeContainer(problems: &problems)
-        let storage = RecordingStorage(root: Self.makeRecordingsRoot(problems: &problems))
+        // UI 테스트에서는 사용자의 실제 휴지통 대신 임시 폴더로 옮긴다.
+        let files: any FileStoring = Self.isUITesting
+            ? LocalFileStore(trashDirectory: FileManager.default.temporaryDirectory.appending(path: "LectureRecorder/FakeTrash", directoryHint: .isDirectory))
+            : LocalFileStore()
+        let storage = RecordingStorage(root: Self.makeRecordingsRoot(problems: &problems), files: files)
 
         let journal: any RecordingJournaling = Self.isUITesting
             ? InMemoryRecordingJournal()
