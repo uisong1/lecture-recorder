@@ -69,6 +69,13 @@ struct RecordingView: View {
                     .accessibilityIdentifier("recordingError")
             }
 
+            if let notice = recording.interruptionNotice, !recording.isRecording {
+                Label(notice, systemImage: "moon.zzz")
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.inkMuted)
+                    .accessibilityIdentifier("interruptionNotice")
+            }
+
             if let saved = recording.lastSaved, !recording.isRecording {
                 HStack(spacing: Design.Spacing.sm) {
                     Text("저장됨: \(saved.title)")
