@@ -20,8 +20,15 @@ final class FakeFileStore: FileStoring, @unchecked Sendable {
 
     func add(_ url: URL) { lock.withLock { _ = paths.insert(url.standardizedFileURL.path) } }
 
+    /// `fileExists`를 부른 횟수 (불필요한 파일 확인이 없는지 볼 때 쓴다).
+    var fileExistsCalls: Int { lock.withLock { existsCalls } }
+    private var existsCalls = 0
+
     func fileExists(at url: URL) -> Bool {
-        lock.withLock { paths.contains(url.standardizedFileURL.path) }
+        lock.withLock {
+            existsCalls += 1
+            return paths.contains(url.standardizedFileURL.path)
+        }
     }
 
     func createDirectory(at url: URL) throws {

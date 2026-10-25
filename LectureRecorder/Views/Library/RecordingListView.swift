@@ -26,7 +26,7 @@ struct RecordingListView: View {
                     .accessibilityIdentifier("emptyRecordings")
             } else {
                 List(library.recordings) { recording in
-                    let status = manager.status(for: recording)
+                    let status = library.rowStatus(for: recording, using: manager)
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(recording.title)
