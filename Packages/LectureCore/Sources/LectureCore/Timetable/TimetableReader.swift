@@ -20,6 +20,10 @@ public struct TextObservation: Equatable, Sendable {
     public var centerY: Double { y + height / 2 }
 }
 
+/// 앱에서 Vision을 함께 import하면 `TextObservation`이 Vision의 같은 이름과 겹친다 (모듈 이름 `LectureCore`는 같은 이름의 enum에 가려져 붙일 수 없다).
+/// 그럴 때 쓰는 다른 이름.
+public typealias TimetableTextObservation = TextObservation
+
 /// 이미지 한 점의 색.
 public struct RGB: Equatable, Sendable {
     public let r: UInt8
