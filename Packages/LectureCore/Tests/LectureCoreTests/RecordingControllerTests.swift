@@ -120,7 +120,7 @@ final class TestClock {
         let saved = try controller.stop()
 
         #expect(saved.subject?.name == "선형대수")
-        #expect(saved.relativePath.hasPrefix("선형대수/"))
+        #expect(saved.relativePath.hasPrefix("학기 미정/선형대수/"))
     }
 
     @Test func 수업_시간에도_미분류를_고를_수_있다() async throws {
