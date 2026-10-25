@@ -4,7 +4,7 @@ extension XCUIApplication {
     /// 테스트용 설정으로 앱을 띄운다.
     static func launchForTesting() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-UITesting", "-ApplePersistenceIgnoreState", "YES"]
+        app.launchArguments = ["-UITesting"]
         app.launch()
         return app
     }
