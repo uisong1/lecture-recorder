@@ -17,6 +17,7 @@ final class AppDependencies {
     let schedule: ScheduleManager
     let recording: RecordingController
     let playback: PlaybackController
+    let library: RecordingLibrary
 
     init() {
         var problems: [String] = []
@@ -57,6 +58,7 @@ final class AppDependencies {
             problems.append("꺼진 녹음을 되살리지 못했습니다: \(error.localizedDescription)")
             recoveryNotice = nil
         }
+        library = RecordingLibrary(context: container.mainContext)
         startupError = problems.isEmpty ? nil : problems.joined(separator: "\n")
     }
 

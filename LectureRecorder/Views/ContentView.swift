@@ -17,9 +17,20 @@ struct ContentView: View {
                     .padding(8)
                     .accessibilityIdentifier("recoveryNotice")
             }
-            RecordingView(recording: dependencies.recording, playback: dependencies.playback)
+            NavigationSplitView {
+                LibraryView(library: dependencies.library, subjects: dependencies.subjects)
+            } detail: {
+                VStack(spacing: 0) {
+                    RecordingView(recording: dependencies.recording, playback: dependencies.playback)
+                    Divider()
+                    RecordingListView(library: dependencies.library)
+                        .frame(minHeight: 160)
+                }
+            }
+            .onChange(of: dependencies.recording.lastSaved?.persistentModelID) { dependencies.library.reload() }
+            .onChange(of: dependencies.subjects.subjects.count) { dependencies.library.reload() }
         }
-        .frame(minWidth: 600, minHeight: 400)
+        .frame(minWidth: 800, minHeight: 600)
         .toolbar {
             SettingsLink {
                 Label("과목과 시간표 설정", systemImage: "gearshape")

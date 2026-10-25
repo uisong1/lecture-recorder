@@ -41,3 +41,23 @@ final class RecordingUITests: XCTestCase {
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 }
+
+final class LibraryUITests: XCTestCase {
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    @MainActor
+    func test사이드바에_미분류가_보이고_녹음하면_목록에_나타난다() throws {
+        let app = XCUIApplication.launchForTesting()
+        XCTAssertTrue(app.staticTexts["미분류"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["emptyRecordingList"].waitForExistence(timeout: 5))
+
+        let button = app.buttons["recordButton"]
+        button.click()
+        XCTAssertTrue(app.staticTexts["recordingSubject"].waitForExistence(timeout: 5))
+        button.click()
+        XCTAssertTrue(app.descendants(matching: .any)["recordingList"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["emptyRecordingList"].waitForNonExistence(timeout: 5))
+    }
+}
