@@ -5,6 +5,9 @@ import SwiftUI
 struct PlaybackBar: View {
     let playback: PlaybackController
     @State private var dragTime: TimeInterval?
+    @State private var editingNote: Bookmark?
+    @State private var noteText = ""
+    @State private var deleting: Bookmark?
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.25)) { _ in
@@ -35,6 +38,17 @@ struct PlaybackBar: View {
                         .monospacedDigit()
                         .foregroundStyle(Design.Palette.inkMuted)
                 }
+                HStack(spacing: Design.Spacing.sm) {
+                    Button {
+                        playback.addBookmarkAtCurrentTime()
+                    } label: {
+                        Label("지금 위치에 북마크", systemImage: "bookmark")
+                    }
+                    .buttonStyle(.pillSecondary)
+                    .keyboardShortcut("b", modifiers: [.command, .shift])
+                    .help("지금 위치에 북마크 추가 (⇧⌘B)")
+                    .accessibilityIdentifier("addPlaybackBookmark")
+                }
                 if !playback.bookmarks.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: Design.Spacing.xs) {
@@ -45,6 +59,13 @@ struct PlaybackBar: View {
                                     Label(label(for: bookmark), systemImage: "bookmark.fill")
                                 }
                                 .buttonStyle(.pillSecondary)
+                                .contextMenu {
+                                    Button("메모 수정…") {
+                                        noteText = bookmark.note
+                                        editingNote = bookmark
+                                    }
+                                    Button("삭제…", role: .destructive) { deleting = bookmark }
+                                }
                                 .accessibilityIdentifier("bookmarkChip")
                             }
                         }
@@ -64,6 +85,23 @@ struct PlaybackBar: View {
         .frame(maxWidth: .infinity)
         .background(Design.Palette.parchment)
         .overlay(alignment: .top) { Divider() }
+        .alert("북마크 메모", isPresented: Binding(get: { editingNote != nil }, set: { if !$0 { editingNote = nil } })) {
+            TextField("메모", text: $noteText)
+            Button("취소", role: .cancel) {}
+            Button("저장") {
+                if let bookmark = editingNote { playback.updateNote(of: bookmark, to: noteText) }
+            }
+        }
+        .confirmationDialog(
+            "이 북마크를 삭제할까요?",
+            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("삭제", role: .destructive) {
+                if let bookmark = deleting { playback.delete(bookmark) }
+            }
+            Button("취소", role: .cancel) {}
+        }
     }
 
     private var shownTime: TimeInterval { dragTime ?? playback.currentTime }

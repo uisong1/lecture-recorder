@@ -30,12 +30,24 @@ public final class PlaybackController {
     /// 고른 재생 속도. 다른 녹음을 골라도 유지한다.
     public private(set) var rate: PlaybackRate = .normal
 
+    /// 이 간격(초) 안에 이미 북마크가 있으면 같은 자리로 보고 새로 만들지 않는다.
+    public static let duplicateBookmarkWindow: TimeInterval = 1
+
     private let player: any AudioPlaying
     private let storage: RecordingStorage
+    private let bookmarkManager: BookmarkManager?
+    private let now: @MainActor () -> Date
 
-    public init(player: any AudioPlaying, storage: RecordingStorage) {
+    public init(
+        player: any AudioPlaying,
+        storage: RecordingStorage,
+        bookmarkManager: BookmarkManager? = nil,
+        now: @escaping @MainActor () -> Date = { Date() }
+    ) {
         self.player = player
         self.storage = storage
+        self.bookmarkManager = bookmarkManager
+        self.now = now
     }
 
     public var currentTime: TimeInterval { player.currentTime }
@@ -99,6 +111,44 @@ public final class PlaybackController {
         guard current != nil else { return }
         seek(to: bookmark.time)
         play()
+    }
+
+    /// 지금 재생 위치에 북마크를 추가한다. 같은 자리(1초 이내)에 이미 있으면 만들지 않는다.
+    @discardableResult
+    public func addBookmarkAtCurrentTime() -> Bookmark? {
+        guard let current, let bookmarkManager else { return nil }
+        let time = min(max(player.currentTime, 0), duration)
+        if current.bookmarks.contains(where: { abs($0.time - time) < Self.duplicateBookmarkWindow }) {
+            errorMessage = "이 위치에는 이미 북마크가 있습니다."
+            return nil
+        }
+        return perform { try bookmarkManager.add(to: current, at: time, now: now()) }
+    }
+
+    /// 북마크 메모를 고친다.
+    public func updateNote(of bookmark: Bookmark, to note: String) {
+        guard let bookmarkManager else { return }
+        perform { try bookmarkManager.updateNote(bookmark, to: note.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    }
+
+    /// 북마크를 지운다.
+    public func delete(_ bookmark: Bookmark) {
+        guard let bookmarkManager else { return }
+        current?.bookmarks.removeAll { $0 === bookmark }
+        perform { try bookmarkManager.delete(bookmark) }
+    }
+
+    /// 북마크 작업을 실행하고 실패하면 오류 문구를 남긴다.
+    @discardableResult
+    private func perform<T>(_ action: () throws -> T) -> T? {
+        do {
+            let result = try action()
+            errorMessage = nil
+            return result
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return nil
+        }
     }
 
     /// 재생이 끝났는지 화면 갱신 때 확인한다.

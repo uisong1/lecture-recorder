@@ -58,7 +58,7 @@ final class AppDependencies {
         }
         library = RecordingLibrary(context: container.mainContext)
         manager = RecordingManager(context: container.mainContext, storage: storage)
-        playback = PlaybackController(player: SystemAudioPlayer(), storage: storage)
+        playback = PlaybackController(player: SystemAudioPlayer(), storage: storage, bookmarkManager: BookmarkManager(context: container.mainContext))
         do {
             let recovery = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal)
             recoveryNotice = try recovery.recoverIfNeeded().map {
