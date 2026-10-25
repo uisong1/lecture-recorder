@@ -60,4 +60,27 @@ import Testing
         try storage.prepareFolder(for: "자료구조/2026-03-02_1000.m4a")
         #expect(files.fileExists(at: root.appending(path: "자료구조")))
     }
+
+    @Test func 녹음_중_파일은_CAF_확장자를_쓴다() {
+        let storage = RecordingStorage(root: root, files: FakeFileStore())
+        let path = storage.newRelativePath(subjectName: "자료구조", startedAt: date(2026, 3, 2, 10, 0), calendar: seoulCalendar, fileExtension: RecordingStorage.workingExtension)
+        #expect(path == "자료구조/2026-03-02_1000.caf")
+    }
+
+    @Test func 압축_전_CAF나_압축된_m4a가_있으면_이름이_겹치지_않는다() {
+        let files = FakeFileStore(files: [
+            root.appending(path: "자료구조/2026-03-02_1000.caf"),
+            root.appending(path: "자료구조/2026-03-02_1000_2.m4a"),
+        ])
+        let storage = RecordingStorage(root: root, files: files)
+        let path = storage.newRelativePath(subjectName: "자료구조", startedAt: date(2026, 3, 2, 10, 0), calendar: seoulCalendar, fileExtension: RecordingStorage.workingExtension)
+        #expect(path == "자료구조/2026-03-02_1000_3.caf")
+    }
+
+    @Test func 압축_경로를_만든다() {
+        #expect(RecordingStorage.compressedPath(for: "자료구조/a.caf") == "자료구조/a.m4a")
+        #expect(RecordingStorage.temporaryCompressedPath(for: "자료구조/a.caf") == "자료구조/a.converting.m4a")
+        #expect(RecordingStorage.isWorkingPath("자료구조/a.caf"))
+        #expect(!RecordingStorage.isWorkingPath("자료구조/a.m4a"))
+    }
 }

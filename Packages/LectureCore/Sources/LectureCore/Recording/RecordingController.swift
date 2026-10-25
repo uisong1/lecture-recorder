@@ -32,8 +32,8 @@ public enum RecordingError: Error, Equatable, LocalizedError {
 @MainActor
 @Observable
 public final class RecordingController {
-    /// 녹음을 시작하려면 남아 있어야 하는 공간 (90분 녹음의 약 5배).
-    public static let minimumFreeBytes: Int64 = 200 * 1024 * 1024
+    /// 녹음을 시작하려면 남아 있어야 하는 공간. 3시간 CAF(약 346MB)와 압축한 m4a(약 43MB)가 함께 있어도 남는 크기.
+    public static let minimumFreeBytes: Int64 = 600 * 1024 * 1024
 
     public enum State: Equatable {
         case idle
@@ -67,6 +67,8 @@ public final class RecordingController {
     private let permission: any MicrophonePermissionProviding
     private let journal: (any RecordingJournaling)?
     private let sleepPreventer: (any SleepPreventing)?
+    private let compressor: RecordingCompressor?
+    private var compressionTask: Task<Void, Never>?
     private let calendar: Calendar
     private let now: @MainActor () -> Date
 
@@ -79,6 +81,7 @@ public final class RecordingController {
         journal: (any RecordingJournaling)? = nil,
         sleepPreventer: (any SleepPreventing)? = nil,
         lifecycle: (any LifecycleEventSource)? = nil,
+        compressor: RecordingCompressor? = nil,
         calendar: Calendar = .current,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
@@ -90,6 +93,7 @@ public final class RecordingController {
         self.permissionStatus = permission.currentStatus()
         self.journal = journal
         self.sleepPreventer = sleepPreventer
+        self.compressor = compressor
         self.calendar = calendar
         self.now = now
         lifecycle?.observe { [weak self] event in self?.handle(event) }
@@ -164,7 +168,7 @@ public final class RecordingController {
 
         let startedAt = now()
         let subject = subject(at: startedAt)
-        let relativePath = storage.newRelativePath(subjectName: subject?.name, startedAt: startedAt, calendar: calendar)
+        let relativePath = storage.newRelativePath(subjectName: subject?.name, startedAt: startedAt, calendar: calendar, fileExtension: RecordingStorage.workingExtension)
         do {
             try storage.prepareFolder(for: relativePath)
             try recorder.start(to: storage.url(for: relativePath))
@@ -213,7 +217,24 @@ public final class RecordingController {
         }
         journal?.clear()
         lastSaved = recording
+        startCompression(of: recording)
         return recording
+    }
+
+    /// 정지한 녹음을 백그라운드에서 m4a로 압축한다. 끝나기 전에도 녹음은 CAF로 재생된다.
+    /// 여러 건이 겹쳐도 한 번에 하나씩 차례로 처리한다.
+    private func startCompression(of recording: Recording) {
+        guard let compressor else { return }
+        let previous = compressionTask
+        compressionTask = Task {
+            await previous?.value
+            await compressor.compress(recording)
+        }
+    }
+
+    /// 진행 중인 압축이 모두 끝날 때까지 기다린다. 주로 테스트에서 쓴다.
+    public func waitForCompression() async {
+        await compressionTask?.value
     }
 
     /// 녹음을 잠시 멈춘다. 이미 멈춘 상태면 아무 일도 하지 않는다.
