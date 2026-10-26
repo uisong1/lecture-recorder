@@ -218,6 +218,33 @@ import Testing
         #expect(library.bookmarkCount(for: .all) == 3)
     }
 
+    @Test func 녹음_검색은_제목뿐_아니라_북마크_메모도_찾고_맞은_메모를_알려_준다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let monday = addRecording("월요일", subject: ds, at: date(2026, 3, 2, 10, 0))
+        let wednesday = addRecording("시험 정리", subject: ds, at: date(2026, 3, 4, 10, 0))
+        let friday = addRecording("금요일", subject: ds, at: date(2026, 3, 6, 10, 0))
+        let at = date(2026, 3, 7, 0, 0)
+        context.insert(Bookmark(time: 20, note: "시험에 나온다고 함", createdAt: at, recording: monday))
+        context.insert(Bookmark(time: 30, note: "다른 이야기", createdAt: at, recording: monday))
+        context.insert(Bookmark(time: 10, note: "", createdAt: at, recording: friday))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        library.filter.query = "시험"
+
+        #expect(library.recordings.map(\.title) == ["시험 정리", "월요일"])
+        #expect(library.matchingNotes(of: monday) == ["시험에 나온다고 함"])
+        #expect(library.matchingNotes(of: wednesday).isEmpty)
+
+        library.filter.query = ""
+        #expect(library.recordings.count == 3)
+        #expect(library.matchingNotes(of: monday).isEmpty)
+
+        library.filter.query = "없는말"
+        #expect(library.recordings.isEmpty)
+    }
+
     @Test func 북마크_검색은_메모와_녹음_제목을_함께_찾는다() throws {
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         let monday = addRecording("중간고사 대비", subject: ds, at: date(2026, 3, 2, 10, 0))
