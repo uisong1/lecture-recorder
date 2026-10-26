@@ -7,8 +7,11 @@ struct RecordingFilesSettingsView: View {
     let model: RecordingRescanModel
     let isRecording: Bool
     let storeBackup: StoreBackup?
+    let storage: RecordingStorage
 
     @State private var lastBackup: Date?
+    @State private var folder: RecordingsFolderInfo?
+    @State private var folderMessage: String?
 
     private var lastBackupText: String {
         guard let lastBackup else { return "마지막 백업: 아직 없음" }
@@ -38,6 +41,27 @@ struct RecordingFilesSettingsView: View {
                         .designText(.caption)
                         .foregroundStyle(model.isError ? Design.Palette.danger : Design.Palette.inkMuted)
                         .accessibilityIdentifier("rescanMessage")
+                }
+            }
+            Section("녹음 폴더") {
+                if let folder {
+                    Text(folder.displayPath())
+                        .designText(.body)
+                        .textSelection(.enabled)
+                        .accessibilityIdentifier("recordingsFolderPath")
+                }
+                Text(RecordingsFolderInfo.archiveGuide)
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.inkMuted)
+                    .accessibilityIdentifier("recordingsFolderGuide")
+                Button("녹음 폴더 열기") { openRecordingsFolder() }
+                    .buttonStyle(.pill)
+                    .accessibilityIdentifier("openRecordingsFolderButton")
+                if let folderMessage {
+                    Text(folderMessage)
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.danger)
+                        .accessibilityIdentifier("recordingsFolderMessage")
                 }
             }
             if let storeBackup {
@@ -70,8 +94,22 @@ struct RecordingFilesSettingsView: View {
                 }
             }
         }
-        .task { lastBackup = storeBackup?.lastBackupDate() }
+        .task {
+            lastBackup = storeBackup?.lastBackupDate()
+            folder = storage.folderInfo()
+        }
         .formStyle(.grouped)
         .padding(Design.Spacing.lg)
+    }
+
+    private func openRecordingsFolder() {
+        let info = storage.folderInfo()
+        folder = info
+        guard info.isAvailable else {
+            Log.storage.error("녹음 폴더를 열 수 없음: \(info.url.path, privacy: .public)")
+            folderMessage = RecordingsFolderInfo.missingNotice
+            return
+        }
+        folderMessage = NSWorkspace.shared.open(info.url) ? nil : "Finder에서 녹음 폴더를 열지 못했습니다."
     }
 }
