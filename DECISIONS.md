@@ -333,3 +333,7 @@
 ## 2026-10-26. 검색에서 맞은 북마크 메모를 누르면 그 시점부터 듣는다 (3-70)
 - 결정: `RecordingLibrary.matchingBookmarks(of:)`가 맞은 `Bookmark`를 시점 순서로 돌려주고(`matchingNotes`는 그 글자만), 행의 "메모: …" 줄마다 누르는 영역을 둔다. 누르면 `select` 후 `play(from:)`이라 북마크 5초 앞(3-12 규칙)에서 시작하고 3-61 스피커 확인을 그대로 거친다. 제목으로만 맞은 녹음은 줄이 없다. 새 저장 항목 없음.
 - 이유: 시험 전에 메모로 찾은 뒤 바로 그 말을 다시 듣는 것이 복습의 핵심이고, 북마크 모아보기와 같은 재생 경로를 쓰면 동작이 한 가지로 유지된다.
+
+## 2026-10-26. 앞뒤 건너뛰기 길이를 설정에서 고른다 (3-71)
+- 결정: `SkipInterval`(5/10/15/30/60초, 기본 15초)을 `LectureCore`에 두고 `PlaybackController.skipInterval`로 쓴다. 설정 "일반" 탭의 선택이 `UserDefaults`(`skipInterval`)에 저장되고, 저장값이 없거나 선택지에 없으면 15초다. 재생 막대 ←/→ 버튼의 글자·아이콘·도움말, 이어폰·키보드 건너뛰기 키(`SystemRemoteCommands.preferredIntervals`)가 같은 값을 따른다. 건너뛰기 계산은 기존 `skip(by:)`(처음·끝에서 멈춤)을 그대로 쓴다. 예전 상수 `PlaybackController.skipInterval`은 없앴다.
+- 이유: 강의 녹음은 15초가 짧거나 길 수 있어 복습 때 맞춰 쓰고 싶다. 선택지를 열거형으로 제한해 잘못된 값이 들어올 수 없다.

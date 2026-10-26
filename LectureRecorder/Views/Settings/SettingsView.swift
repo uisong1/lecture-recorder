@@ -8,11 +8,12 @@ struct SettingsView: View {
     let rescan: RecordingRescanModel
     let recording: RecordingController
     let launchAtLogin: LaunchAtLoginModel
+    let playback: PlaybackController
     let storeBackup: StoreBackup?
 
     var body: some View {
         TabView {
-            GeneralSettingsView(launchAtLogin: launchAtLogin)
+            GeneralSettingsView(launchAtLogin: launchAtLogin, playback: playback)
                 .tabItem { Label("일반", systemImage: "gearshape") }
             SubjectSettingsView(manager: subjects)
                 .tabItem { Label("과목", systemImage: "books.vertical") }

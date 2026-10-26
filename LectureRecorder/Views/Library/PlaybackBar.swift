@@ -44,11 +44,11 @@ struct PlaybackBar: View {
                     Button {
                         playback.skipBackward()
                     } label: {
-                        Label("15초 뒤로", systemImage: "gobackward.15")
+                        Label("\(playback.skipInterval.label) 뒤로", systemImage: playback.skipInterval.symbolName(forward: false))
                     }
                     .buttonStyle(.pillSecondary)
                     .keyboardShortcut(.leftArrow, modifiers: [])
-                    .help("15초 뒤로 (←)")
+                    .help("\(playback.skipInterval.label) 뒤로 (←)")
                     .accessibilityIdentifier("skipBackward")
                     Button {
                         playback.togglePlayPause()
@@ -62,11 +62,11 @@ struct PlaybackBar: View {
                     Button {
                         playback.skipForward()
                     } label: {
-                        Label("15초 앞으로", systemImage: "goforward.15")
+                        Label("\(playback.skipInterval.label) 앞으로", systemImage: playback.skipInterval.symbolName(forward: true))
                     }
                     .buttonStyle(.pillSecondary)
                     .keyboardShortcut(.rightArrow, modifiers: [])
-                    .help("15초 앞으로 (→)")
+                    .help("\(playback.skipInterval.label) 앞으로 (→)")
                     .accessibilityIdentifier("skipForward")
                 }
                 HStack(spacing: Design.Spacing.sm) {
