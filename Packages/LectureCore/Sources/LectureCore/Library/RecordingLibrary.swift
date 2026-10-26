@@ -199,11 +199,17 @@ public final class RecordingLibrary {
         ResumeListening.pick(from: all) { rowStatus(for: $0, using: manager).isPlayable }
     }
 
-    /// 검색어가 제목이 아니라 북마크 메모에 들어 있어서 목록에 남은 녹음이면 그 메모들. 행에 "메모: …"로 보여 준다.
-    public func matchingNotes(of recording: Recording) -> [String] {
+    /// 검색어가 제목이 아니라 북마크 메모에 들어 있어서 목록에 남은 녹음이면 맞은 북마크들 (시점 순서).
+    /// 행에 "메모: …"로 보여 주고, 누르면 그 북마크 앞에서부터 듣는다.
+    public func matchingBookmarks(of recording: Recording) -> [Bookmark] {
         guard !filter.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
         let current = now()
-        return recording.sortedBookmarks.map(\.note).filter { !$0.isEmpty && filter.matches(title: "", bookmarkNotes: [$0], startedAt: recording.startedAt, now: current, calendar: calendar) }
+        return recording.sortedBookmarks.filter { !$0.note.isEmpty && filter.matches(title: "", bookmarkNotes: [$0.note], startedAt: recording.startedAt, now: current, calendar: calendar) }
+    }
+
+    /// `matchingBookmarks`의 메모 글자만.
+    public func matchingNotes(of recording: Recording) -> [String] {
+        matchingBookmarks(of: recording).map(\.note)
     }
 
     /// 고른 분류의 북마크를 모아 본 목록. 최근 녹음부터, 같은 녹음 안에서는 시점 순서다.

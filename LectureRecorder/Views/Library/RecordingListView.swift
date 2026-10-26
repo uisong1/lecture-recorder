@@ -49,12 +49,21 @@ struct RecordingListView: View {
                             Text((library.showsSubjectName ? "\(library.subjectName(of: recording)) · " : "") + "\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(RecordingController.format(recording.duration))")
                                 .designText(.caption)
                                 .foregroundStyle(Design.Palette.inkMuted)
-                            if let note = library.matchingNotes(of: recording).first {
-                                Text("메모: \(note)")
-                                    .designText(.caption)
-                                    .foregroundStyle(Design.Palette.primary)
-                                    .lineLimit(1)
-                                    .accessibilityIdentifier("matchedBookmarkNote")
+                            ForEach(library.matchingBookmarks(of: recording)) { bookmark in
+                                Button {
+                                    guard manager.canPlay(recording) else { return }
+                                    playback.select(recording)
+                                    playback.play(from: bookmark)
+                                } label: {
+                                    Text("메모: \(bookmark.note)")
+                                        .designText(.caption)
+                                        .foregroundStyle(Design.Palette.primary)
+                                        .lineLimit(1)
+                                }
+                                .buttonStyle(.plain)
+                                .help("\(RecordingController.format(bookmark.time)) 북마크 앞부분부터 듣기")
+                                .accessibilityLabel("북마크 메모 \(bookmark.note), \(RecordingController.format(bookmark.time))부터 듣기")
+                                .accessibilityIdentifier("matchedBookmarkNote")
                             }
                             let extras = (recording.isUnplayed ? ["안 들음"] : []) + (RecordingRowStatus.bookmarkLabel(count: recording.bookmarks.count).map { [$0] } ?? []) + status.labels
                             if !extras.isEmpty {
