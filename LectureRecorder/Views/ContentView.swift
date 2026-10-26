@@ -11,9 +11,24 @@ struct ContentView: View {
 
     @State private var sidebar: SidebarItem? = .recorder
 
-    private func subjectRow(_ subject: Subject) -> some View {
-        Label(subject.name, systemImage: "book.closed")
+    private func subjectRow(_ subject: Subject, unplayed: UnplayedCounts) -> some View {
+        let unplayedCount = unplayed.count(for: .subject(subject.persistentModelID))
+        return Label {
+            HStack(spacing: Design.Spacing.xs) {
+                Text(subject.name)
+                if let text = UnplayedBadge.text(count: unplayedCount) {
+                    Text(text)
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.primary)
+                        .accessibilityIdentifier("unplayedCount-\(subject.name)")
+                }
+            }
+        } icon: {
+            Image(systemName: "book.closed")
+        }
             .badge(dependencies.library.count(for: .subject(subject.persistentModelID)))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(UnplayedBadge.accessibilityLabel(name: subject.name, count: unplayedCount))
             .tag(SidebarItem.library(.subject(subject.persistentModelID)))
             .accessibilityIdentifier("sidebar-subject-\(subject.name)")
     }
@@ -31,13 +46,14 @@ struct ContentView: View {
                     .accessibilityIdentifier("sidebar-all")
                 Section("과목") {
                     let library = dependencies.library
+                    let unplayed = library.unplayedCounts
                     if SemesterGrouping.showsHeaders(library.semesterSections) {
                         ForEach(library.semesterSections) { section in
                             DisclosureGroup(isExpanded: Binding(
                                 get: { library.isExpanded(section) },
                                 set: { library.setExpanded($0, for: section) }
                             )) {
-                                ForEach(library.subjects(in: section)) { subject in subjectRow(subject) }
+                                ForEach(library.subjects(in: section)) { subject in subjectRow(subject, unplayed: unplayed) }
                             } label: {
                                 Text(section.title)
                                     .designText(.captionStrong)
@@ -46,7 +62,7 @@ struct ContentView: View {
                             }
                         }
                     } else {
-                        ForEach(library.subjects) { subject in subjectRow(subject) }
+                        ForEach(library.subjects) { subject in subjectRow(subject, unplayed: unplayed) }
                     }
                     Label("미분류", systemImage: "tray")
                         .badge(dependencies.library.count(for: .unclassified))

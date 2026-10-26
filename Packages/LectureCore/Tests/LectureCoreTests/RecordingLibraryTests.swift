@@ -286,6 +286,43 @@ import Testing
         #expect(library.recordings.map(\.title) == ["월요일"])
     }
 
+    @Test func 안_들은_녹음_수를_과목별로_센다() throws {
+        let subjects = SubjectManager(context: context)
+        let ds = try subjects.add(name: "자료구조", color: .green)
+        let os = try subjects.add(name: "운영체제", color: .blue)
+        let first = addRecording("a", subject: ds, at: date(2026, 3, 2, 10, 0))
+        addRecording("b", subject: ds, at: date(2026, 3, 3, 10, 0))
+        let heard = addRecording("c", subject: ds, at: date(2026, 3, 4, 10, 0))
+        heard.lastPlayedAt = date(2026, 3, 5, 9, 0)
+        // 일부만 들음(위치 있음)은 들은 것이다.
+        let partial = addRecording("d", subject: os, at: date(2026, 3, 4, 11, 0))
+        partial.lastPlayedPosition = 30
+        addRecording("e", subject: nil, at: date(2026, 3, 5, 10, 0))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        var counts = library.unplayedCounts
+        #expect(counts.count(for: .subject(ds.persistentModelID)) == 2)
+        #expect(counts.count(for: .subject(os.persistentModelID)) == 0)
+        #expect(counts.count(for: .unclassified) == 1)
+        #expect(counts.count(for: .all) == 3)
+
+        // 과목을 옮기면 개수가 따라간다.
+        first.subject = os
+        library.reload()
+        counts = library.unplayedCounts
+        #expect(counts.count(for: .subject(ds.persistentModelID)) == 1)
+        #expect(counts.count(for: .subject(os.persistentModelID)) == 1)
+        #expect(counts.count(for: .all) == 3)
+    }
+
+    @Test func 안_들은_녹음이_없으면_0이다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let library = RecordingLibrary(context: context)
+        #expect(library.unplayedCounts.count(for: .subject(ds.persistentModelID)) == 0)
+        #expect(library.unplayedCounts.count(for: .all) == 0)
+    }
+
     @Test func 북마크_검색은_메모와_녹음_제목을_함께_찾는다() throws {
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         let monday = addRecording("중간고사 대비", subject: ds, at: date(2026, 3, 2, 10, 0))

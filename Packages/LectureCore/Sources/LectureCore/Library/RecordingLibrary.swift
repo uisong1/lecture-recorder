@@ -23,6 +23,21 @@ public struct BookmarkEntry: Identifiable {
     }
 }
 
+/// 분류마다 안 들은 녹음 수.
+public struct UnplayedCounts: Equatable {
+    var all = 0
+    var unclassified = 0
+    var bySubject: [PersistentIdentifier: Int] = [:]
+
+    public func count(for selection: LibrarySelection) -> Int {
+        switch selection {
+        case .all: all
+        case .unclassified: unclassified
+        case .subject(let id): bySubject[id] ?? 0
+        }
+    }
+}
+
 /// 과목별 녹음 목록을 보여주는 뷰모델.
 @MainActor
 @Observable
@@ -182,6 +197,21 @@ public final class RecordingLibrary {
         case .unclassified: counts.unclassified
         case .subject(let id): counts.bySubject[id] ?? 0
         }
+    }
+
+    /// 분류마다 아직 안 들은 녹음 수(`Recording.isUnplayed`). 휴지통으로 보낸 녹음은 DB에서 지워지므로 세지 않는다.
+    /// 재생하면 바로 줄어야 해서 `reload` 때 세어 두지 않고 부를 때마다 센다. 사이드바를 그릴 때 한 번 부르고 결과를 나눠 쓴다.
+    public var unplayedCounts: UnplayedCounts {
+        var counts = UnplayedCounts()
+        for recording in all where recording.isUnplayed {
+            counts.all += 1
+            if let id = recording.subject?.persistentModelID {
+                counts.bySubject[id, default: 0] += 1
+            } else {
+                counts.unclassified += 1
+            }
+        }
+        return counts
     }
 
     /// 목록 행에 보일 상태. 파일 존재 확인은 행이 처음 그려질 때 한 번만 하고 `reload`까지 같은 결과를 쓴다
