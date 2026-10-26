@@ -16,7 +16,7 @@ struct NotificationSettingsView: View {
                     )
                 )
                 .accessibilityIdentifier("classReminderToggle")
-                Text("알림을 누르면 앱이 열립니다. 녹음은 직접 시작해야 하며, 자동으로 녹음하지 않습니다.")
+                Text("알림의 \"녹음 시작\" 버튼을 누르면 그 과목으로 녹음을 시작합니다. 알림 본문을 누르면 앱만 열리고, 버튼을 누르지 않으면 녹음하지 않습니다.")
                     .designText(.caption)
                     .foregroundStyle(Design.Palette.inkMuted)
                 if let message = reminders.message {
