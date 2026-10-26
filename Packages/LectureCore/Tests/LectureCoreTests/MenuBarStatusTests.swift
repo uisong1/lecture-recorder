@@ -56,4 +56,14 @@ import Testing
     @Test func 안내할_과목이_없으면_상세_줄이_비어_있다() {
         #expect(MenuBarStatus(isRecording: false).detail == "")
     }
+
+    @Test func 일시정지가_오래되면_안내를_보인다() {
+        let paused = MenuBarStatus(isRecording: true, isPaused: true, pausedNotice: PausedAdvice.notice)
+        #expect(paused.pausedNotice == PausedAdvice.notice)
+    }
+
+    @Test func 일시정지_중이_아니면_안내를_보이지_않는다() {
+        #expect(MenuBarStatus(isRecording: true, pausedNotice: PausedAdvice.notice).pausedNotice == nil)
+        #expect(MenuBarStatus(isRecording: false, isPaused: true, pausedNotice: PausedAdvice.notice).pausedNotice == nil)
+    }
 }

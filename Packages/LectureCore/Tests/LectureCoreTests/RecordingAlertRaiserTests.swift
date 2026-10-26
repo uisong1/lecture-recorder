@@ -72,5 +72,19 @@ import Testing
 
         #expect(notifier.notified.isEmpty)
     }
+
+    @Test func rearm_하면_그_종류만_다시_보낼_수_있다() async {
+        let raiser = RecordingAlertRaiser(notifier: notifier)
+
+        raiser.raise(.pausedTooLong)
+        raiser.raise(.storageFull)
+        raiser.rearm(.pausedTooLong)
+        raiser.raise(.pausedTooLong)
+        raiser.raise(.storageFull)
+        await settle()
+
+        #expect(notifier.notifiedIdentifiers.filter { $0 == RecordingAlert.pausedTooLong.identifier }.count == 2)
+        #expect(notifier.notifiedIdentifiers.filter { $0 == RecordingAlert.storageFull.identifier }.count == 1)
+    }
 }
 #endif

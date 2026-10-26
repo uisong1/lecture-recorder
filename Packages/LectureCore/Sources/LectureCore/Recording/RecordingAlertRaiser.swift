@@ -16,6 +16,11 @@ final class RecordingAlertRaiser {
         sent = []
     }
 
+    /// 같은 녹음 안에서도 `alert`를 다시 보낼 수 있게 한다 (일시정지처럼 한 녹음에서 여러 번 생기는 상황용).
+    func rearm(_ alert: RecordingAlert) {
+        sent.remove(alert)
+    }
+
     /// `alert`를 이 녹음에서 처음 알리는 것이면 알림을 보낸다. `body`로 기본 문구를 바꿀 수 있다.
     func raise(_ alert: RecordingAlert, body: String? = nil) {
         guard sent.insert(alert).inserted, let notifier else { return }

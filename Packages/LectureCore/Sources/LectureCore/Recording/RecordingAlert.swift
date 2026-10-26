@@ -9,6 +9,7 @@ public enum RecordingAlert: Hashable, CaseIterable, Sendable {
     case recorderStalled
     case recorderResumed
     case inputSilent
+    case pausedTooLong
 
     public var title: String {
         switch self {
@@ -18,6 +19,7 @@ public enum RecordingAlert: Hashable, CaseIterable, Sendable {
         case .recorderStalled: "녹음이 멈춘 것 같습니다"
         case .recorderResumed: "녹음이 멈춰서 새 파일로 이어 녹음합니다"
         case .inputSilent: "소리가 거의 들어오지 않습니다"
+        case .pausedTooLong: "녹음이 일시정지 중입니다"
         }
     }
 
@@ -30,6 +32,7 @@ public enum RecordingAlert: Hashable, CaseIterable, Sendable {
         case .recorderStalled: "지금까지 녹음은 저장했습니다. 녹음을 다시 시작하세요."
         case .recorderResumed: "지금까지 녹음은 저장했습니다. 새 파일로 이어서 녹음 중이니 소리가 제대로 들어오는지 확인하세요."
         case .inputSilent: "마이크가 가려졌거나 다른 장치로 바뀌지 않았는지 확인하세요."
+        case .pausedTooLong: PausedAdvice.notice
         }
     }
 
@@ -43,6 +46,7 @@ public enum RecordingAlert: Hashable, CaseIterable, Sendable {
         case .recorderStalled: "recording-alert-stalled"
         case .recorderResumed: "recording-alert-resumed"
         case .inputSilent: "recording-alert-silent"
+        case .pausedTooLong: "recording-alert-paused"
         }
     }
 }

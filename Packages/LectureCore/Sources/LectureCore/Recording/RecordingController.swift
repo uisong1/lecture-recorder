@@ -115,6 +115,8 @@ public final class RecordingController {
     public private(set) var bookmarkNotes: [String] = []
     /// 녹음이 시작된 직후 불린다. 재생 중인 소리를 멈추는 데 쓴다 (재생 소리가 마이크로 들어가는 것 방지).
     public var onStarted: (@MainActor () -> Void)?
+    /// 녹음이 끝나 목록에 넣은 직후 불린다. 수업 시작 알림처럼 "지금 녹음 중인지"에 따라 달라지는 예약을 다시 만드는 데 쓴다.
+    public var onStopped: (@MainActor () -> Void)?
     /// 마지막으로 확인한 마이크 권한. 거부 상태면 화면이 녹음 버튼 대신 안내를 보여준다.
     public private(set) var permissionStatus: MicrophonePermissionStatus
 
@@ -134,6 +136,8 @@ public final class RecordingController {
     private let overrunNotifier: (any NotificationScheduling)?
     private var classEnd: Date?
     private var overrunNotified = false
+    /// 지금 일시정지가 시작된 시각. 일시정지 중이 아니면 nil.
+    private var pausedAt: Date?
     /// 녹음을 시작할 때 읽어 둔 시간표와 과목 (화면이 자주 다시 읽어도 매번 DB를 조회하지 않는다).
     private var scheduleSnapshot: ClassSchedule<PersistentIdentifier>?
     private var subjectsByID: [PersistentIdentifier: Subject] = [:]
@@ -359,6 +363,19 @@ public final class RecordingController {
         return ClassOverrunAdvice.notice(subjectName: currentSubjectName, classEnd: classEnd, now: now())
     }
 
+    /// 일시정지가 10분 넘게 이어질 때 화면에 보일 안내. 일시정지 중이 아니거나 아직이면 nil.
+    public var pausedNotice: String? {
+        guard isPaused else { return nil }
+        return PausedAdvice.notice(pausedAt: pausedAt, now: now())
+    }
+
+    /// 안내할 때가 되면 시스템 알림도 일시정지마다 한 번 보낸다. 주기적으로 불린다.
+    public func checkPaused() {
+        guard let notice = pausedNotice else { return }
+        Log.recording.notice("일시정지가 오래 이어짐")
+        raise(.pausedTooLong, body: notice)
+    }
+
     /// 안내할 때가 되면 시스템 알림도 한 번 보낸다 (다른 앱을 보고 있어도 알 수 있게). 주기적으로 불린다.
     public func checkOverrun() {
         guard let notice = overrunNotice, !overrunNotified else { return }
@@ -455,6 +472,7 @@ public final class RecordingController {
                 self?.checkRecorderHealth()
                 self?.checkStorage()
                 self?.checkOverrun()
+                self?.checkPaused()
                 self?.checkNextClass()
             }
         }
@@ -552,6 +570,7 @@ public final class RecordingController {
         bookmarkTimes = []
         bookmarkNotes = []
         state = .recording(startedAt: startedAt)
+        pausedAt = nil
         isStallContinuation = isContinuation
         interruptionNotice = nil
         recorderStallNotice = nil
@@ -622,6 +641,7 @@ public final class RecordingController {
             recorderStallNotice = RecorderHealthMonitor.savedNotice(title: recording.title)
         }
         state = .idle
+        pausedAt = nil
         currentSubject = nil
         currentSubjectID = nil
         currentSubjectLabel = nil
@@ -635,6 +655,7 @@ public final class RecordingController {
         }
         bookmarkTimes = []
         bookmarkNotes = []
+        onStopped?()
         do {
             try context.save()
         } catch {
@@ -719,6 +740,8 @@ public final class RecordingController {
         case .recording(let startedAt):
             recorder.pause()
             state = .paused(startedAt: startedAt)
+            pausedAt = now()
+            alertRaiser.rearm(.pausedTooLong)
         }
     }
 
@@ -731,6 +754,7 @@ public final class RecordingController {
             Log.recording.error("녹음 재개 실패: \(error.localizedDescription, privacy: .public)")
             throw .resumeFailed(error.localizedDescription)
         }
+        pausedAt = nil
         state = .recording(startedAt: startedAt)
     }
 
@@ -792,6 +816,7 @@ public final class RecordingController {
             do {
                 try RecordingManager(context: context, storage: storage).delete(recording)
                 if lastSaved === recording { lastSaved = nil }
+                onStopped?()
             } catch {
                 Log.recording.error("짧은 녹음 삭제 실패: \(error.localizedDescription, privacy: .public)")
                 errorMessage = error.localizedDescription

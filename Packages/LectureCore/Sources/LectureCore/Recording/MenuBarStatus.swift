@@ -11,6 +11,8 @@ public struct MenuBarStatus: Equatable, Sendable {
     public let bookmarkCount: Int
     /// 시작하기 전에 알리는 "지금 녹음하면" 과목 이름.
     public let expectedSubjectName: String
+    /// 일시정지가 오래 이어질 때 보일 안내. 일시정지 중이 아니면 항상 nil.
+    public let pausedNotice: String?
 
     public init(
         isRecording: Bool,
@@ -19,7 +21,8 @@ public struct MenuBarStatus: Equatable, Sendable {
         subjectName: String = "",
         elapsedText: String = "00:00",
         bookmarkCount: Int = 0,
-        expectedSubjectName: String = ""
+        expectedSubjectName: String = "",
+        pausedNotice: String? = nil
     ) {
         self.isRecording = isRecording
         self.isPaused = isPaused && isRecording
@@ -28,6 +31,7 @@ public struct MenuBarStatus: Equatable, Sendable {
         self.elapsedText = elapsedText
         self.bookmarkCount = bookmarkCount
         self.expectedSubjectName = expectedSubjectName
+        self.pausedNotice = isPaused && isRecording ? pausedNotice : nil
     }
 
     /// 메뉴 막대 아이콘 모양.
@@ -81,7 +85,8 @@ extension RecordingController {
             subjectName: currentSubjectName,
             elapsedText: elapsedText,
             bookmarkCount: bookmarkTimes.count,
-            expectedSubjectName: expectedSubjectName
+            expectedSubjectName: expectedSubjectName,
+            pausedNotice: pausedNotice
         )
     }
 }

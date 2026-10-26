@@ -166,5 +166,80 @@ import SwiftData
         // 화면 안내는 알림과 별개로 남는다.
         #expect(controller.interruptionNotice != nil)
     }
+
+    @Test func 일시정지가_십분_넘으면_안내하고_알림을_한_번_보낸다() async throws {
+        try await controller.start()
+        try controller.pause()
+
+        clock.advance(by: 9 * 60 + 59)
+        controller.checkPaused()
+        await settle()
+        #expect(controller.pausedNotice == nil)
+        #expect(notifier.notified.isEmpty)
+
+        clock.advance(by: 1)  // 10분 정각
+        controller.checkPaused()
+        controller.checkPaused()
+        await settle()
+        #expect(controller.pausedNotice == PausedAdvice.notice)
+        #expect(notifier.notifiedIdentifiers == [RecordingAlert.pausedTooLong.identifier])
+        #expect(notifier.notified.first?.body == PausedAdvice.notice)
+        #expect(controller.menuBarStatus.pausedNotice == PausedAdvice.notice)
+    }
+
+    @Test func 재개하면_안내가_사라지고_다시_일시정지하면_새로_센다() async throws {
+        try await controller.start()
+        try controller.pause()
+        clock.advance(by: 10 * 60)
+        controller.checkPaused()
+        try controller.resume()
+        #expect(controller.pausedNotice == nil)
+        #expect(controller.menuBarStatus.pausedNotice == nil)
+
+        try controller.pause()
+        clock.advance(by: 9 * 60 + 59)
+        controller.checkPaused()
+        #expect(controller.pausedNotice == nil)
+
+        clock.advance(by: 1)
+        controller.checkPaused()
+        await settle()
+        // 일시정지마다 한 번씩이므로 모두 두 번.
+        #expect(notifier.notifiedIdentifiers == [RecordingAlert.pausedTooLong.identifier, RecordingAlert.pausedTooLong.identifier])
+    }
+
+    @Test func 정지하면_일시정지_안내가_해제된다() async throws {
+        try await controller.start()
+        try controller.pause()
+        clock.advance(by: 20 * 60)
+        #expect(controller.pausedNotice != nil)
+        try controller.stop()
+        #expect(controller.pausedNotice == nil)
+        controller.checkPaused()
+        await settle()
+        #expect(notifier.notified.isEmpty)
+    }
+
+    @Test func 녹음_중이_아니거나_녹음_중이면_아무_일도_없다() async throws {
+        clock.advance(by: 3600)
+        controller.checkPaused()
+        try await controller.start()
+        clock.advance(by: 3600)
+        controller.checkPaused()
+        await settle()
+        #expect(controller.pausedNotice == nil)
+        #expect(notifier.notified.isEmpty)
+    }
+
+    @Test func 알림을_허용하지_않아도_일시정지_안내는_화면에_남는다() async throws {
+        notifier.authorized = false
+        try await controller.start()
+        try controller.pause()
+        clock.advance(by: 10 * 60)
+        controller.checkPaused()
+        await settle()
+        #expect(controller.pausedNotice != nil)
+        #expect(notifier.notified.isEmpty)
+    }
 }
 #endif
