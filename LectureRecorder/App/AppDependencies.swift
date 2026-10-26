@@ -24,6 +24,15 @@ final class AppDependencies {
     let rescan: RecordingRescanModel
     let launchAtLogin: LaunchAtLoginModel
 
+    /// 알림 버튼으로 녹음을 시작하지 못했을 때 창을 보여 준다. Dock 아이콘을 누른 것과 같아서, 창이 닫혀 있어도 다시 열린다.
+    private static func bringAppToFront() {
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+            if let error {
+                Log.recording.error("앱을 앞으로 가져오지 못함: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     init() {
         var problems: [String] = []
         let container = Self.makeContainer(problems: &problems)
@@ -70,7 +79,12 @@ final class AppDependencies {
                 compressor: compressor
             )
         }
-        reminders = ClassReminderController(context: container.mainContext, notifications: notifications)
+        reminders = ClassReminderController(
+            context: container.mainContext,
+            notifications: notifications,
+            recordingStarter: recording,
+            bringAppToFront: Self.bringAppToFront
+        )
         let reminders = reminders
         schedule.onChange = { Task { await reminders.reschedule() } }
         subjects.onChange = { Task { await reminders.reschedule() } }

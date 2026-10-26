@@ -860,4 +860,30 @@ public final class RecordingController {
         return slots.first { $0.subject?.persistentModelID == id }?.subject
     }
 }
+
+extension RecordingController: ReminderRecordingStarting {
+    /// 수업 시작 알림의 "녹음 시작" 버튼. 알림에 적힌 과목으로 녹음을 시작한다.
+    /// 이미 녹음 중이면 건드리지 않는다. 시작하지 못하면 이유를 `errorMessage`에 남겨 녹음 화면에서 보이게 한다.
+    public func startRecording(forSubjectNamed subjectName: String) async -> ReminderStartOutcome {
+        guard !isRecording else {
+            Log.recording.notice("이미 녹음 중이라 알림의 녹음 시작을 무시")
+            return .alreadyRecording
+        }
+        guard let subject = availableSubjects().first(where: { $0.name == subjectName }) else {
+            Log.recording.notice("알림에 적힌 과목이 없어 녹음을 시작하지 않음")
+            errorMessage = "알림에 적힌 과목을 찾을 수 없어 녹음을 시작하지 못했습니다. 녹음 화면에서 직접 시작해 주세요."
+            return .subjectMissing
+        }
+        subjectChoice = .subject(subject.persistentModelID)
+        do {
+            try await start()
+            errorMessage = nil
+            return .started
+        } catch {
+            subjectChoice = .automatic
+            errorMessage = error.errorDescription
+            return .failed
+        }
+    }
+}
 #endif

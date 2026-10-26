@@ -108,6 +108,16 @@ final class FakeNotificationScheduler: NotificationScheduling {
     private(set) var replaceCount = 0
     private(set) var notified: [(title: String, body: String)] = []
     private(set) var notifiedIdentifiers: [String] = []
+    private var responseHandler: (@MainActor @Sendable (NotificationResponse) async -> Void)?
+
+    func setResponseHandler(_ handler: (@MainActor @Sendable (NotificationResponse) async -> Void)?) {
+        responseHandler = handler
+    }
+
+    /// 사용자가 알림에 반응한 것처럼 흉내 낸다.
+    func simulate(_ response: NotificationResponse) async {
+        await responseHandler?(response)
+    }
 
     /// 권한을 허용하지 않았으면 실제 구현처럼 조용히 아무것도 보내지 않는다.
     func notify(title: String, body: String, identifier: String) async {
@@ -209,6 +219,91 @@ final class FakeNotificationScheduler: NotificationScheduling {
     @Test func 시간표가_비었으면_예약이_비어_있다() async throws {
         await controller.setEnabled(true)
         #expect(notifications.scheduled.isEmpty)
+    }
+}
+
+@MainActor
+final class FakeReminderRecordingStarter: ReminderRecordingStarting {
+    var outcome: ReminderStartOutcome = .started
+    private(set) var requestedSubjects: [String] = []
+
+    func startRecording(forSubjectNamed subjectName: String) async -> ReminderStartOutcome {
+        requestedSubjects.append(subjectName)
+        return outcome
+    }
+}
+
+@MainActor
+@Suite struct ClassReminderResponseTests {
+    let container: ModelContainer
+    let notifications = FakeNotificationScheduler()
+    let starter = FakeReminderRecordingStarter()
+    let defaults: UserDefaults
+    let controller: ClassReminderController
+    let frontCalls: Counter
+
+    @MainActor
+    final class Counter {
+        var count = 0
+    }
+
+    init() throws {
+        container = try LectureModelContainer.make(inMemory: true)
+        defaults = try #require(UserDefaults(suiteName: "ClassReminderResponseTests-\(UUID().uuidString)"))
+        let calls = Counter()
+        frontCalls = calls
+        controller = ClassReminderController(
+            context: container.mainContext,
+            notifications: notifications,
+            defaults: defaults,
+            recordingStarter: starter,
+            bringAppToFront: { calls.count += 1 }
+        )
+    }
+
+    @Test func 알림에는_과목_이름이_실려_녹음_시작_버튼이_붙는다() async throws {
+        let subject = try SubjectManager(context: container.mainContext).add(name: "자료구조", color: .green)
+        try ScheduleManager(context: container.mainContext)
+            .add(subject: subject, weekday: .monday, start: TimeOfDay(hour: 10), end: TimeOfDay(hour: 11))
+        await controller.setEnabled(true)
+        #expect(notifications.scheduled.first?.subjectName == "자료구조")
+    }
+
+    @Test func 녹음_시작_버튼을_누르면_알림의_과목으로_시작한다() async {
+        await notifications.simulate(.startRecording(subjectName: "자료구조"))
+        #expect(starter.requestedSubjects == ["자료구조"])
+        #expect(frontCalls.count == 0)
+    }
+
+    @Test func 이미_녹음_중이면_조용히_넘어간다() async {
+        starter.outcome = .alreadyRecording
+        await notifications.simulate(.startRecording(subjectName: "자료구조"))
+        #expect(starter.requestedSubjects == ["자료구조"])
+        #expect(frontCalls.count == 0)
+    }
+
+    @Test func 과목이_지워진_알림은_앱을_앞으로_가져온다() async {
+        starter.outcome = .subjectMissing
+        await notifications.simulate(.startRecording(subjectName: "지워진 과목"))
+        #expect(frontCalls.count == 1)
+    }
+
+    @Test func 시작하지_못하면_앱을_앞으로_가져온다() async {
+        starter.outcome = .failed
+        await notifications.simulate(.startRecording(subjectName: "자료구조"))
+        #expect(frontCalls.count == 1)
+    }
+
+    @Test func 과목이_적히지_않은_버튼은_녹음하지_않고_앱을_앞으로_가져온다() async {
+        await notifications.simulate(.startRecording(subjectName: nil))
+        #expect(starter.requestedSubjects.isEmpty)
+        #expect(frontCalls.count == 1)
+    }
+
+    @Test func 알림_본문을_누르면_앱만_열고_녹음하지_않는다() async {
+        await notifications.simulate(.open)
+        #expect(starter.requestedSubjects.isEmpty)
+        #expect(frontCalls.count == 0)
     }
 }
 #endif
