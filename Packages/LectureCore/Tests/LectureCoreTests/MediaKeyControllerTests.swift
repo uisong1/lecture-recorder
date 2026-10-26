@@ -107,7 +107,8 @@ final class FakeNowPlaying: NowPlayingPublishing {
 
     @Test func 이전_다음_키는_북마크_이어_듣기_중에_구간을_옮긴다() {
         let (playback, _) = make()
-        let recording = makeRecording()
+        // 북마크가 녹음 길이 안에 있어야 구간이 만들어진다.
+        let recording = Recording(title: "녹음", subject: nil, startedAt: date(2026, 3, 2, 10, 0), duration: 600, relativePath: "자료구조/2026-03-02_1000.m4a")
         container.mainContext.insert(recording)
         let entries = [100.0, 300].map { time -> BookmarkEntry in
             let bookmark = Bookmark(time: time, createdAt: date(2026, 3, 2, 11, 0), recording: recording)
