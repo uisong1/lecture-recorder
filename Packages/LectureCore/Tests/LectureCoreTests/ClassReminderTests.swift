@@ -148,7 +148,14 @@ final class FakeNotificationScheduler: NotificationScheduling {
         container = try LectureModelContainer.make(inMemory: true)
         let suite = "ClassReminderControllerTests-\(UUID().uuidString)"
         defaults = try #require(UserDefaults(suiteName: suite))
-        controller = ClassReminderController(context: container.mainContext, notifications: notifications, defaults: defaults)
+        // 오늘 남은 수업 알림(3-66)이 섞이지 않도록 일요일 밤으로 고정한다.
+        controller = ClassReminderController(
+            context: container.mainContext,
+            notifications: notifications,
+            defaults: defaults,
+            calendar: seoulCalendar,
+            now: { date(2026, 3, 1, 23, 59) }
+        )
     }
 
     private func addClass(_ name: String, _ weekday: Weekday, hour: Int, minute: Int = 0, endHour: Int) throws -> Subject {
@@ -257,7 +264,9 @@ final class FakeReminderRecordingStarter: ReminderRecordingStarting {
             notifications: notifications,
             defaults: defaults,
             recordingStarter: starter,
-            bringAppToFront: { calls.count += 1 }
+            bringAppToFront: { calls.count += 1 },
+            calendar: seoulCalendar,
+            now: { date(2026, 3, 1, 23, 59) }
         )
     }
 

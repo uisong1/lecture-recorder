@@ -115,6 +115,8 @@ public final class RecordingController {
     public private(set) var bookmarkNotes: [String] = []
     /// 녹음이 시작된 직후 불린다. 재생 중인 소리를 멈추는 데 쓴다 (재생 소리가 마이크로 들어가는 것 방지).
     public var onStarted: (@MainActor () -> Void)?
+    /// 녹음이 끝나 목록에 넣은 직후 불린다. 수업 시작 알림처럼 "지금 녹음 중인지"에 따라 달라지는 예약을 다시 만드는 데 쓴다.
+    public var onStopped: (@MainActor () -> Void)?
     /// 마지막으로 확인한 마이크 권한. 거부 상태면 화면이 녹음 버튼 대신 안내를 보여준다.
     public private(set) var permissionStatus: MicrophonePermissionStatus
 
@@ -653,6 +655,7 @@ public final class RecordingController {
         }
         bookmarkTimes = []
         bookmarkNotes = []
+        onStopped?()
         do {
             try context.save()
         } catch {
@@ -799,6 +802,7 @@ public final class RecordingController {
             do {
                 try RecordingManager(context: context, storage: storage).delete(recording)
                 if lastSaved === recording { lastSaved = nil }
+                onStopped?()
             } catch {
                 Log.recording.error("짧은 녹음 삭제 실패: \(error.localizedDescription, privacy: .public)")
                 errorMessage = error.localizedDescription

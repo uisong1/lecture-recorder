@@ -1,6 +1,6 @@
 import Foundation
 
-/// 알림 하나. 매주 `weekday` `hour:minute`에 되풀이해서 울린다.
+/// 알림 하나. 매주 `weekday` `hour:minute`에 되풀이해서 울린다. `fireDate`가 있으면 그 시각에 한 번만 울린다.
 public struct ScheduledNotification: Equatable, Sendable {
     public let id: String
     public let title: String
@@ -10,9 +10,12 @@ public struct ScheduledNotification: Equatable, Sendable {
     public let minute: Int
     /// 이 알림이 알리는 수업의 과목 이름. 있으면 알림에 "녹음 시작" 버튼이 붙는다.
     public let subjectName: String?
+    /// 있으면 되풀이하지 않고 이 시각에 한 번만 울린다 (요일·시각은 이 시각에서 따온 값).
+    public let fireDate: Date?
 
-    public init(id: String, title: String, body: String, weekday: Weekday, hour: Int, minute: Int, subjectName: String? = nil) {
+    public init(id: String, title: String, body: String, weekday: Weekday, hour: Int, minute: Int, subjectName: String? = nil, fireDate: Date? = nil) {
         self.subjectName = subjectName
+        self.fireDate = fireDate
         self.id = id
         self.title = title
         self.body = body
@@ -96,6 +99,10 @@ public final class ClassReminderController {
     private let recordingStarter: (any ReminderRecordingStarting)?
     /// 녹음을 시작하지 못했을 때 사용자가 안내를 볼 수 있게 앱을 앞으로 가져온다.
     private let bringAppToFront: @MainActor () -> Void
+    private let calendar: Calendar
+    private let now: @MainActor () -> Date
+    /// 지금 녹음 중인지. 녹음 중에는 "녹음 중이 아닙니다" 알림을 예약하지 않는다.
+    private let isRecording: @MainActor () -> Bool
 
     public init(
         context: ModelContext,
@@ -103,8 +110,14 @@ public final class ClassReminderController {
         defaults: UserDefaults = .standard,
         leadMinutes: Int = ClassSchedule<String>.defaultReminderLeadMinutes,
         recordingStarter: (any ReminderRecordingStarting)? = nil,
-        bringAppToFront: @escaping @MainActor () -> Void = {}
+        bringAppToFront: @escaping @MainActor () -> Void = {},
+        calendar: Calendar = .current,
+        now: @escaping @MainActor () -> Date = { Date() },
+        isRecording: @escaping @MainActor () -> Bool = { false }
     ) {
+        self.calendar = calendar
+        self.now = now
+        self.isRecording = isRecording
         self.recordingStarter = recordingStarter
         self.bringAppToFront = bringAppToFront
         self.context = context
@@ -159,17 +172,17 @@ public final class ClassReminderController {
     /// 시간표나 과목 이름이 바뀌었을 때 예약을 다시 만든다. 꺼져 있으면 아무 일도 하지 않는다.
     public func reschedule() async {
         guard isEnabled else { return }
-        await notifications.replaceAll(with: plannedNotifications())
+        await notifications.replaceAll(with: plannedNotifications() + plannedMissedStartNotifications())
     }
 
-    /// 지금 시간표로 만든 알림 목록.
-    public func plannedNotifications() -> [ScheduledNotification] {
+    /// 시간표와 과목 이름. 읽지 못하면 nil.
+    private func loadSchedule() -> (schedule: ClassSchedule<PersistentIdentifier>, names: [PersistentIdentifier: String])? {
         let slots: [TimeSlot]
         do {
             slots = try context.fetch(FetchDescriptor<TimeSlot>())
         } catch {
             Log.data.error("알림용 시간표 조회 실패: \(error.localizedDescription, privacy: .public)")
-            return []
+            return nil
         }
         let names = Dictionary(
             slots.compactMap { slot in slot.subject.map { ($0.persistentModelID, $0.name) } },
@@ -179,6 +192,50 @@ public final class ClassReminderController {
             guard let period = slot.period, let subject = slot.subject else { return nil }
             return .init(period: period, subjectID: subject.persistentModelID)
         })
+        return (schedule, names)
+    }
+
+    /// 오늘 시작한 녹음의 과목. 이미 녹음한 수업인지 가릴 때 쓴다.
+    private func todaysRecordings() -> [(subjectID: PersistentIdentifier, startedAt: Date)] {
+        let dayStart = calendar.startOfDay(for: now())
+        do {
+            let recordings = try context.fetch(FetchDescriptor<Recording>(predicate: #Predicate { $0.startedAt >= dayStart }))
+            return recordings.compactMap { recording in
+                recording.subject.map { (subjectID: $0.persistentModelID, startedAt: recording.startedAt) }
+            }
+        } catch {
+            Log.data.error("알림용 오늘 녹음 조회 실패: \(error.localizedDescription, privacy: .public)")
+            return []
+        }
+    }
+
+    /// 오늘 남은 수업 중 시작 5분 뒤에도 녹음 중이 아니면 보낼 한 번짜리 알림 목록.
+    /// 지금 녹음 중이면 비어 있다 (녹음이 끝나면 `reschedule()`로 다시 만든다).
+    public func plannedMissedStartNotifications() -> [ScheduledNotification] {
+        guard !isRecording(), let (schedule, names) = loadSchedule() else { return [] }
+        let current = now()
+        return schedule.missedStartReminders(now: current, calendar: calendar, recorded: todaysRecordings()).compactMap { reminder in
+            guard let name = names[reminder.subjectID], !name.isEmpty else { return nil }
+            let parts = calendar.dateComponents([.weekday, .hour, .minute], from: reminder.fireDate)
+            guard let weekdayValue = parts.weekday, let weekday = Weekday(rawValue: weekdayValue),
+                  let hour = parts.hour, let minute = parts.minute
+            else { return nil }
+            return ScheduledNotification(
+                id: "missed-start-\(Int(reminder.fireDate.timeIntervalSince1970))",
+                title: Self.title,
+                body: "\(name) 수업이 시작됐는데 녹음 중이 아닙니다",
+                weekday: weekday,
+                hour: hour,
+                minute: minute,
+                subjectName: name,
+                fireDate: reminder.fireDate
+            )
+        }
+    }
+
+    /// 지금 시간표로 만든 매주 되풀이 알림 목록.
+    public func plannedNotifications() -> [ScheduledNotification] {
+        guard let (schedule, names) = loadSchedule() else { return [] }
         return schedule.weeklyReminders(leadMinutes: leadMinutes).map { reminder in
             let name = names[reminder.subjectID] ?? ""
             return ScheduledNotification(
@@ -261,8 +318,15 @@ public final class SystemNotificationScheduler: NSObject, NotificationScheduling
                 content.categoryIdentifier = Self.categoryID
                 content.userInfo = [Self.subjectNameKey: subjectName]
             }
-            let components = DateComponents(hour: notification.hour, minute: notification.minute, weekday: notification.weekday.rawValue)
-            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+            let trigger: UNCalendarNotificationTrigger
+            if let fireDate = notification.fireDate {
+                // 한 번만 울린다. 날짜까지 정해서 내일 같은 시각에 다시 울리지 않게 한다.
+                let components = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: fireDate)
+                trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            } else {
+                let components = DateComponents(hour: notification.hour, minute: notification.minute, weekday: notification.weekday.rawValue)
+                trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+            }
             do {
                 try await center.add(UNNotificationRequest(identifier: notification.id, content: content, trigger: trigger))
             } catch {

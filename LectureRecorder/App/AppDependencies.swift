@@ -84,16 +84,22 @@ final class AppDependencies {
                 compressor: compressor
             )
         }
+        let recordingController = recording
         reminders = ClassReminderController(
             context: container.mainContext,
             notifications: notifications,
             recordingStarter: recording,
-            bringAppToFront: Self.bringAppToFront
+            bringAppToFront: Self.bringAppToFront,
+            isRecording: { recordingController.isRecording }
         )
         let reminders = reminders
         schedule.onChange = { Task { await reminders.reschedule() } }
         subjects.onChange = { Task { await reminders.reschedule() } }
         Task { await reminders.reschedule() }
+        // 하루가 바뀌면 오늘 남은 수업 기준으로 "녹음 중이 아닙니다" 알림을 다시 예약한다. 앱을 오래 켜 둬도 날마다 새로 만들어진다.
+        Timer.scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { _ in
+            Task { @MainActor in await reminders.reschedule() }
+        }
         launchAtLogin = LaunchAtLoginModel(controller: SystemLoginItem())
         library = RecordingLibrary(context: container.mainContext)
         manager = RecordingManager(context: container.mainContext, storage: storage)
@@ -169,7 +175,12 @@ final class AppDependencies {
         startupError = problems.isEmpty ? nil : problems.joined(separator: "\n")
         // 녹음을 시작하면 재생 중인 소리를 멈춘다.
         let player = playback
-        recording.onStarted = { player.recordingDidStart() }
+        // 녹음을 시작하면 "녹음 중이 아닙니다" 알림을 취소하고, 끝나면 남은 수업 기준으로 다시 예약한다.
+        recording.onStarted = {
+            player.recordingDidStart()
+            Task { await reminders.reschedule() }
+        }
+        recording.onStopped = { Task { await reminders.reschedule() } }
     }
 
     private static func makeStoreBackup() -> StoreBackup? {
