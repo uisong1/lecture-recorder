@@ -23,6 +23,9 @@ public final class Recording {
     /// 마지막으로 재생을 시작한 시각. nil이면 한 번도 재생한 적이 없다.
     /// 기본값이 nil인 속성 추가라 기존 저장소는 자동으로 옮겨지고, 기존 녹음은 모두 nil로 시작한다.
     public var lastPlayedAt: Date?
+    /// 수업 전체에 대한 한 줄 메모 (예: "중간고사 범위 발표"). 비어 있으면 없는 것이다.
+    /// 기본값이 빈 문자열인 속성 추가라 기존 저장소는 자동으로 옮겨진다.
+    public var memo: String = ""
 
     public init(title: String, subject: Subject?, startedAt: Date, duration: TimeInterval, relativePath: String) {
         self.title = title

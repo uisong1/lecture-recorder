@@ -22,6 +22,8 @@ public struct BundleRecording: Sendable, Equatable {
     public var duration: TimeInterval
     /// 녹음 폴더(`Recordings/`) 기준 상대 경로.
     public var relativePath: String
+    /// 수업 전체에 대한 한 줄 메모. 비어 있으면 없는 것이다.
+    public var memo: String
     public var bookmarks: [BundleBookmark]
     public var isRecovered: Bool
 
@@ -32,6 +34,7 @@ public struct BundleRecording: Sendable, Equatable {
         startedAt: Date,
         duration: TimeInterval,
         relativePath: String,
+        memo: String = "",
         bookmarks: [BundleBookmark] = [],
         isRecovered: Bool = false
     ) {
@@ -41,6 +44,7 @@ public struct BundleRecording: Sendable, Equatable {
         self.startedAt = startedAt
         self.duration = duration
         self.relativePath = relativePath
+        self.memo = memo
         self.bookmarks = bookmarks
         self.isRecovered = isRecovered
     }
@@ -186,6 +190,8 @@ public struct RecordingBundleExporter: Sendable {
                 lines.append("- 날짜: \(dateTimeText(r.startedAt))")
                 lines.append("- 길이: \(Self.durationText(r.duration))")
                 lines.append("- 파일: `\(Self.audioFolderName)/\(item.fileName)`")
+                let memo = r.memo.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+                if !memo.isEmpty { lines.append("- 수업 메모: \(memo)") }
                 if r.isRecovered { lines.append("- 참고: 녹음 중 앱이 꺼져 복구한 녹음이라 끝부분이 없을 수 있습니다.") }
                 if r.bookmarks.isEmpty {
                     lines.append("- 북마크: 없음")

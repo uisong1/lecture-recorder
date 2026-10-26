@@ -4,6 +4,10 @@ import SwiftUI
 /// 불러온 녹음의 재생 위치 슬라이더와 배속 선택. 뷰는 컨트롤러 상태만 보여준다.
 struct PlaybackBar: View {
     let playback: PlaybackController
+    let manager: RecordingManager
+    let library: RecordingLibrary
+    @State private var editingMemo = false
+    @State private var memoText = ""
     @State private var dragTime: TimeInterval?
     @State private var editingNote: Bookmark?
     @State private var noteText = ""
@@ -16,6 +20,20 @@ struct PlaybackBar: View {
                 Text(playback.current?.title ?? "")
                     .designText(.captionStrong)
                     .foregroundStyle(Design.Palette.ink)
+                if let recording = playback.current {
+                    Button {
+                        memoText = recording.memo
+                        editingMemo = true
+                    } label: {
+                        Text(recording.memo.isEmpty ? "수업 메모 쓰기" : "수업 메모: \(recording.memo)")
+                            .designText(.caption)
+                            .foregroundStyle(recording.memo.isEmpty ? Design.Palette.primary : Design.Palette.inkMuted)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .help("이 수업에 대한 한 줄 메모를 쓰거나 고칩니다")
+                    .accessibilityIdentifier("playbackMemo")
+                }
                 HStack(spacing: Design.Spacing.sm) {
                     Text(RecordingController.format(shownTime))
                         .designText(.caption)
@@ -155,6 +173,16 @@ struct PlaybackBar: View {
         .frame(maxWidth: .infinity)
         .background(Design.Palette.parchment)
         .overlay(alignment: .top) { Divider() }
+        .alert("수업 메모", isPresented: $editingMemo) {
+            TextField("예: 중간고사 범위 발표", text: $memoText)
+            Button("취소", role: .cancel) {}
+            Button("저장") {
+                if let recording = playback.current {
+                    try? manager.setMemo(memoText, for: recording)
+                    library.reload()
+                }
+            }
+        }
         .alert("북마크 메모", isPresented: Binding(get: { editingNote != nil }, set: { if !$0 { editingNote = nil } })) {
             TextField("메모", text: $noteText)
             Button("취소", role: .cancel) {}

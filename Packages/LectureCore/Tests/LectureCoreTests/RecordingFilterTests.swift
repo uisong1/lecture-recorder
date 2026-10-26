@@ -23,6 +23,13 @@ import Testing
         #expect(!matches(RecordingFilter(query: "알고리즘")))
     }
 
+    @Test func 수업_메모에_들어_있어도_찾는다() {
+        let filter = RecordingFilter(query: "중간고사")
+        #expect(filter.matches(title: "자료구조 3주차", memo: "중간고사 범위 발표", startedAt: now, now: now, calendar: seoulCalendar))
+        #expect(!filter.matches(title: "자료구조 3주차", memo: "", startedAt: now, now: now, calendar: seoulCalendar))
+        #expect(!filter.matches(title: "자료구조 3주차", memo: "과제 공지", startedAt: now, now: now, calendar: seoulCalendar))
+    }
+
     @Test func 검색어의_앞뒤_공백과_대소문자는_무시한다() {
         #expect(matches(RecordingFilter(query: "  자료  ")))
         #expect(matches(RecordingFilter(query: "ai"), title: "AI 데이터 분석"))

@@ -34,6 +34,18 @@ struct FakeDurationReader: AudioDurationReading {
 
     func all() throws -> [Recording] { try context.fetch(FetchDescriptor<Recording>()) }
 
+    @Test func 폴더를_다시_읽어도_수업_메모가_남는다() async throws {
+        addFile("2026년 2학기/컴퓨터구조/10-28 수 13-30.m4a")
+        let existing = Recording(title: "녹음", subject: nil, startedAt: date(2026, 10, 28, 13, 30), duration: 60, relativePath: "2026년 2학기/컴퓨터구조/10-28 수 13-30.m4a")
+        existing.memo = "중간고사 범위 발표"
+        context.insert(existing)
+        try context.save()
+
+        _ = try await rescanner().rescan()
+
+        #expect(try all().map(\.memo) == ["중간고사 범위 발표"])
+    }
+
     @Test func 목록에_있는_파일은_건너뛴다() async throws {
         addFile("2026년 2학기/컴퓨터구조/10-28 수 13-30.m4a")
         context.insert(Recording(title: "녹음", subject: nil, startedAt: date(2026, 10, 28, 13, 30), duration: 60, relativePath: "2026년 2학기/컴퓨터구조/10-28 수 13-30.m4a"))

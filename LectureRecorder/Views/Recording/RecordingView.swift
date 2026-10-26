@@ -322,7 +322,7 @@ struct RecordingView: View {
         .onChange(of: recording.lastSaved) { isEditingSaved = false }
         .onDisappear { recording.stopPreview() }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if playback.current != nil { PlaybackBar(playback: playback) }
+            if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
         }
         .alert(
             "너무 짧은 녹음입니다",

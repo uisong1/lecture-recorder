@@ -273,6 +273,19 @@ import Testing
         #expect(PlaybackController.playbackStart(forBookmarkAt: 900, duration: 600) == 600)
     }
 
+    @Test func 녹음_검색은_수업_메모도_찾는다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let monday = addRecording("월요일", subject: ds, at: date(2026, 3, 2, 10, 0))
+        _ = addRecording("수요일", subject: ds, at: date(2026, 3, 4, 10, 0))
+        monday.memo = "중간고사 범위 발표"
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        library.filter.query = "중간고사"
+        #expect(library.recordings.map(\.title) == ["월요일"])
+    }
+
     @Test func 북마크_검색은_메모와_녹음_제목을_함께_찾는다() throws {
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         let monday = addRecording("중간고사 대비", subject: ds, at: date(2026, 3, 2, 10, 0))
