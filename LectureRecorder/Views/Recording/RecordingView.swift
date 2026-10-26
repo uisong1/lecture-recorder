@@ -3,7 +3,7 @@ import AppKit
 import SwiftData
 import SwiftUI
 
-/// 녹음 버튼 하나로 시작·정지하는 화면.
+/// 녹음 버튼 하나로 시작·정지하는 화면. 대기 / 녹음 중 / 정지 직후 세 구역으로 나뉜다.
 struct RecordingView: View {
     let recording: RecordingController
     let playback: PlaybackController
@@ -12,43 +12,9 @@ struct RecordingView: View {
     /// 과목이 하나도 없을 때 보이는 첫 안내.
     let showsFirstRunGuide: Bool
 
-    @State private var isEditingSaved = false
-    @State private var titleDraft = ""
-    @State private var memoDraft = ""
-
     var body: some View {
         VStack(spacing: Design.Spacing.lg) {
-            TimelineView(.periodic(from: .now, by: 0.5)) { _ in
-                VStack(spacing: Design.Spacing.xs) {
-                    Text(recording.isRecording ? recording.currentSubjectName + (recording.isPaused ? " (일시정지)" : "") : "녹음 대기")
-                        .designText(.tagline)
-                        .foregroundStyle(Design.Palette.ink)
-                        .accessibilityIdentifier("recordingSubject")
-                    if recording.isRecording {
-                        RecordingIndicator(isPaused: recording.isPaused)
-                    } else {
-                        Text("지금 녹음하면: \(recording.expectedSubjectName)")
-                            .designText(.caption)
-                            .foregroundStyle(Design.Palette.inkMuted)
-                            .accessibilityIdentifier("expectedSubject")
-                        Picker("과목", selection: Bindable(recording).subjectChoice) {
-                            Text("자동 (시간표)").tag(SubjectChoice.automatic)
-                            ForEach(recording.availableSubjects()) { subject in
-                                Text(subject.name).tag(SubjectChoice.subject(subject.persistentModelID))
-                            }
-                            Text("미분류").tag(SubjectChoice.unclassified)
-                        }
-                        .pickerStyle(.menu)
-                        .fixedSize()
-                        .accessibilityIdentifier("subjectChoice")
-                    }
-                    Text(recording.elapsedText)
-                        .designText(.hero)
-                        .monospacedDigit()
-                        .foregroundStyle(Design.Palette.ink)
-                        .accessibilityIdentifier("elapsedTime")
-                }
-            }
+            header
 
             if let device = recording.inputDeviceName {
                 Label("마이크: \(device)", systemImage: "mic")
@@ -85,158 +51,10 @@ struct RecordingView: View {
                 }
             }
 
-            if let warning = recording.inputDeviceWarning {
-                Label(warning, systemImage: "exclamationmark.triangle")
-                    .designText(.caption)
-                    .foregroundStyle(Design.Palette.danger)
-                    .accessibilityIdentifier("inputDeviceWarning")
-            }
-
-            if !recording.isRecording && !recording.isPermissionDenied {
-                VStack(spacing: Design.Spacing.xs) {
-                    Button(recording.isPreviewing ? "확인 중…" : "마이크 확인") {
-                        Task { await recording.startPreview() }
-                    }
-                    .buttonStyle(.pillSecondary)
-                    .disabled(recording.isPreviewing)
-                    .accessibilityIdentifier("checkMicrophone")
-                    if recording.isPreviewing {
-                        InputLevelBar(level: recording.previewLevel)
-                            .accessibilityIdentifier("previewLevel")
-                    }
-                    switch recording.previewOutcome {
-                    case .heard:
-                        Label("소리가 잘 들어옵니다", systemImage: "checkmark.circle")
-                            .designText(.caption)
-                            .foregroundStyle(Design.Palette.inkMuted)
-                            .accessibilityIdentifier("previewHeard")
-                    case .quiet:
-                        Label("소리가 거의 안 들려요. 마이크 위치나 입력 장치를 확인해 주세요.", systemImage: "mic.slash")
-                            .designText(.caption)
-                            .foregroundStyle(Design.Palette.inkMuted)
-                            .accessibilityIdentifier("previewSilenceHint")
-                    case nil:
-                        EmptyView()
-                    }
-                }
-            }
-
             if recording.isRecording {
-                InputLevelBar(level: recording.inputLevel)
-                    .accessibilityIdentifier("inputLevel")
-                if recording.isInputSilent {
-                    Label("소리가 거의 들어오지 않습니다", systemImage: "mic.slash")
-                        .designText(.caption)
-                        .foregroundStyle(Design.Palette.danger)
-                        .accessibilityIdentifier("silenceWarning")
-                }
-            }
-
-            if !recording.isRecording,
-               let resume = library.resumeCandidate(using: manager),
-               !(playback.current === resume && playback.isPlaying) {
-                HStack(spacing: Design.Spacing.sm) {
-                    Label(ResumeListening.lineText(for: resume), systemImage: "headphones")
-                        .designText(.caption)
-                        .foregroundStyle(Design.Palette.inkMuted)
-                        .accessibilityIdentifier("resumeListeningLine")
-                    Button("이어 듣기") {
-                        playback.select(resume)
-                        playback.play()
-                    }
-                    .buttonStyle(.pillSecondary)
-                    .accessibilityIdentifier("resumeListening")
-                }
-            }
-
-            if showsFirstRunGuide && !recording.isRecording {
-                VStack(spacing: Design.Spacing.sm) {
-                    Text(SubjectManager.firstRunGuideText)
-                        .designText(.caption)
-                        .foregroundStyle(Design.Palette.inkMuted)
-                        .accessibilityIdentifier("firstRunGuide")
-                    SettingsLink {
-                        Text("과목과 시간표 설정 열기")
-                    }
-                    .buttonStyle(.pill)
-                    .accessibilityIdentifier("firstRunOpenSettings")
-                }
-            }
-
-            if let advice = recording.preRecordingAdvice {
-                Label(advice, systemImage: "battery.100percent.bolt")
-                    .designText(.caption)
-                    .foregroundStyle(Design.Palette.inkMuted)
-                    .accessibilityIdentifier("chargeAdvice")
-            }
-
-            if recording.isPermissionDenied && !recording.isRecording {
-                VStack(spacing: Design.Spacing.xs) {
-                    Label("마이크 권한이 꺼져 있어 녹음할 수 없습니다.", systemImage: "mic.slash")
-                        .designText(.bodyStrong)
-                        .accessibilityIdentifier("microphoneDenied")
-                    Text("시스템 설정 > 개인정보 보호 및 보안 > 마이크에서 LectureRecorder를 켜 주세요.")
-                        .designText(.caption)
-                        .foregroundStyle(Design.Palette.inkMuted)
-                    Button("시스템 설정 열기") {
-                        if let url = Self.microphoneSettingsURL { NSWorkspace.shared.open(url) }
-                    }
-                    .buttonStyle(.pill)
-                    .accessibilityIdentifier("openSystemSettings")
-                }
+                RecordingActiveSection(recording: recording)
             } else {
-                Button {
-                    Task { await recording.toggle() }
-                } label: {
-                    Label(recording.isRecording ? "녹음 정지" : "녹음 시작", systemImage: recording.isRecording ? "stop.fill" : "mic.fill")
-                }
-                .buttonStyle(.pill)
-                .keyboardShortcut("r", modifiers: .command)
-                .help(recording.isRecording ? "녹음 정지 (⌘R)" : "녹음 시작 (⌘R)")
-                .accessibilityLabel(recording.isRecording ? "녹음 정지" : "녹음 시작")
-                .accessibilityIdentifier("recordButton")
-            }
-
-            if recording.isRecording {
-                Button {
-                    recording.togglePause()
-                } label: {
-                    Label(recording.isPaused ? "재개" : "일시정지", systemImage: recording.isPaused ? "play.fill" : "pause.fill")
-                }
-                .buttonStyle(.pillSecondary)
-                .keyboardShortcut("p", modifiers: .command)
-                .accessibilityIdentifier("pauseButton")
-
-                Button {
-                    recording.addBookmark()
-                } label: {
-                    Label("북마크 \(recording.bookmarkTimes.count)", systemImage: "bookmark")
-                }
-                .buttonStyle(.pillSecondary)
-                .keyboardShortcut("b", modifiers: .command)
-                .help("중요한 구간 표시 (⌘B)")
-                .accessibilityIdentifier("bookmarkButton")
-            }
-
-            if recording.isRecording {
-                BookmarkNoteField(recording: recording)
-            }
-
-            if recording.isRecording {
-                Text(BatteryAdvice.lidNotice)
-                    .designText(.caption)
-                    .foregroundStyle(Design.Palette.inkMuted)
-                    .accessibilityIdentifier("lidNotice")
-                if let warning = recording.batteryWarning {
-                    Label(warning, systemImage: "battery.25percent")
-                        .designText(.caption)
-                        .foregroundStyle(Design.Palette.danger)
-                        .accessibilityIdentifier("batteryWarning")
-                }
-                Text("창을 닫아도 녹음은 계속됩니다. Dock 아이콘을 누르면 창이 다시 열립니다.")
-                    .designText(.caption)
-                    .foregroundStyle(Design.Palette.inkMuted)
-                    .accessibilityIdentifier("windowCloseHint")
+                RecordingIdleSection(recording: recording, playback: playback, manager: manager, library: library, showsFirstRunGuide: showsFirstRunGuide)
             }
 
             if let message = recording.errorMessage {
@@ -246,105 +64,14 @@ struct RecordingView: View {
                     .accessibilityIdentifier("recordingError")
             }
 
-            if let warning = recording.storageWarning, recording.isRecording {
-                Label(warning, systemImage: "externaldrive.badge.exclamationmark")
-                    .designText(.caption)
-                    .foregroundStyle(Design.Palette.danger)
-                    .accessibilityIdentifier("storageWarning")
-            }
-
-            if let notice = recording.stallResumeNotice, recording.isRecording {
-                Label(notice, systemImage: "exclamationmark.triangle.fill")
-                    .designText(.bodyStrong)
-                    .foregroundStyle(Design.Palette.danger)
-                    .multilineTextAlignment(.center)
-                    .accessibilityIdentifier("stallResumeNotice")
-            }
-
-            if let notice = recording.recorderStallNotice, !recording.isRecording {
-                Label(notice, systemImage: "exclamationmark.triangle.fill")
-                    .designText(.bodyStrong)
-                    .foregroundStyle(Design.Palette.danger)
-                    .multilineTextAlignment(.center)
-                    .accessibilityIdentifier("recorderStallNotice")
-            }
-
-            if let notice = recording.interruptionNotice, !recording.isRecording {
-                Label(notice, systemImage: "moon.zzz")
-                    .designText(.caption)
-                    .foregroundStyle(Design.Palette.inkMuted)
-                    .accessibilityIdentifier("interruptionNotice")
-            }
-
             if let saved = recording.lastSaved, !recording.isRecording {
-                HStack(spacing: Design.Spacing.sm) {
-                    Text("저장됨: \(saved.title)")
-                        .designText(.caption)
-                        .accessibilityIdentifier("lastSavedTitle")
-                    Button(playback.current === saved && playback.isPlaying ? "일시정지" : "듣기") {
-                        playback.select(saved)
-                        playback.togglePlayPause()
-                    }
-                    .buttonStyle(.textLink)
-                    .accessibilityIdentifier("playLastSaved")
-                    Button("이어서 녹음") {
-                        Task { await recording.continueAfterStop() }
-                    }
-                    .buttonStyle(.textLink)
-                    .help("같은 과목으로 새 파일에 바로 이어서 녹음합니다")
-                    .accessibilityIdentifier("continueRecording")
-                    Button(isEditingSaved ? "완료" : "제목·과목·메모 수정") {
-                        if isEditingSaved {
-                            if titleDraft != saved.title { try? manager.rename(saved, to: titleDraft) }
-                            try? manager.setMemo(memoDraft, for: saved)
-                            library.reload()
-                        } else {
-                            titleDraft = saved.title
-                            memoDraft = saved.memo
-                        }
-                        isEditingSaved.toggle()
-                    }
-                    .buttonStyle(.textLink)
-                    .accessibilityIdentifier("editLastSaved")
-                }
-                .foregroundStyle(Design.Palette.inkMuted)
-                if isEditingSaved {
-                    HStack(spacing: Design.Spacing.sm) {
-                        TextField("제목", text: $titleDraft)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 260)
-                            .onSubmit { try? manager.rename(saved, to: titleDraft) }
-                            .accessibilityIdentifier("lastSavedTitleField")
-                        TextField("수업 메모 (예: 과제 공지)", text: $memoDraft)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 260)
-                            .onSubmit {
-                                try? manager.setMemo(memoDraft, for: saved)
-                                library.reload()
-                            }
-                            .accessibilityIdentifier("lastSavedMemoField")
-                        Menu("과목: \(saved.subject?.name ?? SubjectManager.unclassifiedName)") {
-                            ForEach(recording.availableSubjects()) { subject in
-                                Button(subject.name) { try? manager.move(saved, to: subject) }
-                            }
-                            Button(SubjectManager.unclassifiedName) { try? manager.move(saved, to: nil) }
-                        }
-                        .fixedSize()
-                        .accessibilityIdentifier("lastSavedSubjectMenu")
-                    }
-                }
-                if let message = manager.errorMessage {
-                    Text(message).designText(.caption).foregroundStyle(Design.Palette.danger)
-                }
-                if let message = playback.errorMessage {
-                    Text(message).designText(.caption).foregroundStyle(Design.Palette.danger)
-                }
+                SavedRecordingSection(recording: recording, playback: playback, manager: manager, library: library, saved: saved)
+                    .id(saved.persistentModelID)
             }
         }
         .padding(Design.Spacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .designCanvas(Design.Palette.parchment)
-        .onChange(of: recording.lastSaved) { isEditingSaved = false }
         .onDisappear { recording.stopPreview() }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
@@ -365,11 +92,100 @@ struct RecordingView: View {
         }
     }
 
-    private static let microphoneSettingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
+    private var header: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+            VStack(spacing: Design.Spacing.xs) {
+                Text(recording.isRecording ? recording.currentSubjectName + (recording.isPaused ? " (일시정지)" : "") : "녹음 대기")
+                    .designText(.tagline)
+                    .foregroundStyle(Design.Palette.ink)
+                    .accessibilityIdentifier("recordingSubject")
+                if recording.isRecording {
+                    RecordingIndicator(isPaused: recording.isPaused)
+                } else {
+                    Text("지금 녹음하면: \(recording.expectedSubjectName)")
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.inkMuted)
+                        .accessibilityIdentifier("expectedSubject")
+                    Picker("과목", selection: Bindable(recording).subjectChoice) {
+                        Text("자동 (시간표)").tag(SubjectChoice.automatic)
+                        ForEach(recording.availableSubjects()) { subject in
+                            Text(subject.name).tag(SubjectChoice.subject(subject.persistentModelID))
+                        }
+                        Text("미분류").tag(SubjectChoice.unclassified)
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .accessibilityIdentifier("subjectChoice")
+                }
+                Text(recording.elapsedText)
+                    .designText(.hero)
+                    .monospacedDigit()
+                    .foregroundStyle(Design.Palette.ink)
+                    .accessibilityIdentifier("elapsedTime")
+            }
+        }
+    }
+}
+
+/// 녹음 시작·정지 버튼. 대기와 녹음 중 구역이 함께 쓴다.
+struct RecordButton: View {
+    let recording: RecordingController
+
+    var body: some View {
+        Button {
+            Task { await recording.toggle() }
+        } label: {
+            Label(recording.isRecording ? "녹음 정지" : "녹음 시작", systemImage: recording.isRecording ? "stop.fill" : "mic.fill")
+        }
+        .buttonStyle(.pill)
+        .keyboardShortcut("r", modifiers: .command)
+        .help(recording.isRecording ? "녹음 정지 (⌘R)" : "녹음 시작 (⌘R)")
+        .accessibilityLabel(recording.isRecording ? "녹음 정지" : "녹음 시작")
+        .accessibilityIdentifier("recordButton")
+    }
+}
+
+/// 경고(danger 색)와, 경고가 없을 때만 보이는 고정 안내 한 줄. 우선순위는 `RecordingScreenNotices`가 정한다.
+struct RecordingNoticeLines: View {
+    let notices: RecordingScreenNotices
+
+    var body: some View {
+        ForEach(notices.warnings, id: \.kind) { warning in
+            switch warning.kind {
+            case .stallResume:
+                Label(warning.message, systemImage: "exclamationmark.triangle.fill")
+                    .designText(.bodyStrong)
+                    .foregroundStyle(Design.Palette.danger)
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("stallResumeNotice")
+            case .storage:
+                line(warning.message, icon: "externaldrive.badge.exclamationmark", id: "storageWarning")
+            case .battery:
+                line(warning.message, icon: "battery.25percent", id: "batteryWarning")
+            case .inputDevice:
+                line(warning.message, icon: "exclamationmark.triangle", id: "inputDeviceWarning")
+            case .silence:
+                line(warning.message, icon: "mic.slash", id: "silenceWarning")
+            }
+        }
+        if let standing = notices.standingNotice {
+            Text(standing)
+                .designText(.caption)
+                .foregroundStyle(Design.Palette.inkMuted)
+                .accessibilityIdentifier("standingNotice")
+        }
+    }
+
+    private func line(_ message: String, icon: String, id: String) -> some View {
+        Label(message, systemImage: icon)
+            .designText(.caption)
+            .foregroundStyle(Design.Palette.danger)
+            .accessibilityIdentifier(id)
+    }
 }
 
 /// 입력 크기를 가로 막대로 보여준다.
-private struct InputLevelBar: View {
+struct InputLevelBar: View {
     let level: Float
 
     var body: some View {

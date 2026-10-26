@@ -12,6 +12,8 @@ struct PlaybackBar: View {
     @State private var editingNote: Bookmark?
     @State private var noteText = ""
     @State private var deleting: Bookmark?
+    /// 수업 메모 저장에 실패했을 때의 문구.
+    @State private var memoError: String?
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.25)) { _ in
@@ -33,6 +35,12 @@ struct PlaybackBar: View {
                     .buttonStyle(.plain)
                     .help("이 수업에 대한 한 줄 메모를 쓰거나 고칩니다")
                     .accessibilityIdentifier("playbackMemo")
+                    if let memoError {
+                        Text(memoError)
+                            .designText(.caption)
+                            .foregroundStyle(Design.Palette.danger)
+                            .accessibilityIdentifier("playbackMemoError")
+                    }
                 }
                 HStack(spacing: Design.Spacing.sm) {
                     Text(RecordingController.format(shownTime))
@@ -178,7 +186,12 @@ struct PlaybackBar: View {
             Button("취소", role: .cancel) {}
             Button("저장") {
                 if let recording = playback.current {
-                    try? manager.setMemo(memoText, for: recording)
+                    do {
+                        try manager.setMemo(memoText, for: recording)
+                        memoError = nil
+                    } catch {
+                        memoError = manager.errorMessage ?? error.localizedDescription
+                    }
                     library.reload()
                 }
             }

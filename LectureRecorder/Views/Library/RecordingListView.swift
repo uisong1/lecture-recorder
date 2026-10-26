@@ -58,7 +58,8 @@ struct RecordingListView: View {
                                     .lineLimit(1)
                                     .accessibilityIdentifier("recordingMemo")
                             }
-                            ForEach(library.matchingBookmarks(of: recording)) { bookmark in
+                            let matches = BookmarkMatchSummary(library.matchingBookmarks(of: recording)) { $0.note }
+                            ForEach(matches.shown) { bookmark in
                                 Button {
                                     guard manager.canPlay(recording) else { return }
                                     playback.select(recording)
@@ -73,6 +74,13 @@ struct RecordingListView: View {
                                 .help("\(RecordingController.format(bookmark.time)) 북마크 앞부분부터 듣기")
                                 .accessibilityLabel("북마크 메모 \(bookmark.note), \(RecordingController.format(bookmark.time))부터 듣기")
                                 .accessibilityIdentifier("matchedBookmarkNote")
+                            }
+                            if let hidden = matches.hiddenText {
+                                Button(hidden) { showsBookmarks = true }
+                                    .buttonStyle(.textLink)
+                                    .help("북마크 보기에서 맞은 메모를 모두 봅니다")
+                                    .accessibilityLabel("맞은 북마크 메모 \(matches.hiddenCount)개 더 보기")
+                                    .accessibilityIdentifier("hiddenBookmarkNotes")
                             }
                             let extras = (recording.isUnplayed ? ["안 들음"] : []) + (RecordingRowStatus.bookmarkLabel(count: recording.bookmarks.count).map { [$0] } ?? []) + status.labels
                             if !extras.isEmpty {
@@ -134,31 +142,13 @@ struct RecordingListView: View {
                 .accessibilityIdentifier("listModePicker")
             }
             ToolbarItem {
-                Button("Claude용 내보내기…") { exportBundle() }
-                    .help("지금 목록의 녹음과 북마크·메모를 한 폴더로 묶어 내보냅니다.")
-                    .disabled(showsBookmarks || library.recordings.isEmpty)
-                    .accessibilityIdentifier("exportBundle")
-            }
-            ToolbarItem {
-                Picker("정렬", selection: Binding(get: { library.sortOrder }, set: { library.sortOrder = $0 })) {
-                    ForEach(RecordingSortOrder.allCases, id: \.self) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.menu)
-                .disabled(showsBookmarks)
-                .accessibilityIdentifier("sortOrder")
-            }
-            ToolbarItem {
                 Toggle("안 들은 것만", isOn: Binding(get: { library.filter.unplayedOnly }, set: { library.filter.unplayedOnly = $0 }))
                     .toggleStyle(.button)
                     .disabled(showsBookmarks)
                     .accessibilityIdentifier("unplayedOnly")
             }
             ToolbarItem {
-                Picker("기간", selection: Binding(get: { library.filter.period }, set: { selectPeriod($0) })) {
-                    ForEach(RecordingPeriod.allCases, id: \.self) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("periodFilter")
+                moreMenu
             }
         }
         .scrollContentBackground(.hidden)
@@ -229,6 +219,31 @@ struct RecordingListView: View {
                     .padding(Design.Spacing.xs)
             }
         }
+    }
+
+    /// 자주 쓰지 않는 정렬·기간·내보내기를 한 메뉴로 모았다.
+    private var moreMenu: some View {
+        Menu {
+            Picker("정렬", selection: Binding(get: { library.sortOrder }, set: { library.sortOrder = $0 })) {
+                ForEach(RecordingSortOrder.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.inline)
+            .disabled(showsBookmarks)
+            .accessibilityIdentifier("sortOrder")
+            Picker("기간", selection: Binding(get: { library.filter.period }, set: { selectPeriod($0) })) {
+                ForEach(RecordingPeriod.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.inline)
+            .accessibilityIdentifier("periodFilter")
+            Divider()
+            Button("Claude용 내보내기…") { exportBundle() }
+                .help("지금 목록의 녹음과 북마크·메모를 한 폴더로 묶어 내보냅니다.")
+                .disabled(showsBookmarks || library.recordings.isEmpty)
+                .accessibilityIdentifier("exportBundle")
+        } label: {
+            Label("더 보기", systemImage: "ellipsis.circle")
+        }
+        .accessibilityIdentifier("moreMenu")
     }
 
     /// 둘 이상 골랐을 때 목록 위에 보이는 줄.
@@ -367,7 +382,11 @@ struct RecordingListView: View {
 
     /// 동작을 실행하고 목록을 다시 읽는다. 오류 문구는 `manager.errorMessage`에 남는다.
     private func perform(_ action: () throws -> Void) {
-        try? action()
+        do {
+            try action()
+        } catch {
+            // 문구는 manager.errorMessage에 남아 목록 아래에 보인다.
+        }
         library.reload()
     }
 }
