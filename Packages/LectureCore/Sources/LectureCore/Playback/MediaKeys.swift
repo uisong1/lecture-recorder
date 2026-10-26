@@ -61,7 +61,8 @@ public final class MediaKeyController {
         self.playback = playback
         self.nowPlaying = nowPlaying
         self.now = now
-        commands.handler = { [weak self] command in self?.handle(command) ?? false }
+        // 등록한 곳이 이 객체를 붙들게 한다 (이쪽은 등록한 곳을 붙들지 않으므로 순환하지 않는다).
+        commands.handler = { [self] command in handle(command) }
     }
 
     /// 명령을 처리했으면 true. 불러온 녹음이 없거나, 녹음 중 스피커로 재생될 상황이면 무시한다
