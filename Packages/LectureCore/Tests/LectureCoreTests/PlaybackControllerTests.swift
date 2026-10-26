@@ -638,5 +638,41 @@ import Testing
         controller.skipBackward()
         #expect(!controller.isPlaying)
     }
+
+    @Test func 고른_길이만큼_앞뒤로_건너뛰고_다시_만들어도_기억한다() {
+        let defaults = UserDefaults(suiteName: "PlaybackControllerTests-\(UUID().uuidString)") ?? .standard
+        let storage = RecordingStorage(root: root, files: FakeFileStore())
+        let controller = PlaybackController(player: player, storage: storage, defaults: defaults)
+        controller.select(makeRecording())
+        controller.skipInterval = .seconds10
+        controller.seek(to: 20)
+        controller.skipForward()
+        #expect(controller.currentTime == 30)
+        controller.skipBackward()
+        #expect(controller.currentTime == 20)
+
+        let again = PlaybackController(player: player, storage: storage, defaults: defaults)
+        #expect(again.skipInterval == .seconds10)
+    }
+
+    @Test func 건너뛰기_길이가_바뀌면_알린다() {
+        let controller = makeController()
+        var seen: [SkipInterval] = []
+        controller.onSkipIntervalChange = { seen.append($0) }
+        controller.skipInterval = .seconds60
+        #expect(seen == [.seconds60])
+    }
+
+    @Test func 긴_건너뛰기도_처음과_끝_근처에서_넘지_않는다() {
+        let controller = makeController()
+        controller.select(makeRecording())
+        controller.skipInterval = .seconds60
+        controller.seek(to: 30)
+        controller.skipBackward()
+        #expect(controller.currentTime == 0)
+        controller.seek(to: 59)
+        controller.skipForward()
+        #expect(controller.currentTime == 60)
+    }
 }
 #endif

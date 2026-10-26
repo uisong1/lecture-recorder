@@ -26,6 +26,8 @@ final class AppDependencies {
     let launchAtLogin: LaunchAtLoginModel
     /// 저장소 백업. 설정에서 백업 폴더 위치와 마지막 백업 시각을 보여 준다. UI 테스트에서는 nil.
     let storeBackup: StoreBackup?
+    /// 녹음 폴더. 설정에서 위치를 보여 주고 열어 준다.
+    let storage: RecordingStorage
 
     /// 알림 버튼으로 녹음을 시작하지 못했을 때 창을 보여 준다. Dock 아이콘을 누른 것과 같아서, 창이 닫혀 있어도 다시 열린다.
     private static func bringAppToFront() {
@@ -46,6 +48,7 @@ final class AppDependencies {
             ? LocalFileStore(trashDirectory: FileManager.default.temporaryDirectory.appending(path: "LectureRecorder/FakeTrash", directoryHint: .isDirectory))
             : LocalFileStore()
         let storage = RecordingStorage(root: Self.makeRecordingsRoot(problems: &problems), files: files)
+        self.storage = storage
 
         let journal: any RecordingJournaling = Self.isUITesting
             ? InMemoryRecordingJournal()
@@ -125,7 +128,8 @@ final class AppDependencies {
             isRecording: { recording.isRecording },
             outputInspector: SystemAudioOutput()
         )
-        let remoteCommands = SystemRemoteCommands(skipInterval: PlaybackController.skipInterval)
+        let remoteCommands = SystemRemoteCommands(skipInterval: playback.skipInterval.seconds)
+        playback.onSkipIntervalChange = { [weak remoteCommands] in remoteCommands?.setSkipInterval($0.seconds) }
         let mediaKeys = MediaKeyController(playback: playback, commands: remoteCommands, nowPlaying: remoteCommands)
         self.mediaKeys = mediaKeys
         // 재생 상태를 "지금 재생 중"에 반영한다. 바뀐 것이 없으면 아무것도 올리지 않는다.

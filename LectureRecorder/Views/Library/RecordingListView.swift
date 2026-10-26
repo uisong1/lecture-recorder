@@ -10,6 +10,8 @@ struct RecordingListView: View {
 
     @State private var renaming: Recording?
     @State private var renameText = ""
+    @State private var memoing: Recording?
+    @State private var memoText = ""
     @State private var deleting: Recording?
     /// 여러 건 삭제 확인 창.
     @State private var confirmsBulkTrash = false
@@ -49,6 +51,29 @@ struct RecordingListView: View {
                             Text((library.showsSubjectName ? "\(library.subjectName(of: recording)) · " : "") + "\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(RecordingController.format(recording.duration))")
                                 .designText(.caption)
                                 .foregroundStyle(Design.Palette.inkMuted)
+                            if !recording.memo.isEmpty {
+                                Text("수업 메모: \(recording.memo)")
+                                    .designText(.caption)
+                                    .foregroundStyle(Design.Palette.ink)
+                                    .lineLimit(1)
+                                    .accessibilityIdentifier("recordingMemo")
+                            }
+                            ForEach(library.matchingBookmarks(of: recording)) { bookmark in
+                                Button {
+                                    guard manager.canPlay(recording) else { return }
+                                    playback.select(recording)
+                                    playback.play(from: bookmark)
+                                } label: {
+                                    Text("메모: \(bookmark.note)")
+                                        .designText(.caption)
+                                        .foregroundStyle(Design.Palette.primary)
+                                        .lineLimit(1)
+                                }
+                                .buttonStyle(.plain)
+                                .help("\(RecordingController.format(bookmark.time)) 북마크 앞부분부터 듣기")
+                                .accessibilityLabel("북마크 메모 \(bookmark.note), \(RecordingController.format(bookmark.time))부터 듣기")
+                                .accessibilityIdentifier("matchedBookmarkNote")
+                            }
                             let extras = (recording.isUnplayed ? ["안 들음"] : []) + (RecordingRowStatus.bookmarkLabel(count: recording.bookmarks.count).map { [$0] } ?? []) + status.labels
                             if !extras.isEmpty {
                                 Text(extras.joined(separator: " · "))
@@ -72,6 +97,10 @@ struct RecordingListView: View {
                             renameText = recording.title
                             renaming = recording
                         }
+                        Button(recording.memo.isEmpty ? "메모 쓰기…" : "메모 고치기…") {
+                            memoText = recording.memo
+                            memoing = recording
+                        }
                         Menu("과목 이동") {
                             ForEach(library.subjects) { subject in
                                 Button(subject.name) { perform { try manager.move(recording, to: subject) } }
@@ -94,7 +123,7 @@ struct RecordingListView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .searchable(text: Binding(get: { library.filter.query }, set: { library.filter.query = $0 }), prompt: showsBookmarks ? "메모·제목 검색" : "제목 검색")
+        .searchable(text: Binding(get: { library.filter.query }, set: { library.filter.query = $0 }), prompt: "제목·북마크 메모 검색")
         .toolbar {
             ToolbarItem {
                 Picker("보기", selection: $showsBookmarks) {
@@ -141,6 +170,13 @@ struct RecordingListView: View {
                 if let recording = renaming { perform { try manager.rename(recording, to: renameText) } }
             }
         }
+        .alert("수업 메모", isPresented: Binding(get: { memoing != nil }, set: { if !$0 { memoing = nil } })) {
+            TextField("예: 중간고사 범위 발표", text: $memoText)
+            Button("취소", role: .cancel) {}
+            Button("저장") {
+                if let recording = memoing { perform { try manager.setMemo(memoText, for: recording) } }
+            }
+        }
         .alert("처리 결과", isPresented: Binding(get: { batchNotice != nil }, set: { if !$0 { batchNotice = nil } })) {
             Button("확인") {}
         } message: {
@@ -183,7 +219,7 @@ struct RecordingListView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if playback.current != nil { PlaybackBar(playback: playback) }
+            if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
         }
         .overlay(alignment: .bottom) {
             if let message = manager.errorMessage ?? library.errorMessage ?? playback.errorMessage {

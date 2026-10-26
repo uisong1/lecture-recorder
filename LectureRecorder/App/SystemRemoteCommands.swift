@@ -20,6 +20,13 @@ final class SystemRemoteCommands: RemoteCommandRegistering, NowPlayingPublishing
         bind(center.previousTrackCommand, to: .previousTrack)
     }
 
+    /// 시스템 재생 키의 건너뛰기 길이를 바꾼다.
+    func setSkipInterval(_ skipInterval: TimeInterval) {
+        let center = MPRemoteCommandCenter.shared()
+        center.skipForwardCommand.preferredIntervals = [NSNumber(value: skipInterval)]
+        center.skipBackwardCommand.preferredIntervals = [NSNumber(value: skipInterval)]
+    }
+
     private func bind(_ command: MPRemoteCommand, to remote: RemoteCommand) {
         command.isEnabled = true
         command.addTarget { [weak self] _ in

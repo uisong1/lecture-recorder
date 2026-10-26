@@ -785,6 +785,20 @@ public final class RecordingController {
         }
     }
 
+    /// 방금 저장한 녹음과 같은 과목으로 새 파일에 바로 이어서 녹음한다 (실수로 멈췄거나, 수업 시간표 밖이라 자동 분류가 틀릴 때).
+    /// 지금 녹음 중이거나 방금 저장한 녹음이 없으면 아무것도 하지 않는다. 시작하지 못하면 이유를 `errorMessage`에 남기고 과목 선택은 자동으로 되돌린다.
+    public func continueAfterStop() async {
+        guard !isRecording, let saved = lastSaved else { return }
+        subjectChoice = saved.subject.map { SubjectChoice.subject($0.persistentModelID) } ?? .unclassified
+        do {
+            try await start()
+            errorMessage = nil
+        } catch {
+            subjectChoice = .automatic
+            errorMessage = error.errorDescription
+        }
+    }
+
     /// 너무 짧은 녹음을 그대로 둔다.
     public func keepShortRecording() {
         shortRecordingPrompt = nil

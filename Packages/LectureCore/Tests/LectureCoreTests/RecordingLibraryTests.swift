@@ -218,6 +218,111 @@ import Testing
         #expect(library.bookmarkCount(for: .all) == 3)
     }
 
+    @Test func 녹음_검색은_제목뿐_아니라_북마크_메모도_찾고_맞은_메모를_알려_준다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let monday = addRecording("월요일", subject: ds, at: date(2026, 3, 2, 10, 0))
+        let wednesday = addRecording("시험 정리", subject: ds, at: date(2026, 3, 4, 10, 0))
+        let friday = addRecording("금요일", subject: ds, at: date(2026, 3, 6, 10, 0))
+        let at = date(2026, 3, 7, 0, 0)
+        context.insert(Bookmark(time: 20, note: "시험에 나온다고 함", createdAt: at, recording: monday))
+        context.insert(Bookmark(time: 30, note: "다른 이야기", createdAt: at, recording: monday))
+        context.insert(Bookmark(time: 10, note: "", createdAt: at, recording: friday))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        library.filter.query = "시험"
+
+        #expect(library.recordings.map(\.title) == ["시험 정리", "월요일"])
+        #expect(library.matchingNotes(of: monday) == ["시험에 나온다고 함"])
+        #expect(library.matchingNotes(of: wednesday).isEmpty)
+
+        library.filter.query = ""
+        #expect(library.recordings.count == 3)
+        #expect(library.matchingNotes(of: monday).isEmpty)
+
+        library.filter.query = "없는말"
+        #expect(library.recordings.isEmpty)
+    }
+
+    @Test func 맞은_북마크를_시점_순서로_돌려주고_제목으로_맞은_녹음은_비어_있다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let monday = addRecording("월요일", subject: ds, at: date(2026, 3, 2, 10, 0))
+        let exam = addRecording("시험 정리", subject: ds, at: date(2026, 3, 4, 10, 0))
+        let at = date(2026, 3, 7, 0, 0)
+        let late = Bookmark(time: 900, note: "시험 범위 발표", createdAt: at, recording: monday)
+        let early = Bookmark(time: 60, note: "시험에 나온다고 함", createdAt: at, recording: monday)
+        let other = Bookmark(time: 120, note: "과제 공지", createdAt: at, recording: monday)
+        context.insert(late)
+        context.insert(early)
+        context.insert(other)
+        context.insert(Bookmark(time: 10, note: "다른 이야기", createdAt: at, recording: exam))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+
+        library.filter.query = "과제"
+        #expect(library.matchingBookmarks(of: monday).map(\.time) == [120])
+
+        library.filter.query = "시험"
+        #expect(library.matchingBookmarks(of: monday).map(\.time) == [60, 900])
+        #expect(library.matchingBookmarks(of: exam).isEmpty)
+
+        // 길이를 넘는 시점이어도 재생 시작은 길이 안에 머문다.
+        #expect(PlaybackController.playbackStart(forBookmarkAt: 900, duration: 600) == 600)
+    }
+
+    @Test func 녹음_검색은_수업_메모도_찾는다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let monday = addRecording("월요일", subject: ds, at: date(2026, 3, 2, 10, 0))
+        _ = addRecording("수요일", subject: ds, at: date(2026, 3, 4, 10, 0))
+        monday.memo = "중간고사 범위 발표"
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        library.select(.all)
+        library.filter.query = "중간고사"
+        #expect(library.recordings.map(\.title) == ["월요일"])
+    }
+
+    @Test func 안_들은_녹음_수를_과목별로_센다() throws {
+        let subjects = SubjectManager(context: context)
+        let ds = try subjects.add(name: "자료구조", color: .green)
+        let os = try subjects.add(name: "운영체제", color: .blue)
+        let first = addRecording("a", subject: ds, at: date(2026, 3, 2, 10, 0))
+        addRecording("b", subject: ds, at: date(2026, 3, 3, 10, 0))
+        let heard = addRecording("c", subject: ds, at: date(2026, 3, 4, 10, 0))
+        heard.lastPlayedAt = date(2026, 3, 5, 9, 0)
+        // 일부만 들음(위치 있음)은 들은 것이다.
+        let partial = addRecording("d", subject: os, at: date(2026, 3, 4, 11, 0))
+        partial.lastPlayedPosition = 30
+        addRecording("e", subject: nil, at: date(2026, 3, 5, 10, 0))
+        try context.save()
+
+        let library = RecordingLibrary(context: context)
+        var counts = library.unplayedCounts
+        #expect(counts.count(for: .subject(ds.persistentModelID)) == 2)
+        #expect(counts.count(for: .subject(os.persistentModelID)) == 0)
+        #expect(counts.count(for: .unclassified) == 1)
+        #expect(counts.count(for: .all) == 3)
+
+        // 과목을 옮기면 개수가 따라간다.
+        first.subject = os
+        library.reload()
+        counts = library.unplayedCounts
+        #expect(counts.count(for: .subject(ds.persistentModelID)) == 1)
+        #expect(counts.count(for: .subject(os.persistentModelID)) == 1)
+        #expect(counts.count(for: .all) == 3)
+    }
+
+    @Test func 안_들은_녹음이_없으면_0이다() throws {
+        let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
+        let library = RecordingLibrary(context: context)
+        #expect(library.unplayedCounts.count(for: .subject(ds.persistentModelID)) == 0)
+        #expect(library.unplayedCounts.count(for: .all) == 0)
+    }
+
     @Test func 북마크_검색은_메모와_녹음_제목을_함께_찾는다() throws {
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         let monday = addRecording("중간고사 대비", subject: ds, at: date(2026, 3, 2, 10, 0))

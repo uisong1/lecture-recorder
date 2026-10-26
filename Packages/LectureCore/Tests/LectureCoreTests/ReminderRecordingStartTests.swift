@@ -56,5 +56,64 @@ extension RecordingControllerTests {
         #expect(controller.errorMessage == RecordingError.permissionDenied.errorDescription)
         #expect(controller.subjectChoice == .automatic)
     }
+
+    // MARK: 정지 직후 이어서 녹음
+
+    @Test func 정지_직후_이어서_녹음하면_방금_저장한_녹음의_과목으로_시작한다() async throws {
+        _ = try addBackToBackClasses()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        try await controller.start()
+        clock.advance(by: 20 * 60)
+        _ = try controller.stop()
+
+        // 시간표로는 선형대수 시간이 됐지만 이어서 녹음은 방금 전 과목을 쓴다.
+        clock.advance(by: 56 * 60)
+        await controller.continueAfterStop()
+
+        #expect(controller.isRecording)
+        #expect(controller.currentSubjectName == "자료구조")
+        #expect(recorder.startedURLs.count == 2)
+        #expect(controller.subjectChoice == .automatic)
+        #expect(controller.errorMessage == nil)
+    }
+
+    @Test func 방금_저장한_녹음이_미분류면_미분류로_이어서_녹음한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 15, 0))  // 수업 없는 시간
+        try await controller.start()
+        _ = try controller.stop()
+
+        await controller.continueAfterStop()
+
+        #expect(controller.isRecording)
+        #expect(controller.currentSubjectName == SubjectManager.unclassifiedName)
+    }
+
+    @Test func 저장한_녹음이_없거나_이미_녹음_중이면_이어서_녹음은_아무것도_하지_않는다() async throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        await controller.continueAfterStop()
+        #expect(!controller.isRecording)
+        #expect(recorder.startedURLs.isEmpty)
+
+        try await controller.start()
+        await controller.continueAfterStop()
+        #expect(recorder.startedURLs.count == 1)
+    }
+
+    @Test func 이어서_녹음을_시작하지_못하면_이유를_남기고_과목_선택을_되돌린다() async throws {
+        _ = try addSubjectWithSlot()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        _ = try controller.stop()
+        permission.status = .denied
+        permission.answer = .denied
+
+        await controller.continueAfterStop()
+
+        #expect(!controller.isRecording)
+        #expect(controller.errorMessage == RecordingError.permissionDenied.errorDescription)
+        #expect(controller.subjectChoice == .automatic)
+    }
 }
 #endif

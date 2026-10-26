@@ -317,3 +317,29 @@ public enum StorageError: Error, Equatable, LocalizedError {
         }
     }
 }
+
+/// 설정에서 보여 주는 녹음 폴더 정보. 학기가 끝났을 때 폴더째 복사해 보관하는 데 쓴다.
+public struct RecordingsFolderInfo: Equatable, Sendable {
+    public let url: URL
+    /// 폴더가 지금 있고 열 수 있는지.
+    public let isAvailable: Bool
+
+    public static let archiveGuide = "학기가 끝나면 학기 폴더를 통째로 복사해 두면 됩니다. 앱에서는 폴더 이름을 바꾸거나 옮기지 마세요."
+    public static let missingNotice = "녹음 폴더를 찾을 수 없습니다. 아직 녹음한 적이 없거나 폴더가 옮겨졌을 수 있습니다."
+
+    /// 홈 폴더 아래면 `~`로 줄여 보여 준다.
+    public func displayPath(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> String {
+        let path = url.standardizedFileURL.path
+        let homePath = home.standardizedFileURL.path
+        if path == homePath { return "~" }
+        if path.hasPrefix(homePath + "/") { return "~" + path.dropFirst(homePath.count) }
+        return path
+    }
+}
+
+extension RecordingStorage {
+    /// 녹음 폴더(`Recordings/`)의 위치와 열 수 있는지.
+    public func folderInfo() -> RecordingsFolderInfo {
+        RecordingsFolderInfo(url: root, isAvailable: files.isDirectory(at: root))
+    }
+}

@@ -67,9 +67,17 @@ final class FakeNowPlaying: NowPlayingPublishing {
         let (playback, _) = make()
         playback.select(makeRecording())
         #expect(commands.send(.skipForward))
-        #expect(player.currentTime == PlaybackController.skipInterval)
+        #expect(player.currentTime == 15)
         #expect(commands.send(.skipBackward))
         #expect(player.currentTime == 0)
+    }
+
+    @Test func 건너뛰기_길이를_바꾸면_이어폰_키도_같은_길이를_쓴다() {
+        let (playback, _) = make()
+        playback.select(makeRecording())
+        playback.skipInterval = .seconds30
+        #expect(commands.send(.skipForward))
+        #expect(player.currentTime == 30)
     }
 
     @Test func 녹음_중_스피커면_재생_키를_무시한다() {

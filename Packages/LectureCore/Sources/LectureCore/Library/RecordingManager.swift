@@ -70,6 +70,21 @@ public final class RecordingManager {
         }
     }
 
+    /// 수업 메모를 쓰거나 고친다. 앞뒤 공백과 줄바꿈은 떼고(북마크 메모와 같은 규칙), 비우면 메모를 지운다.
+    public func setMemo(_ memo: String, for recording: Recording) throws {
+        let trimmed = memo.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != recording.memo else { return }
+        let previous = recording.memo
+        recording.memo = trimmed
+        do {
+            try context.save()
+            errorMessage = nil
+        } catch {
+            recording.memo = previous
+            throw fail(.saveFailed(error.localizedDescription))
+        }
+    }
+
     /// 다른 과목(nil이면 미분류)으로 옮긴다. 파일을 먼저 옮기고, DB 저장이 실패하면 파일을 되돌린다.
     public func move(_ recording: Recording, to subject: Subject?) throws {
         guard recording.subject?.persistentModelID != subject?.persistentModelID else { return }
@@ -156,6 +171,7 @@ public final class RecordingManager {
                 startedAt: recording.startedAt,
                 duration: recording.duration,
                 relativePath: recording.relativePath,
+                memo: recording.memo,
                 bookmarks: recording.sortedBookmarks.map { BundleBookmark(time: $0.time, note: $0.note) },
                 isRecovered: recording.isRecovered
             )

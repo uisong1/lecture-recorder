@@ -8,11 +8,13 @@ struct RecordingView: View {
     let recording: RecordingController
     let playback: PlaybackController
     let manager: RecordingManager
+    let library: RecordingLibrary
     /// 과목이 하나도 없을 때 보이는 첫 안내.
     let showsFirstRunGuide: Bool
 
     @State private var isEditingSaved = false
     @State private var titleDraft = ""
+    @State private var memoDraft = ""
 
     var body: some View {
         VStack(spacing: Design.Spacing.lg) {
@@ -127,6 +129,23 @@ struct RecordingView: View {
                         .designText(.caption)
                         .foregroundStyle(Design.Palette.danger)
                         .accessibilityIdentifier("silenceWarning")
+                }
+            }
+
+            if !recording.isRecording,
+               let resume = library.resumeCandidate(using: manager),
+               !(playback.current === resume && playback.isPlaying) {
+                HStack(spacing: Design.Spacing.sm) {
+                    Label(ResumeListening.lineText(for: resume), systemImage: "headphones")
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.inkMuted)
+                        .accessibilityIdentifier("resumeListeningLine")
+                    Button("이어 듣기") {
+                        playback.select(resume)
+                        playback.play()
+                    }
+                    .buttonStyle(.pillSecondary)
+                    .accessibilityIdentifier("resumeListening")
                 }
             }
 
@@ -268,11 +287,20 @@ struct RecordingView: View {
                     }
                     .buttonStyle(.textLink)
                     .accessibilityIdentifier("playLastSaved")
-                    Button(isEditingSaved ? "완료" : "제목·과목 수정") {
+                    Button("이어서 녹음") {
+                        Task { await recording.continueAfterStop() }
+                    }
+                    .buttonStyle(.textLink)
+                    .help("같은 과목으로 새 파일에 바로 이어서 녹음합니다")
+                    .accessibilityIdentifier("continueRecording")
+                    Button(isEditingSaved ? "완료" : "제목·과목·메모 수정") {
                         if isEditingSaved {
                             if titleDraft != saved.title { try? manager.rename(saved, to: titleDraft) }
+                            try? manager.setMemo(memoDraft, for: saved)
+                            library.reload()
                         } else {
                             titleDraft = saved.title
+                            memoDraft = saved.memo
                         }
                         isEditingSaved.toggle()
                     }
@@ -287,6 +315,14 @@ struct RecordingView: View {
                             .frame(maxWidth: 260)
                             .onSubmit { try? manager.rename(saved, to: titleDraft) }
                             .accessibilityIdentifier("lastSavedTitleField")
+                        TextField("수업 메모 (예: 과제 공지)", text: $memoDraft)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 260)
+                            .onSubmit {
+                                try? manager.setMemo(memoDraft, for: saved)
+                                library.reload()
+                            }
+                            .accessibilityIdentifier("lastSavedMemoField")
                         Menu("과목: \(saved.subject?.name ?? SubjectManager.unclassifiedName)") {
                             ForEach(recording.availableSubjects()) { subject in
                                 Button(subject.name) { try? manager.move(saved, to: subject) }
@@ -311,7 +347,7 @@ struct RecordingView: View {
         .onChange(of: recording.lastSaved) { isEditingSaved = false }
         .onDisappear { recording.stopPreview() }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if playback.current != nil { PlaybackBar(playback: playback) }
+            if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
         }
         .alert(
             "너무 짧은 녹음입니다",
