@@ -40,7 +40,7 @@ struct LectureRecorderApp: App {
         .defaultSize(width: 860, height: 640)
 
         Settings {
-            SettingsView(subjects: dependencies.subjects, schedule: dependencies.schedule, reminders: dependencies.reminders, rescan: dependencies.rescan, recording: dependencies.recording, launchAtLogin: dependencies.launchAtLogin, playback: dependencies.playback, storeBackup: dependencies.storeBackup)
+            SettingsView(subjects: dependencies.subjects, schedule: dependencies.schedule, reminders: dependencies.reminders, rescan: dependencies.rescan, recording: dependencies.recording, launchAtLogin: dependencies.launchAtLogin, playback: dependencies.playback, storeBackup: dependencies.storeBackup, storage: dependencies.storage)
         }
         .modelContainer(dependencies.container)
     }

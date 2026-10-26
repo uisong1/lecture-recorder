@@ -10,6 +10,7 @@ struct SettingsView: View {
     let launchAtLogin: LaunchAtLoginModel
     let playback: PlaybackController
     let storeBackup: StoreBackup?
+    let storage: RecordingStorage
 
     var body: some View {
         TabView {
@@ -21,7 +22,7 @@ struct SettingsView: View {
                 .tabItem { Label("시간표", systemImage: "calendar") }
             NotificationSettingsView(reminders: reminders)
                 .tabItem { Label("알림", systemImage: "bell") }
-            RecordingFilesSettingsView(model: rescan, isRecording: recording.isRecording, storeBackup: storeBackup)
+            RecordingFilesSettingsView(model: rescan, isRecording: recording.isRecording, storeBackup: storeBackup, storage: storage)
                 .tabItem { Label("녹음 파일", systemImage: "folder") }
         }
         .frame(width: 560, height: 560)
