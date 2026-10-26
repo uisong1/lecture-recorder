@@ -50,6 +50,12 @@ struct MenuBarContent: View {
                     .foregroundStyle(Design.Palette.inkMuted)
                     .accessibilityIdentifier("menuBarDetail")
             }
+            if let notice = status.pausedNotice {
+                Text(notice)
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.primary)
+                    .accessibilityIdentifier("menuBarPausedNotice")
+            }
             if let notice = status.permissionNotice {
                 Text(notice)
                     .designText(.caption)
