@@ -194,6 +194,11 @@ public final class RecordingLibrary {
         return status
     }
 
+    /// 이어서 듣기로 보일 녹음. 분류·검색 조건과 상관없이 전체에서 고른다 (`ResumeListening.pick`).
+    public func resumeCandidate(using manager: RecordingManager) -> Recording? {
+        ResumeListening.pick(from: all) { rowStatus(for: $0, using: manager).isPlayable }
+    }
+
     /// 고른 분류의 북마크를 모아 본 목록. 최근 녹음부터, 같은 녹음 안에서는 시점 순서다.
     /// 북마크가 없는 녹음은 나오지 않는다. 검색어는 녹음 제목과 북마크 메모를 함께 찾고 기간은 녹음 날짜 기준이다.
     public var bookmarkEntries: [BookmarkEntry] {
