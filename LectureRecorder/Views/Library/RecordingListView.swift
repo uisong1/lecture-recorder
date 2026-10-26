@@ -49,6 +49,13 @@ struct RecordingListView: View {
                             Text((library.showsSubjectName ? "\(library.subjectName(of: recording)) · " : "") + "\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(RecordingController.format(recording.duration))")
                                 .designText(.caption)
                                 .foregroundStyle(Design.Palette.inkMuted)
+                            if let note = library.matchingNotes(of: recording).first {
+                                Text("메모: \(note)")
+                                    .designText(.caption)
+                                    .foregroundStyle(Design.Palette.primary)
+                                    .lineLimit(1)
+                                    .accessibilityIdentifier("matchedBookmarkNote")
+                            }
                             let extras = (recording.isUnplayed ? ["안 들음"] : []) + (RecordingRowStatus.bookmarkLabel(count: recording.bookmarks.count).map { [$0] } ?? []) + status.labels
                             if !extras.isEmpty {
                                 Text(extras.joined(separator: " · "))
@@ -94,7 +101,7 @@ struct RecordingListView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .searchable(text: Binding(get: { library.filter.query }, set: { library.filter.query = $0 }), prompt: showsBookmarks ? "메모·제목 검색" : "제목 검색")
+        .searchable(text: Binding(get: { library.filter.query }, set: { library.filter.query = $0 }), prompt: "제목·북마크 메모 검색")
         .toolbar {
             ToolbarItem {
                 Picker("보기", selection: $showsBookmarks) {
