@@ -8,6 +8,7 @@ struct RecordingView: View {
     let recording: RecordingController
     let playback: PlaybackController
     let manager: RecordingManager
+    let library: RecordingLibrary
     /// 과목이 하나도 없을 때 보이는 첫 안내.
     let showsFirstRunGuide: Bool
 
@@ -120,6 +121,23 @@ struct RecordingView: View {
                         .designText(.caption)
                         .foregroundStyle(Design.Palette.danger)
                         .accessibilityIdentifier("silenceWarning")
+                }
+            }
+
+            if !recording.isRecording,
+               let resume = library.resumeCandidate(using: manager),
+               !(playback.current === resume && playback.isPlaying) {
+                HStack(spacing: Design.Spacing.sm) {
+                    Label(ResumeListening.lineText(for: resume), systemImage: "headphones")
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.inkMuted)
+                        .accessibilityIdentifier("resumeListeningLine")
+                    Button("이어 듣기") {
+                        playback.select(resume)
+                        playback.play()
+                    }
+                    .buttonStyle(.pillSecondary)
+                    .accessibilityIdentifier("resumeListening")
                 }
             }
 

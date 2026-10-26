@@ -74,7 +74,7 @@ struct ContentView: View {
                 case .library:
                     RecordingListView(library: dependencies.library, playback: dependencies.playback, manager: dependencies.manager)
                 default:
-                    RecordingView(recording: dependencies.recording, playback: dependencies.playback, manager: dependencies.manager, showsFirstRunGuide: dependencies.subjects.needsFirstRunGuide)
+                    RecordingView(recording: dependencies.recording, playback: dependencies.playback, manager: dependencies.manager, library: dependencies.library, showsFirstRunGuide: dependencies.subjects.needsFirstRunGuide)
                 }
             }
         }
