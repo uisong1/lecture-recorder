@@ -18,6 +18,7 @@ final class AppDependencies {
     let reminders: ClassReminderController
     let recording: RecordingController
     let playback: PlaybackController
+    let mediaKeys: MediaKeyController
     let library: RecordingLibrary
     let manager: RecordingManager
     let timetableImport: TimetableImportModel
@@ -114,6 +115,13 @@ final class AppDependencies {
             isRecording: { recording.isRecording },
             outputInspector: SystemAudioOutput()
         )
+        let remoteCommands = SystemRemoteCommands(skipInterval: PlaybackController.skipInterval)
+        let mediaKeys = MediaKeyController(playback: playback, commands: remoteCommands, nowPlaying: remoteCommands)
+        self.mediaKeys = mediaKeys
+        // 재생 상태를 "지금 재생 중"에 반영한다. 바뀐 것이 없으면 아무것도 올리지 않는다.
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            MainActor.assumeIsolated { mediaKeys.publish() }
+        }
         do {
             let recovery = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal)
             recoveryNotice = try recovery.recoverIfNeeded().map {
