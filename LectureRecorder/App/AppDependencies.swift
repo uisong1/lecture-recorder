@@ -110,7 +110,9 @@ final class AppDependencies {
             },
             queue: { library.recordings },
             isPlayable: { manager.status(for: $0).isPlayable },
-            allowsAdvance: { !recording.isRecording }
+            allowsAdvance: { !recording.isRecording },
+            isRecording: { recording.isRecording },
+            outputInspector: SystemAudioOutput()
         )
         do {
             let recovery = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal)
@@ -155,7 +157,7 @@ final class AppDependencies {
         startupError = problems.isEmpty ? nil : problems.joined(separator: "\n")
         // 녹음을 시작하면 재생 중인 소리를 멈춘다.
         let player = playback
-        recording.onStarted = { player.pause() }
+        recording.onStarted = { player.recordingDidStart() }
     }
 
     private static func makeContainer(problems: inout [String]) -> ModelContainer {
