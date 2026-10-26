@@ -119,7 +119,8 @@ final class AppDependencies {
             isRecording: { recording.isRecording },
             outputInspector: SystemAudioOutput()
         )
-        let remoteCommands = SystemRemoteCommands(skipInterval: PlaybackController.skipInterval)
+        let remoteCommands = SystemRemoteCommands(skipInterval: playback.skipInterval.seconds)
+        playback.onSkipIntervalChange = { [weak remoteCommands] in remoteCommands?.setSkipInterval($0.seconds) }
         let mediaKeys = MediaKeyController(playback: playback, commands: remoteCommands, nowPlaying: remoteCommands)
         self.mediaKeys = mediaKeys
         // 재생 상태를 "지금 재생 중"에 반영한다. 바뀐 것이 없으면 아무것도 올리지 않는다.

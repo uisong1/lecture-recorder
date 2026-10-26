@@ -39,8 +39,16 @@ public final class PlaybackController {
     /// 이 간격(초) 안에 이미 북마크가 있으면 같은 자리로 보고 새로 만들지 않는다.
     public static let duplicateBookmarkWindow: TimeInterval = 1
 
-    /// 앞뒤 건너뛰기 간격(초).
-    public static let skipInterval: TimeInterval = 15
+    /// 앞뒤 건너뛰기 길이. 바꾸면 기억하고 `onSkipIntervalChange`로 알린다.
+    public var skipInterval: SkipInterval {
+        didSet {
+            skipInterval.save(to: defaults)
+            onSkipIntervalChange?(skipInterval)
+        }
+    }
+
+    /// 건너뛰기 길이가 바뀔 때 부른다 (시스템 재생 키의 건너뛰기 길이를 맞추는 데 쓴다).
+    @ObservationIgnored public var onSkipIntervalChange: (@MainActor (SkipInterval) -> Void)?
 
     /// 끝에서 이 시간(초) 안쪽까지 들었으면 다 들은 것으로 보고 다음엔 처음부터 듣는다.
     public static let finishedMargin: TimeInterval = 3
@@ -113,6 +121,7 @@ public final class PlaybackController {
         self.isRecording = isRecording
         self.outputInspector = outputInspector
         continuousPlayback = defaults.bool(forKey: Self.continuousPlaybackKey)
+        skipInterval = SkipInterval.load(from: defaults)
         // 저장된 값이 없거나(0) 알 수 없는 값이면 보통 속도로 시작한다.
         let global = PlaybackRate(rawValue: defaults.float(forKey: Self.rateKey)) ?? .normal
         globalRate = global
@@ -227,8 +236,8 @@ public final class PlaybackController {
         seek(to: player.currentTime + seconds)
     }
 
-    public func skipForward() { skip(by: Self.skipInterval) }
-    public func skipBackward() { skip(by: -Self.skipInterval) }
+    public func skipForward() { skip(by: skipInterval.seconds) }
+    public func skipBackward() { skip(by: -skipInterval.seconds) }
 
     /// 속도를 바꾼다. 지금 녹음의 과목에 기억해 두고, 과목이 없는 녹음이나 기억이 없는 과목을 위해 전체 기본으로도 남긴다.
     public func setRate(_ newRate: PlaybackRate) {
