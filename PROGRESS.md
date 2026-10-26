@@ -187,3 +187,7 @@
 ## 2026-10-25 3-62 수업 시작 알림에서 바로 녹음 시작
 - 한 일: 수업 시작 알림에 "녹음 시작" 버튼(과목 이름을 알림에 실음). `ClassReminderController.handle`이 반응을 받아 `RecordingController.startRecording(forSubjectNamed:)`로 시작하고, 이미 녹음 중이면 무시, 시작 못 하면 앱을 앞으로 가져온다. 단위 테스트: 컨트롤러 반응 7개, 녹음 컨트롤러 4개.
 - Mac에서 확인 필요: CHECKLIST_MAC.md 7번의 알림 항목(버튼이 보이는지, 눌렀을 때 창 없이 녹음이 시작되는지, 마이크 권한 꺼진 상태에서 창이 열려 안내가 뜨는지).
+
+## 2026-10-26 3-64 백업에서 되살리는 길 안내
+- 한 일: `StoreBackup.lastBackupDate/folderURL/storeFolderURL`(테스트 5개)과 설정 > 녹음 파일의 "목록 백업" 영역(마지막 백업 날짜, 백업·저장소 폴더 열기, 복원 순서 안내). 설정 창 높이를 560으로 늘림.
+- Mac에서 확인 필요: CHECKLIST_MAC.md 7번의 백업 항목(안내 글이 창 안에 다 보이는지, 폴더 열기가 샌드박스 안에서 되는지).

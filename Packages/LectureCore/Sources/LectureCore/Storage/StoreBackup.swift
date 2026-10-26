@@ -95,6 +95,29 @@ public struct StoreBackup: Sendable {
         return dated.map { $0.name }.filter { !keep.contains($0) }.sorted()
     }
 
+    /// 백업이 쌓이는 폴더. 설정에서 Finder로 연다.
+    public var folderURL: URL { backupsRoot }
+
+    /// 복원할 때 백업 파일을 되돌려 놓는 저장소 폴더 (default.store가 있는 곳).
+    public var storeFolderURL: URL { storeURL.deletingLastPathComponent() }
+
+    /// 가장 최근에 끝난 백업의 날짜(그날 0시). 끝난 백업은 본 파일이 들어 있는 날짜 폴더다.
+    /// 백업이 없거나 폴더를 읽지 못하면 nil.
+    public func lastBackupDate() -> Date? {
+        guard let entries = try? files.contentsOfDirectory(at: backupsRoot) else { return nil }
+        let storeName = storeURL.lastPathComponent
+        let latest = entries.map(\.lastPathComponent)
+            .filter { Self.isDayName($0) && files.fileExists(at: backupsRoot.appending(path: $0).appending(path: storeName)) }
+            .sorted(by: >)
+        for name in latest {
+            let parts = name.split(separator: "-").compactMap { Int($0) }
+            guard let date = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])),
+                  Self.dayName(for: date, calendar: calendar) == name else { continue }
+            return date
+        }
+        return nil
+    }
+
     @discardableResult
     public func backupIfNeeded() -> Outcome {
         guard files.fileExists(at: storeURL) else { return .noStore }

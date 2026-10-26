@@ -223,4 +223,34 @@ import Testing
         let names = ["2026-09-27", "2026-09-28", "2026-10-04", "2026-10-05", "2026-10-18", "2026-10-19", "2026-10-25"]
         #expect(removed(names, calendar: sunday) == removed(names, calendar: monday))
     }
+
+    @Test func 마지막_백업은_가장_최근에_끝난_날짜다() {
+        addOldBackup("2026-10-20")
+        addOldBackup("2026-10-23")
+        #expect(backup().lastBackupDate() == date(2026, 10, 23, 0, 0))
+    }
+
+    @Test func 본_파일이_없는_조각은_마지막_백업으로_치지_않는다() {
+        addOldBackup("2026-10-20")
+        files.add(backups.appending(path: "2026-10-24/default.store-wal"))
+        #expect(backup().lastBackupDate() == date(2026, 10, 20, 0, 0))
+    }
+
+    @Test func 백업이_없거나_날짜_폴더가_아니면_nil이다() {
+        #expect(backup().lastBackupDate() == nil)
+        files.add(backups.appending(path: "메모/default.store"))
+        #expect(backup().lastBackupDate() == nil)
+    }
+
+    @Test func 방금_만든_백업이_마지막_백업으로_보인다() {
+        addStore()
+        let target = backup()
+        target.backupIfNeeded()
+        #expect(target.lastBackupDate() == date(2026, 10, 25, 0, 0))
+    }
+
+    @Test func 백업_폴더_위치를_알려_준다() {
+        #expect(backup().folderURL == backups)
+        #expect(backup().storeFolderURL == support)
+    }
 }

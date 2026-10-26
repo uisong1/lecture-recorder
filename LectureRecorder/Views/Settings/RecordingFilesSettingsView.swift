@@ -1,10 +1,19 @@
 import LectureCore
+import AppKit
 import SwiftUI
 
 /// 녹음 파일을 다시 읽어 목록에 되살리는 설정 탭.
 struct RecordingFilesSettingsView: View {
     let model: RecordingRescanModel
     let isRecording: Bool
+    let storeBackup: StoreBackup?
+
+    @State private var lastBackup: Date?
+
+    private var lastBackupText: String {
+        guard let lastBackup else { return "마지막 백업: 아직 없음" }
+        return "마지막 백업: \(lastBackup.formatted(date: .long, time: .omitted))"
+    }
 
     var body: some View {
         Form {
@@ -31,7 +40,37 @@ struct RecordingFilesSettingsView: View {
                         .accessibilityIdentifier("rescanMessage")
                 }
             }
+            if let storeBackup {
+                Section("목록 백업") {
+                    Text("과목·시간표·녹음 목록은 앱을 켤 때 하루에 한 번 백업됩니다. 녹음 파일(.m4a)은 백업 대상이 아니며, 목록이 사라져도 위의 \"녹음 폴더 다시 읽기\"로 되살립니다.")
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.inkMuted)
+                    Text(lastBackupText)
+                        .designText(.body)
+                        .accessibilityIdentifier("lastBackupText")
+                    HStack {
+                        Button("저장소 폴더 열기") { NSWorkspace.shared.open(storeBackup.storeFolderURL) }
+                            .buttonStyle(.pillSecondary)
+                            .accessibilityIdentifier("openStoreFolderButton")
+                        Button("백업 폴더 열기") { NSWorkspace.shared.open(storeBackup.folderURL) }
+                            .buttonStyle(.pill)
+                            .disabled(lastBackup == nil)
+                            .accessibilityIdentifier("openBackupFolderButton")
+                    }
+                    VStack(alignment: .leading, spacing: Design.Spacing.xs) {
+                        Text("목록이 망가졌을 때 되살리는 순서")
+                            .designText(.caption)
+                        Text("1. 앱을 완전히 종료합니다(⌘Q).\n2. \"저장소 폴더 열기\"로 연 폴더의 default.store 파일들을 다른 이름의 폴더로 옮겨 보관합니다. 지우지 마세요.\n3. 백업 폴더에서 원하는 날짜 폴더의 파일을 모두 저장소 폴더로 복사합니다.\n4. 앱을 다시 켭니다.")
+                            .designText(.caption)
+                            .foregroundStyle(Design.Palette.inkMuted)
+                        Text("자동으로 되살리지는 않습니다. 잘못 쓰면 가장 최근 기록을 덮어쓰기 때문입니다.")
+                            .designText(.caption)
+                            .foregroundStyle(Design.Palette.inkMuted)
+                    }
+                }
+            }
         }
+        .task { lastBackup = storeBackup?.lastBackupDate() }
         .formStyle(.grouped)
         .padding(Design.Spacing.lg)
     }
