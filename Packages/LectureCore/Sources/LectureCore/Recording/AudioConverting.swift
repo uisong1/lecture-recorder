@@ -6,6 +6,19 @@ public protocol AudioConverting: Sendable {
     func compress(from source: URL, to destination: URL) async throws -> TimeInterval
 }
 
+/// 압축본이 원본 길이를 제대로 담았는지 가린다. 압축본이 확인되기 전에는 CAF를 지우지 않는다.
+public enum ConversionCheck {
+    /// AAC가 앞뒤에 붙이는 여유와 반올림을 허용하는 오차 (초).
+    public static let toleranceSeconds: TimeInterval = 1
+    /// 길이에 비례해 허용하는 오차 비율.
+    public static let toleranceRatio = 0.005
+
+    public static func isComplete(sourceSeconds: TimeInterval, convertedSeconds: TimeInterval) -> Bool {
+        guard sourceSeconds > 0 else { return true }
+        return convertedSeconds >= sourceSeconds - max(toleranceSeconds, sourceSeconds * toleranceRatio)
+    }
+}
+
 #if canImport(AVFoundation)
 import AVFoundation
 
@@ -34,6 +47,8 @@ public struct SystemAudioConverter: AudioConverting {
 
     /// 처음부터 끝까지 읽어 가장 큰 소리 크기(0...1)를 찾는다. 한 번에 한 조각만 읽는다.
     private static func peakLevel(of file: AVAudioFile, buffer: AVAudioPCMBuffer) throws -> Float {
+        // 읽다가 실패해도 본 변환이 처음부터 시작하도록 항상 되감는다. 그러지 않으면 뒷부분만 압축하고 CAF를 지운다.
+        defer { file.framePosition = 0 }
         file.framePosition = 0
         var peak: Float = 0
         while file.framePosition < file.length {
@@ -46,7 +61,6 @@ public struct SystemAudioConverter: AudioConverting {
                 }
             }
         }
-        file.framePosition = 0
         return peak
     }
 
@@ -82,7 +96,15 @@ public struct SystemAudioConverter: AudioConverting {
             try output?.write(from: buffer)
         }
         output = nil
-        return Double(input.length) / format.sampleRate
+        // 압축본이 원본보다 눈에 띄게 짧으면 실패로 본다. 그래야 CAF가 지워지지 않는다.
+        let sourceSeconds = Double(input.length) / format.sampleRate
+        let written = try AVAudioFile(forReading: destination)
+        let writtenSeconds = Double(written.length) / written.processingFormat.sampleRate
+        guard ConversionCheck.isComplete(sourceSeconds: sourceSeconds, convertedSeconds: writtenSeconds) else {
+            Log.recording.error("압축본이 짧음: 원본 \(sourceSeconds, privacy: .public)초, 압축본 \(writtenSeconds, privacy: .public)초")
+            throw CocoaError(.fileWriteUnknown)
+        }
+        return sourceSeconds
     }
 }
 #endif

@@ -65,6 +65,21 @@ import Testing
         try play(m4a, expectedSeconds: 3)
     }
 
+    @Test func 압축본_길이가_원본_전체를_담는다() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let caf = directory.appending(path: "long.caf")
+        let m4a = directory.appending(path: "long.m4a")
+        try writeSineWave(seconds: 20, to: caf)
+
+        _ = try await SystemAudioConverter().compress(from: caf, to: m4a)
+
+        let written = try AVAudioFile(forReading: m4a)
+        let seconds = Double(written.length) / written.processingFormat.sampleRate
+        #expect(ConversionCheck.isComplete(sourceSeconds: 20, convertedSeconds: seconds))
+        #expect(abs(seconds - 20) < 1)
+    }
+
     @Test func 없는_파일은_재생_오류() {
         let player = SystemAudioPlayer()
         #expect(throws: (any Error).self) {
