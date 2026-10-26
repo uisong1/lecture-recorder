@@ -2,7 +2,7 @@
 
 대학생 한 명이 혼자 쓰는 macOS용 수업 녹음 앱. 녹음 버튼 하나로 녹음하면 시간표를 보고 과목별로 자동 분류한다.
 
-자세한 설계와 규칙은 [CLAUDE.md](CLAUDE.md), 작업 목록은 [TODO.md](TODO.md)를 본다.
+자세한 설계와 규칙은 [CLAUDE.md](CLAUDE.md), 작업 목록은 [TODO.md](TODO.md)를 본다. 새 기능을 Mac에서 직접 확인하려면 [CHECKLIST_MAC.md](CHECKLIST_MAC.md)를 따라 한다.
 
 ## 요구 사항
 
