@@ -261,7 +261,7 @@ public final class RecordingLibrary {
     private func filtered(by selection: LibrarySelection?) -> [Recording] {
         let current = now()
         let matching = inCategory(selection).filter {
-            filter.matches(title: $0.title, bookmarkNotes: $0.bookmarks.map(\.note), startedAt: $0.startedAt, isUnplayed: $0.isUnplayed, now: current, calendar: calendar)
+            filter.matches(title: $0.title, memo: $0.memo, bookmarkNotes: $0.bookmarks.map(\.note), startedAt: $0.startedAt, isUnplayed: $0.isUnplayed, now: current, calendar: calendar)
         }
         // `all`은 최신순으로 읽어 오므로 오래된 순일 때만 뒤집는다.
         return sortOrder == .oldestFirst ? Array(matching.reversed()) : matching

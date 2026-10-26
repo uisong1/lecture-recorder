@@ -70,8 +70,9 @@ public struct RecordingFilter: Equatable, Sendable {
     /// 제목과 시작 시각이 조건에 맞는지. `now`와 `calendar`는 기간 계산에만 쓴다.
     /// `isUnplayed`는 "안 들은 것만" 조건이 켜져 있을 때만 본다.
     /// `bookmarkNotes`를 주면 검색어가 제목 대신 북마크 메모에 들어 있어도 맞는다 (시험 전에 메모로 녹음 찾기).
-    public func matches(title: String, bookmarkNotes: [String] = [], startedAt: Date, isUnplayed: Bool = false, now: Date, calendar: Calendar) -> Bool {
-        (matchesQuery(title) || bookmarkNotes.contains { !$0.isEmpty && matchesQuery($0) }) && matchesPeriod(startedAt, now: now, calendar: calendar) && (!unplayedOnly || isUnplayed)
+    /// `memo`(수업 메모)에 들어 있어도 맞는다.
+    public func matches(title: String, memo: String = "", bookmarkNotes: [String] = [], startedAt: Date, isUnplayed: Bool = false, now: Date, calendar: Calendar) -> Bool {
+        (matchesQuery(title) || (!memo.isEmpty && matchesQuery(memo)) || bookmarkNotes.contains { !$0.isEmpty && matchesQuery($0) }) && matchesPeriod(startedAt, now: now, calendar: calendar) && (!unplayedOnly || isUnplayed)
     }
 
     /// 북마크용: 녹음 제목이나 북마크 메모 중 하나라도 검색어를 담으면 맞는다. 기간은 녹음 시작 시각으로 본다.

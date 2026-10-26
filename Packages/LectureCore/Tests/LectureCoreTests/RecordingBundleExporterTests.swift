@@ -63,6 +63,15 @@ import Testing
         #expect(order == order.sorted())
     }
 
+    @Test func 수업_메모는_있을_때만_한_줄로_적는다() throws {
+        var withMemo = recording(path: "a/1.m4a")
+        withMemo.memo = "중간고사\n범위 발표"
+        let without = recording("2주차", at: date(2026, 3, 9, 10, 0), path: "a/2.m4a")
+        let text = try summary(try exporter.export([withMemo, without], label: "자료구조", to: parent, now: now))
+        #expect(text.contains("- 수업 메모: 중간고사 범위 발표"))
+        #expect(text.components(separatedBy: "수업 메모").count == 2)
+    }
+
     @Test func 북마크가_없으면_없음이라고_적는다() throws {
         let text = try summary(try exporter.export([recording()], label: "자료구조", to: parent, now: now))
         #expect(text.contains("- 북마크: 없음"))

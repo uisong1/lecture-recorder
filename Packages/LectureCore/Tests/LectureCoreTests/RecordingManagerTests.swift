@@ -32,6 +32,29 @@ import Testing
         #expect(recording.relativePath == "미분류/2026-03-02_1000.m4a")
     }
 
+    @Test func 수업_메모는_앞뒤_공백을_떼고_저장하며_비우면_지운다() throws {
+        let recording = addRecording("미분류/a.m4a")
+        let manager = makeManager()
+        #expect(recording.memo.isEmpty)
+        try manager.setMemo("  중간고사 범위 발표 \n", for: recording)
+        #expect(recording.memo == "중간고사 범위 발표")
+        try manager.setMemo("   ", for: recording)
+        #expect(recording.memo.isEmpty)
+    }
+
+    @Test func 수업_메모는_다시_읽어도_남고_묶음_내보내기에_들어간다() throws {
+        let recording = addRecording("미분류/a.m4a")
+        try makeManager().setMemo("과제 공지", for: recording)
+        let fetched = try #require(try context.fetch(FetchDescriptor<Recording>()).first)
+        #expect(fetched.memo == "과제 공지")
+
+        let parent = URL(filePath: "/tmp/내보내기", directoryHint: .isDirectory)
+        let result = try makeManager().exportBundle([recording], label: "모든 녹음", to: parent, now: date(2026, 10, 25, 9, 0), calendar: seoulCalendar)
+        let summary = result.folder.appending(path: RecordingBundleExporter.summaryFileName)
+        let text = String(decoding: files.written[summary.standardizedFileURL.path] ?? Data(), as: UTF8.self)
+        #expect(text.contains("- 수업 메모: 과제 공지"))
+    }
+
     @Test func 빈_제목은_거부한다() throws {
         let recording = addRecording("미분류/a.m4a")
         let manager = makeManager()
