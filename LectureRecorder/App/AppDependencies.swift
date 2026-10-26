@@ -24,6 +24,8 @@ final class AppDependencies {
     let timetableImport: TimetableImportModel
     let rescan: RecordingRescanModel
     let launchAtLogin: LaunchAtLoginModel
+    /// 저장소 백업. 설정에서 백업 폴더 위치와 마지막 백업 시각을 보여 준다. UI 테스트에서는 nil.
+    let storeBackup: StoreBackup?
 
     /// 알림 버튼으로 녹음을 시작하지 못했을 때 창을 보여 준다. Dock 아이콘을 누른 것과 같아서, 창이 닫혀 있어도 다시 열린다.
     private static func bringAppToFront() {
@@ -36,7 +38,9 @@ final class AppDependencies {
 
     init() {
         var problems: [String] = []
-        let container = Self.makeContainer(problems: &problems)
+        let storeBackup = Self.makeStoreBackup()
+        self.storeBackup = storeBackup
+        let container = Self.makeContainer(problems: &problems, backup: storeBackup)
         // UI 테스트에서는 사용자의 실제 휴지통 대신 임시 폴더로 옮긴다.
         let files: any FileStoring = Self.isUITesting
             ? LocalFileStore(trashDirectory: FileManager.default.temporaryDirectory.appending(path: "LectureRecorder/FakeTrash", directoryHint: .isDirectory))
@@ -168,11 +172,14 @@ final class AppDependencies {
         recording.onStarted = { player.recordingDidStart() }
     }
 
-    private static func makeContainer(problems: inout [String]) -> ModelContainer {
+    private static func makeStoreBackup() -> StoreBackup? {
+        guard !isUITesting, let backupsRoot = try? StoreBackup.defaultRoot() else { return nil }
+        return StoreBackup(storeURL: LectureModelContainer.defaultStoreURL(), backupsRoot: backupsRoot)
+    }
+
+    private static func makeContainer(problems: inout [String], backup: StoreBackup?) -> ModelContainer {
         // 저장소를 열기 전에 하루 한 번 복사해 둔다. 실패해도 앱은 켠다.
-        if !isUITesting, let backupsRoot = try? StoreBackup.defaultRoot() {
-            StoreBackup(storeURL: LectureModelContainer.defaultStoreURL(), backupsRoot: backupsRoot).backupIfNeeded()
-        }
+        backup?.backupIfNeeded()
         do {
             return try LectureModelContainer.make(inMemory: isUITesting)
         } catch {
