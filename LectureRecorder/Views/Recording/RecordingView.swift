@@ -111,7 +111,7 @@ struct RecordingView: View {
     }
 
     private var header: some View {
-        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
             VStack(spacing: Design.Spacing.xs) {
                 Text(recording.isRecording ? recording.currentSubjectName + (recording.isPaused ? " (일시정지)" : "") : "녹음 대기")
                     .designText(.tagline)
@@ -216,7 +216,7 @@ struct InputLevelBar: View {
             }
         }
         .frame(width: 200, height: 6)
-        .animation(.linear(duration: 0.1), value: level)
+        .animation(.linear(duration: 0.25), value: level)
         .accessibilityHidden(true)
     }
 }

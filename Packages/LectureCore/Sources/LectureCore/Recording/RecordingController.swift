@@ -94,6 +94,10 @@ public final class RecordingController {
     public private(set) var inputLevel: Float = 0
     /// 마이크 확인에 걸리는 시간(초).
     public static let previewDuration: TimeInterval = 5
+    /// 소리 크기를 읽고 화면을 다시 그리는 간격. 배터리를 아끼려고 초당 4번만 읽는다(예전 10번).
+    public static let defaultLevelCheckInterval: Duration = .milliseconds(250)
+    /// 화면에 보이는 막대가 이 값보다 덜 변하면 다시 그리지 않는다.
+    public static let levelRedrawThreshold: Float = 0.03
     /// 마이크 확인 결과.
     public enum PreviewOutcome: Equatable {
         /// 소리가 들어옴.
@@ -173,7 +177,7 @@ public final class RecordingController {
         lifecycle: (any LifecycleEventSource)? = nil,
         compressor: RecordingCompressor? = nil,
         storageCheckInterval: Duration? = .seconds(10),
-        levelCheckInterval: Duration? = .milliseconds(100),
+        levelCheckInterval: Duration? = RecordingController.defaultLevelCheckInterval,
         calendar: Calendar = .current,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
@@ -294,8 +298,12 @@ public final class RecordingController {
             silenceDetector.reset()
             return
         }
-        inputLevel = recorder.inputLevel
-        isInputSilent = silenceDetector.update(level: inputLevel, at: now())
+        let level = recorder.inputLevel
+        // 값이 거의 같으면 대입하지 않는다. 대입할 때마다 화면이 다시 그려져 전력을 쓴다.
+        if abs(level - inputLevel) >= Self.levelRedrawThreshold || (level == 0) != (inputLevel == 0) {
+            inputLevel = level
+        }
+        isInputSilent = silenceDetector.update(level: level, at: now())
         if isInputSilent { raise(.inputSilent) }
     }
 

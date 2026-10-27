@@ -16,7 +16,8 @@ struct PlaybackBar: View {
     @State private var memoError: String?
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.25)) { _ in
+        // 재생 중이 아닐 때는 갱신을 멈춘다. 끝 도달 감지는 재생 중에만 필요하다.
+        TimelineView(.animation(minimumInterval: 0.25, paused: !playback.isPlaying)) { _ in
             let _ = playback.refresh()
             VStack(spacing: Design.Spacing.xs) {
                 Text(playback.current?.title ?? "")
