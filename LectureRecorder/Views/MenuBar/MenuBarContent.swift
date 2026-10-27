@@ -21,7 +21,7 @@ struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
             content(for: recording.menuBarStatus)
         }
         .padding(Design.Spacing.md)

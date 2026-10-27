@@ -99,6 +99,31 @@ import SwiftData
         #expect(!controller.isInputSilent)
     }
 
+    @Test func 거의_같은_크기는_다시_대입하지_않는다() async throws {
+        try await controller.start()
+        recorder.inputLevel = 0.5
+        controller.sampleInputLevel()
+        recorder.inputLevel = 0.51
+        controller.sampleInputLevel()
+        #expect(controller.inputLevel == 0.5)
+        recorder.inputLevel = 0.6
+        controller.sampleInputLevel()
+        #expect(controller.inputLevel == 0.6)
+    }
+
+    @Test func 무음으로_바뀌면_막대를_바로_비운다() async throws {
+        try await controller.start()
+        recorder.inputLevel = 0.01
+        controller.sampleInputLevel()
+        recorder.inputLevel = 0
+        controller.sampleInputLevel()
+        #expect(controller.inputLevel == 0)
+    }
+
+    @Test func 소리_크기는_초당_네_번만_읽는다() {
+        #expect(RecordingController.defaultLevelCheckInterval >= .milliseconds(250))
+    }
+
     @Test func 십_초_넘게_무음이면_경고하고_소리가_나면_사라진다() async throws {
         try await controller.start()
         recorder.inputLevel = 0

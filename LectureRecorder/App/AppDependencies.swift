@@ -100,9 +100,10 @@ final class AppDependencies {
         subjects.onChange = { Task { await reminders.reschedule() } }
         Task { await reminders.reschedule() }
         // 하루가 바뀌면 오늘 남은 수업 기준으로 "녹음 중이 아닙니다" 알림을 다시 예약한다. 앱을 오래 켜 둬도 날마다 새로 만들어진다.
-        Timer.scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { _ in
+        let reminderTimer = Timer.scheduledTimer(withTimeInterval: 15 * 60, repeats: true) { _ in
             Task { @MainActor in await reminders.reschedule() }
         }
+        reminderTimer.tolerance = 60  // 시스템이 다른 작업과 묶어 깨울 수 있게 한다
         launchAtLogin = LaunchAtLoginModel(controller: SystemLoginItem())
         library = RecordingLibrary(context: container.mainContext)
         manager = RecordingManager(context: container.mainContext, storage: storage)
@@ -133,9 +134,10 @@ final class AppDependencies {
         let mediaKeys = MediaKeyController(playback: playback, commands: remoteCommands, nowPlaying: remoteCommands)
         self.mediaKeys = mediaKeys
         // 재생 상태를 "지금 재생 중"에 반영한다. 바뀐 것이 없으면 아무것도 올리지 않는다.
-        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+        let publishTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             MainActor.assumeIsolated { mediaKeys.publish() }
         }
+        publishTimer.tolerance = 0.5
         do {
             let recovery = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal)
             recoveryNotice = try recovery.recoverIfNeeded().map {
