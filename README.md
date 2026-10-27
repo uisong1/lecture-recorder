@@ -24,6 +24,16 @@ open "$(xcodebuild -scheme LectureRecorder -showBuildSettings | awk '/ BUILT_PRO
 
 처음 실행하면 마이크 권한을 묻는다. 거부했다면 시스템 설정 → 개인정보 보호 및 보안 → 마이크에서 다시 켤 수 있다.
 
+## 앱으로 설치하기
+
+Xcode 없이 Launchpad·Dock에서 쓰려면 터미널을 저장소 폴더에서 열고 아래 한 줄을 실행한다.
+
+```bash
+git pull && ./scripts/install.sh
+```
+
+Release로 빌드해 `/Applications/LectureRecorder.app`에 설치하고 바로 연다. 실행 중이면 먼저 종료하고(녹음 중이면 정지·저장 후 실행), 이미 설치돼 있으면 덮어쓴다. 녹음 파일과 설정은 앱 밖(`~/Library/Containers/com.uisong.LectureRecorder`)에 있어서 다시 설치해도 그대로다. 업데이트할 때도 같은 한 줄을 다시 실행하면 된다. 빌드만 해 보려면 `./scripts/install.sh --build-only`.
+
 ## 테스트
 
 ```bash

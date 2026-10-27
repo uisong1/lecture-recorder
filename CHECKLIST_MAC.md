@@ -2,6 +2,8 @@
 
 CI(Linux·macOS)는 빌드와 단위 테스트까지만 본다. 아래는 실제 Mac에서 눌러 봐야 확인되는 것들이다. 위에서부터 순서대로 하면 5~10분 걸린다. 모양이 이상하거나 안 되면 [FEEDBACK.md](FEEDBACK.md)에 한 줄씩 적어 주세요.
 
+앱처럼 설치해 쓰려면 터미널을 저장소 폴더에서 열고 `git pull && ./scripts/install.sh` 를 실행한다. (자세한 설명은 [README](README.md#앱으로-설치하기))
+
 준비: `git pull` → `LectureRecorder.xcodeproj` 열기 → ⌘R. 기존 데이터가 있는 Mac에서 하면 마이그레이션 확인도 겸한다.
 
 ## 1. 처음 실행·권한 (1분)
