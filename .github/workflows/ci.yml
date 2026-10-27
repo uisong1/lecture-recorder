@@ -33,3 +33,5 @@ jobs:
         run: xcodebuild -version && swift --version
       - name: 빌드·테스트·실행 확인
         run: scripts/ci.sh
+      - name: 설치 스크립트 빌드 확인
+        run: scripts/install.sh --build-only
