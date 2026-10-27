@@ -12,7 +12,48 @@ struct RecordingView: View {
     /// 과목이 하나도 없을 때 보이는 첫 안내.
     let showsFirstRunGuide: Bool
 
+    /// 마이크 권한이 꺼져 있으면 시작 버튼 대신 안내가 나오므로 하단 고정 버튼도 숨긴다.
+    private var showsRecordButton: Bool {
+        recording.isRecording || !recording.isPermissionDenied
+    }
+
     var body: some View {
+        ScrollView {
+            content
+                .padding(Design.Spacing.xl)
+                .frame(maxWidth: .infinity)
+        }
+        .designCanvas(Design.Palette.parchment)
+        .onDisappear { recording.stopPreview() }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                if showsRecordButton {
+                    // 창이 낮아도 시작·정지 버튼은 항상 보이게 스크롤 밖에 고정한다.
+                    RecordButton(recording: recording)
+                        .padding(.vertical, Design.Spacing.md)
+                        .frame(maxWidth: .infinity)
+                        .background(Design.Palette.parchment)
+                }
+                if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
+            }
+        }
+        .alert(
+            "너무 짧은 녹음입니다",
+            isPresented: Binding(get: { recording.shortRecordingPrompt != nil }, set: { _ in })
+        ) {
+            Button("저장", role: .cancel) { recording.keepShortRecording() }
+                .accessibilityIdentifier("keepShortRecording")
+            Button("버리기", role: .destructive) { recording.discardShortRecording() }
+                .accessibilityIdentifier("discardShortRecording")
+        } message: {
+            Text("\(Int(RecordingController.shortRecordingSeconds))초가 안 되는 녹음입니다. 저장할까요?")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            recording.refreshPermission()
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: Design.Spacing.lg) {
             header
 
@@ -68,27 +109,6 @@ struct RecordingView: View {
                 SavedRecordingSection(recording: recording, playback: playback, manager: manager, library: library, saved: saved)
                     .id(saved.persistentModelID)
             }
-        }
-        .padding(Design.Spacing.xxl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .designCanvas(Design.Palette.parchment)
-        .onDisappear { recording.stopPreview() }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
-        }
-        .alert(
-            "너무 짧은 녹음입니다",
-            isPresented: Binding(get: { recording.shortRecordingPrompt != nil }, set: { _ in })
-        ) {
-            Button("저장", role: .cancel) { recording.keepShortRecording() }
-                .accessibilityIdentifier("keepShortRecording")
-            Button("버리기", role: .destructive) { recording.discardShortRecording() }
-                .accessibilityIdentifier("discardShortRecording")
-        } message: {
-            Text("\(Int(RecordingController.shortRecordingSeconds))초가 안 되는 녹음입니다. 저장할까요?")
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            recording.refreshPermission()
         }
     }
 
