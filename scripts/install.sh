@@ -15,8 +15,30 @@ APP_NAME="LectureRecorder"
 DEST_DIR="${INSTALL_DIR:-/Applications}"
 BUILT="build/install/Build/Products/Release/${APP_NAME}.app"
 
-if [ "$(uname)" != "Darwin" ] || ! command -v xcodebuild >/dev/null 2>&1; then
-  echo "❌ Xcode가 설치된 Mac에서만 실행할 수 있어요. (App Store에서 Xcode를 설치한 뒤 한 번 열어 주세요.)"
+if [ "$(uname)" != "Darwin" ]; then
+  echo "❌ Mac에서만 실행할 수 있어요."
+  exit 1
+fi
+
+# xcode-select가 Xcode가 아니라 명령줄 도구(CommandLineTools)를 가리키면 xcodebuild가 실패한다.
+# sudo 없이 이 실행에서만 Xcode.app을 찾아 DEVELOPER_DIR로 지정한다.
+if ! xcodebuild -version >/dev/null 2>&1; then
+  XCODE_APP=""
+  if [ -d "${DEVELOPER_DIR:-}" ]; then :; else
+    for app in /Applications/Xcode.app /Applications/Xcode*.app "$HOME/Applications/Xcode.app" "$HOME/Applications/Xcode*.app"; do
+      [ -d "$app/Contents/Developer" ] && { XCODE_APP="$app"; break; }
+    done
+    if [ -z "$XCODE_APP" ]; then
+      XCODE_APP="$(mdfind "kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'" 2>/dev/null | head -1)"
+    fi
+  fi
+  if [ -n "$XCODE_APP" ] && [ -d "$XCODE_APP/Contents/Developer" ]; then
+    export DEVELOPER_DIR="$XCODE_APP/Contents/Developer"
+    echo "ℹ️  Xcode를 찾았어요: $XCODE_APP"
+  fi
+fi
+if ! xcodebuild -version >/dev/null 2>&1; then
+  echo "❌ Xcode를 찾지 못했어요. App Store에서 Xcode를 설치하고 한 번 열어 라이선스에 동의한 뒤 다시 실행해 주세요."
   exit 1
 fi
 
@@ -25,7 +47,8 @@ LOG="$(mktemp -t lecture-install)"
 if ! xcodebuild -project LectureRecorder.xcodeproj -scheme "$APP_NAME" -configuration Release \
   -destination 'platform=macOS' -derivedDataPath build/install \
   CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES build >"$LOG" 2>&1; then
-  grep -E "error:" "$LOG" | awk '!seen[$0]++' | head -20 || true
+  { grep -E "error:|Fatal|FAILED" "$LOG" | awk '!seen[$0]++' | head -20; } || true
+  if ! grep -qE "error:|Fatal|FAILED" "$LOG"; then tail -20 "$LOG"; fi
   echo "❌ 빌드에 실패했어요. 전체 로그: $LOG"
   exit 1
 fi
