@@ -9,8 +9,6 @@ struct RecordingActiveSection: View {
         InputLevelBar(level: recording.inputLevel)
             .accessibilityIdentifier("inputLevel")
 
-        RecordButton(recording: recording)
-
         Button {
             recording.togglePause()
         } label: {

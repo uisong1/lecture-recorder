@@ -66,8 +66,6 @@ struct RecordingIdleSection: View {
                 .buttonStyle(.pill)
                 .accessibilityIdentifier("openSystemSettings")
             }
-        } else {
-            RecordButton(recording: recording)
         }
 
         RecordingNoticeLines(notices: RecordingScreenNotices(
