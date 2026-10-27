@@ -23,6 +23,10 @@ struct RecordingListView: View {
     @State private var bundleNotice: String?
 
     var body: some View {
+        withOverlays(withDialogs(withToolbar(content)))
+    }
+
+    private var content: some View {
         Group {
             if showsBookmarks {
                 BookmarkOverviewView(library: library, playback: playback)
@@ -30,194 +34,267 @@ struct RecordingListView: View {
                 ContentUnavailableView("조건에 맞는 녹음이 없습니다", systemImage: "magnifyingglass", description: Text("검색어나 기간을 바꿔 보세요."))
                     .accessibilityIdentifier("noMatchingRecordings")
             } else if library.recordings.isEmpty {
-                ContentUnavailableView("녹음이 없습니다", systemImage: "waveform", description: Text(library.selection == .all ? "녹음한 수업이 여기에 나타납니다." : "이 과목으로 녹음한 수업이 여기에 나타납니다."))
+                ContentUnavailableView("녹음이 없습니다", systemImage: "waveform", description: Text(emptyDescription))
                     .accessibilityIdentifier("emptyRecordings")
             } else {
-                List(library.recordings, selection: Bindable(library).selectedIDs) { recording in
-                    let status = library.rowStatus(for: recording, using: manager)
-                    HStack {
-                        if recording.isUnplayed {
-                            Circle()
-                                .fill(Design.Palette.primary)
-                                .frame(width: 8, height: 8)
-                                .accessibilityHidden(true)
-                                .accessibilityIdentifier("unplayedDot")
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(recording.title)
-                                .designText(.bodyStrong)
-                                .foregroundStyle(Design.Palette.ink)
-                                .accessibilityIdentifier("recordingRow")
-                            Text((library.showsSubjectName ? "\(library.subjectName(of: recording)) · " : "") + "\(recording.startedAt.formatted(date: .abbreviated, time: .shortened)) · \(RecordingController.format(recording.duration))")
-                                .designText(.caption)
-                                .foregroundStyle(Design.Palette.inkMuted)
-                            if !recording.memo.isEmpty {
-                                Text("수업 메모: \(recording.memo)")
-                                    .designText(.caption)
-                                    .foregroundStyle(Design.Palette.ink)
-                                    .lineLimit(1)
-                                    .accessibilityIdentifier("recordingMemo")
-                            }
-                            let matches = BookmarkMatchSummary(library.matchingBookmarks(of: recording)) { $0.note }
-                            ForEach(matches.shown) { bookmark in
-                                Button {
-                                    guard manager.canPlay(recording) else { return }
-                                    playback.select(recording)
-                                    playback.play(from: bookmark)
-                                } label: {
-                                    Text("메모: \(bookmark.note)")
-                                        .designText(.caption)
-                                        .foregroundStyle(Design.Palette.primary)
-                                        .lineLimit(1)
-                                }
-                                .buttonStyle(.plain)
-                                .help("\(RecordingController.format(bookmark.time)) 북마크 앞부분부터 듣기")
-                                .accessibilityLabel("북마크 메모 \(bookmark.note), \(RecordingController.format(bookmark.time))부터 듣기")
-                                .accessibilityIdentifier("matchedBookmarkNote")
-                            }
-                            if let hidden = matches.hiddenText {
-                                Button(hidden) { showsBookmarks = true }
-                                    .buttonStyle(.textLink)
-                                    .help("북마크 보기에서 맞은 메모를 모두 봅니다")
-                                    .accessibilityLabel("맞은 북마크 메모 \(matches.hiddenCount)개 더 보기")
-                                    .accessibilityIdentifier("hiddenBookmarkNotes")
-                            }
-                            let extras = (recording.isUnplayed ? ["안 들음"] : []) + (RecordingRowStatus.bookmarkLabel(count: recording.bookmarks.count).map { [$0] } ?? []) + status.labels
-                            if !extras.isEmpty {
-                                Text(extras.joined(separator: " · "))
-                                    .designText(.caption)
-                                    .foregroundStyle(status.isMissing ? Design.Palette.danger : Design.Palette.inkMuted)
-                                    .accessibilityIdentifier("recordingStatus")
-                            }
-                        }
-                        Spacer()
-                        Button(playback.current === recording && playback.isPlaying ? "일시정지" : "듣기") { play(recording) }
-                            .buttonStyle(.textLink)
-                            .accessibilityLabel((playback.current === recording && playback.isPlaying ? "일시정지: " : "듣기: ") + recording.title)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) { play(recording) }
-                    .contextMenu {
-                        if library.isMultiSelecting && library.selectedIDs.contains(recording.persistentModelID) {
-                            bulkActions
-                        } else {
-                        Button("이름 변경…") {
-                            renameText = recording.title
-                            renaming = recording
-                        }
-                        Button(recording.memo.isEmpty ? "메모 쓰기…" : "메모 고치기…") {
-                            memoText = recording.memo
-                            memoing = recording
-                        }
-                        Menu("과목 이동") {
-                            ForEach(library.subjects) { subject in
-                                Button(subject.name) { perform { try manager.move(recording, to: subject) } }
-                            }
-                            Button(RecordingStorage.unclassifiedFolder) { perform { try manager.move(recording, to: nil) } }
-                        }
-                        Divider()
-                        Button("Finder에서 보기") {
-                            NSWorkspace.shared.activateFileViewerSelecting([manager.fileURL(for: recording)])
-                        }
-                        Button("다른 곳에 저장…") { export(recording) }
-                        if let url = manager.shareURL(for: recording) {
-                            ShareLink("공유…", item: url)
-                        }
-                        Divider()
-                        Button("휴지통으로 이동…", role: .destructive) { deleting = recording }
-                        }
-                    }
-                }
+                recordingList
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .searchable(text: Binding(get: { library.filter.query }, set: { library.filter.query = $0 }), prompt: "제목·북마크 메모 검색")
-        .toolbar {
-            ToolbarItem {
-                Picker("보기", selection: $showsBookmarks) {
-                    Text("녹음").tag(false)
-                    Text("북마크").tag(true)
-                }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("listModePicker")
+    }
+
+    private var emptyDescription: String {
+        library.selection == .all ? "녹음한 수업이 여기에 나타납니다." : "이 과목으로 녹음한 수업이 여기에 나타납니다."
+    }
+
+    private var recordingList: some View {
+        List(library.recordings, selection: Bindable(library).selectedIDs) { recording in
+            row(for: recording)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) { play(recording) }
+                .contextMenu { rowMenu(for: recording) }
+        }
+    }
+
+    private func isPlaying(_ recording: Recording) -> Bool {
+        playback.current === recording && playback.isPlaying
+    }
+
+    private func detailLine(for recording: Recording) -> String {
+        let subject: String = library.showsSubjectName ? "\(library.subjectName(of: recording)) · " : ""
+        let started: String = recording.startedAt.formatted(date: .abbreviated, time: .shortened)
+        let length: String = RecordingController.format(recording.duration)
+        return subject + started + " · " + length
+    }
+
+    private func extraLabels(for recording: Recording, status: RecordingRowStatus) -> [String] {
+        var labels: [String] = []
+        if recording.isUnplayed { labels.append("안 들음") }
+        if let bookmarks = RecordingRowStatus.bookmarkLabel(count: recording.bookmarks.count) { labels.append(bookmarks) }
+        labels.append(contentsOf: status.labels)
+        return labels
+    }
+
+    private func row(for recording: Recording) -> some View {
+        HStack {
+            if recording.isUnplayed {
+                Circle()
+                    .fill(Design.Palette.primary)
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+                    .accessibilityIdentifier("unplayedDot")
             }
-            ToolbarItem {
-                Toggle("안 들은 것만", isOn: Binding(get: { library.filter.unplayedOnly }, set: { library.filter.unplayedOnly = $0 }))
-                    .toggleStyle(.button)
-                    .disabled(showsBookmarks)
-                    .accessibilityIdentifier("unplayedOnly")
-            }
-            ToolbarItem {
-                moreMenu
-            }
+            rowText(for: recording)
+            Spacer()
+            Button(isPlaying(recording) ? "일시정지" : "듣기") { play(recording) }
+                .buttonStyle(.textLink)
+                .accessibilityLabel((isPlaying(recording) ? "일시정지: " : "듣기: ") + recording.title)
         }
-        .scrollContentBackground(.hidden)
-        .designCanvas()
-        .alert("이름 변경", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("제목", text: $renameText)
-            Button("취소", role: .cancel) {}
-            Button("변경") {
-                if let recording = renaming { perform { try manager.rename(recording, to: renameText) } }
-            }
-        }
-        .alert("수업 메모", isPresented: Binding(get: { memoing != nil }, set: { if !$0 { memoing = nil } })) {
-            TextField("예: 중간고사 범위 발표", text: $memoText)
-            Button("취소", role: .cancel) {}
-            Button("저장") {
-                if let recording = memoing { perform { try manager.setMemo(memoText, for: recording) } }
-            }
-        }
-        .alert("처리 결과", isPresented: Binding(get: { batchNotice != nil }, set: { if !$0 { batchNotice = nil } })) {
-            Button("확인") {}
-        } message: {
-            Text(batchNotice ?? "")
-        }
-        .confirmationDialog(
-            "녹음 \(library.selectedRecordings.count)개를 삭제할까요?",
-            isPresented: $confirmsBulkTrash,
-            titleVisibility: .visible
-        ) {
-            Button("휴지통으로 이동", role: .destructive) { trashSelected() }
-            Button("취소", role: .cancel) {}
-        } message: {
-            Text("녹음 파일이 휴지통으로 이동합니다. 휴지통에서 되돌릴 수 있습니다.")
-        }
-        .alert("내보내기", isPresented: Binding(get: { bundleNotice != nil }, set: { if !$0 { bundleNotice = nil } })) {
-            Button("확인") {}
-        } message: {
-            Text(bundleNotice ?? "")
-        }
-        .confirmationDialog(
-            "‘\(deleting?.title ?? "")’을(를) 삭제할까요?",
-            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("휴지통으로 이동", role: .destructive) {
-                if let recording = deleting {
-                    if playback.current === recording { playback.select(nil) }
-                    perform { try manager.trash(recording) }
-                }
-            }
-            Button("취소", role: .cancel) {}
-        } message: {
-            Text("녹음 파일이 휴지통으로 이동합니다. 휴지통에서 되돌릴 수 있습니다.")
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: 0) {
-                if library.isMultiSelecting && !showsBookmarks { selectionBar }
-                if library.filter.isActive { filterBar }
-            }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
-        }
-        .overlay(alignment: .bottom) {
-            if let message = manager.errorMessage ?? library.errorMessage ?? playback.errorMessage {
-                Label(message, systemImage: "exclamationmark.triangle")
+    }
+
+    private func rowText(for recording: Recording) -> some View {
+        let status: RecordingRowStatus = library.rowStatus(for: recording, using: manager)
+        let matches = BookmarkMatchSummary(library.matchingBookmarks(of: recording)) { $0.note }
+        let extras: [String] = extraLabels(for: recording, status: status)
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(recording.title)
+                .designText(.bodyStrong)
+                .foregroundStyle(Design.Palette.ink)
+                .accessibilityIdentifier("recordingRow")
+            Text(detailLine(for: recording))
+                .designText(.caption)
+                .foregroundStyle(Design.Palette.inkMuted)
+            if !recording.memo.isEmpty {
+                Text("수업 메모: \(recording.memo)")
                     .designText(.caption)
-                    .foregroundStyle(Design.Palette.danger)
-                    .padding(Design.Spacing.xs)
+                    .foregroundStyle(Design.Palette.ink)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("recordingMemo")
             }
+            ForEach(matches.shown) { bookmark in
+                matchedBookmarkButton(bookmark, in: recording)
+            }
+            if let hidden = matches.hiddenText {
+                Button(hidden) { showsBookmarks = true }
+                    .buttonStyle(.textLink)
+                    .help("북마크 보기에서 맞은 메모를 모두 봅니다")
+                    .accessibilityLabel("맞은 북마크 메모 \(matches.hiddenCount)개 더 보기")
+                    .accessibilityIdentifier("hiddenBookmarkNotes")
+            }
+            if !extras.isEmpty {
+                Text(extras.joined(separator: " · "))
+                    .designText(.caption)
+                    .foregroundStyle(status.isMissing ? Design.Palette.danger : Design.Palette.inkMuted)
+                    .accessibilityIdentifier("recordingStatus")
+            }
+        }
+    }
+
+    private func matchedBookmarkButton(_ bookmark: Bookmark, in recording: Recording) -> some View {
+        let time: String = RecordingController.format(bookmark.time)
+        return Button {
+            guard manager.canPlay(recording) else { return }
+            playback.select(recording)
+            playback.play(from: bookmark)
+        } label: {
+            Text("메모: \(bookmark.note)")
+                .designText(.caption)
+                .foregroundStyle(Design.Palette.primary)
+                .lineLimit(1)
+        }
+        .buttonStyle(.plain)
+        .help("\(time) 북마크 앞부분부터 듣기")
+        .accessibilityLabel("북마크 메모 \(bookmark.note), \(time)부터 듣기")
+        .accessibilityIdentifier("matchedBookmarkNote")
+    }
+
+    @ViewBuilder
+    private func rowMenu(for recording: Recording) -> some View {
+        if library.isMultiSelecting && library.selectedIDs.contains(recording.persistentModelID) {
+            bulkActions
+        } else {
+            singleActions(for: recording)
+        }
+    }
+
+    @ViewBuilder
+    private func singleActions(for recording: Recording) -> some View {
+        Button("이름 변경…") {
+            renameText = recording.title
+            renaming = recording
+        }
+        Button(recording.memo.isEmpty ? "메모 쓰기…" : "메모 고치기…") {
+            memoText = recording.memo
+            memoing = recording
+        }
+        Menu("과목 이동") {
+            ForEach(library.subjects) { subject in
+                Button(subject.name) { perform { try manager.move(recording, to: subject) } }
+            }
+            Button(RecordingStorage.unclassifiedFolder) { perform { try manager.move(recording, to: nil) } }
+        }
+        Divider()
+        Button("Finder에서 보기") {
+            NSWorkspace.shared.activateFileViewerSelecting([manager.fileURL(for: recording)])
+        }
+        Button("다른 곳에 저장…") { export(recording) }
+        if let url = manager.shareURL(for: recording) {
+            ShareLink("공유…", item: url)
+        }
+        Divider()
+        Button("휴지통으로 이동…", role: .destructive) { deleting = recording }
+    }
+
+    private var queryBinding: Binding<String> {
+        Binding(get: { library.filter.query }, set: { library.filter.query = $0 })
+    }
+
+    private var unplayedBinding: Binding<Bool> {
+        Binding(get: { library.filter.unplayedOnly }, set: { library.filter.unplayedOnly = $0 })
+    }
+
+    private func presence<T>(_ value: Binding<T?>) -> Binding<Bool> {
+        Binding(get: { value.wrappedValue != nil }, set: { if !$0 { value.wrappedValue = nil } })
+    }
+
+    private func withToolbar<V: View>(_ view: V) -> some View {
+        view
+            .searchable(text: queryBinding, prompt: "제목·북마크 메모 검색")
+            .toolbar { toolbarContent }
+            .scrollContentBackground(.hidden)
+            .designCanvas()
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem {
+            Picker("보기", selection: $showsBookmarks) {
+                Text("녹음").tag(false)
+                Text("북마크").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("listModePicker")
+        }
+        ToolbarItem {
+            Toggle("안 들은 것만", isOn: unplayedBinding)
+                .toggleStyle(.button)
+                .disabled(showsBookmarks)
+                .accessibilityIdentifier("unplayedOnly")
+        }
+        ToolbarItem {
+            moreMenu
+        }
+    }
+
+    private func withDialogs<V: View>(_ view: V) -> some View {
+        let bulkTitle: String = "녹음 \(library.selectedRecordings.count)개를 삭제할까요?"
+        let singleTitle: String = "‘\(deleting?.title ?? "")’을(를) 삭제할까요?"
+        let trashMessage: String = "녹음 파일이 휴지통으로 이동합니다. 휴지통에서 되돌릴 수 있습니다."
+        return view
+            .alert("이름 변경", isPresented: presence($renaming)) {
+                TextField("제목", text: $renameText)
+                Button("취소", role: .cancel) {}
+                Button("변경") {
+                    if let recording = renaming { perform { try manager.rename(recording, to: renameText) } }
+                }
+            }
+            .alert("수업 메모", isPresented: presence($memoing)) {
+                TextField("예: 중간고사 범위 발표", text: $memoText)
+                Button("취소", role: .cancel) {}
+                Button("저장") {
+                    if let recording = memoing { perform { try manager.setMemo(memoText, for: recording) } }
+                }
+            }
+            .alert("처리 결과", isPresented: presence($batchNotice)) {
+                Button("확인") {}
+            } message: {
+                Text(batchNotice ?? "")
+            }
+            .alert("내보내기", isPresented: presence($bundleNotice)) {
+                Button("확인") {}
+            } message: {
+                Text(bundleNotice ?? "")
+            }
+            .confirmationDialog(bulkTitle, isPresented: $confirmsBulkTrash, titleVisibility: .visible) {
+                Button("휴지통으로 이동", role: .destructive) { trashSelected() }
+                Button("취소", role: .cancel) {}
+            } message: {
+                Text(trashMessage)
+            }
+            .confirmationDialog(singleTitle, isPresented: presence($deleting), titleVisibility: .visible) {
+                Button("휴지통으로 이동", role: .destructive) {
+                    if let recording = deleting {
+                        if playback.current === recording { playback.select(nil) }
+                        perform { try manager.trash(recording) }
+                    }
+                }
+                Button("취소", role: .cancel) {}
+            } message: {
+                Text(trashMessage)
+            }
+    }
+
+    private func withOverlays<V: View>(_ view: V) -> some View {
+        view
+            .safeAreaInset(edge: .top, spacing: 0) {
+                VStack(spacing: 0) {
+                    if library.isMultiSelecting && !showsBookmarks { selectionBar }
+                    if library.filter.isActive { filterBar }
+                }
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
+            }
+            .overlay(alignment: .bottom) { errorOverlay }
+    }
+
+    @ViewBuilder
+    private var errorOverlay: some View {
+        if let message = manager.errorMessage ?? library.errorMessage ?? playback.errorMessage {
+            Label(message, systemImage: "exclamationmark.triangle")
+                .designText(.caption)
+                .foregroundStyle(Design.Palette.danger)
+                .padding(Design.Spacing.xs)
         }
     }
 
