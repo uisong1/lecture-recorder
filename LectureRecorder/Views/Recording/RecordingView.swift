@@ -18,25 +18,23 @@ struct RecordingView: View {
     }
 
     var body: some View {
-        ScrollView {
-            content
-                .padding(Design.Spacing.xl)
-                .frame(maxWidth: .infinity)
+        VStack(spacing: 0) {
+            ScrollView {
+                content
+                    .padding(Design.Spacing.xl)
+                    .frame(maxWidth: .infinity)
+            }
+            if showsRecordButton {
+                // 창이 낮아도 시작·정지 버튼은 항상 보이게 스크롤 밖에 고정한다.
+                RecordButton(recording: recording)
+                    .padding(.vertical, Design.Spacing.md)
+                    .frame(maxWidth: .infinity)
+            }
+            if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .designCanvas(Design.Palette.parchment)
         .onDisappear { recording.stopPreview() }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: 0) {
-                if showsRecordButton {
-                    // 창이 낮아도 시작·정지 버튼은 항상 보이게 스크롤 밖에 고정한다.
-                    RecordButton(recording: recording)
-                        .padding(.vertical, Design.Spacing.md)
-                        .frame(maxWidth: .infinity)
-                        .background(Design.Palette.parchment)
-                }
-                if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
-            }
-        }
         .alert(
             "너무 짧은 녹음입니다",
             isPresented: Binding(get: { recording.shortRecordingPrompt != nil }, set: { _ in })
