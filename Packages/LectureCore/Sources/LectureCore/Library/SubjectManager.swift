@@ -125,9 +125,14 @@ public final class SubjectManager {
         if !isCaseOnly, storage.folderExists(newFolder) { throw .folderExists(name) }
 
         let oldPaths = inFolder.map { ($0, $0.relativePath) }
+        // 영상도 보관한 녹음은 영상 파일도 같은 폴더에 있어 함께 따라간다.
+        let oldVideoPaths = inFolder.compactMap { recording in recording.videoRelativePath.map { (recording, $0) } }
         func apply(name: String, folder: String) {
             subject.name = name
             for (recording, path) in oldPaths { recording.relativePath = folder + "/" + path.dropFirst(oldPrefix.count) }
+            for (recording, path) in oldVideoPaths where path.hasPrefix(oldPrefix) {
+                recording.videoRelativePath = folder + "/" + path.dropFirst(oldPrefix.count)
+            }
         }
 
         let moved = storage.folderExists(oldFolder)

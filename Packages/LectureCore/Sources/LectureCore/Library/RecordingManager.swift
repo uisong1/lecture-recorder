@@ -9,9 +9,12 @@ public enum RecordingManagerError: Error, Equatable, LocalizedError {
     case exportFailed(String)
     case fileFailed(String)
     case saveFailed(String)
+    case sharingRestricted
 
     public var errorDescription: String? {
         switch self {
+        case .sharingRestricted: "LMS에서 가져온 영상은 개인 복습용이라 공유하거나 다른 곳에 저장할 수 없습니다."
+
         case .emptyTitle: "제목을 입력하세요."
         case .fileMissing: "녹음 파일을 찾을 수 없습니다."
         case .exportFailed(let reason): "녹음을 저장하지 못했습니다: \(reason)"
@@ -45,6 +48,9 @@ public struct RecordingBatchResult: Equatable, Sendable {
 @MainActor
 @Observable
 public final class RecordingManager {
+    /// "영상도 보관"으로 소리 파일 옆에 두는 영상의 확장자.
+    public static let videoExtension = "mp4"
+
     public var errorMessage: String?
 
     private let context: ModelContext
@@ -102,16 +108,31 @@ public final class RecordingManager {
             Log.storage.error("녹음 이동 실패 \(oldPath, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw fail(.fileFailed(error.localizedDescription))
         }
+        // 영상도 보관한 녹음이면 영상 파일도 같은 이름으로 따라 옮긴다. 실패하면 소리 파일을 되돌린다.
+        let oldVideoPath = recording.videoRelativePath
+        let newVideoPath = oldVideoPath.map { _ in (newPath as NSString).deletingPathExtension + "." + Self.videoExtension }
+        if let oldVideoPath, let newVideoPath {
+            do {
+                try storage.moveFile(from: oldVideoPath, to: newVideoPath)
+            } catch {
+                Log.storage.error("영상 이동 실패 \(oldVideoPath, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                try? storage.moveFile(from: newPath, to: oldPath)
+                throw fail(.fileFailed(error.localizedDescription))
+            }
+        }
         let oldSubject = recording.subject
         recording.subject = subject
         recording.relativePath = newPath
+        recording.videoRelativePath = newVideoPath
         do {
             try context.save()
             errorMessage = nil
         } catch {
             recording.subject = oldSubject
             recording.relativePath = oldPath
+            recording.videoRelativePath = oldVideoPath
             try? storage.moveFile(from: newPath, to: oldPath)
+            if let oldVideoPath, let newVideoPath { try? storage.moveFile(from: newVideoPath, to: oldVideoPath) }
             throw fail(.saveFailed(error.localizedDescription))
         }
     }
@@ -128,6 +149,11 @@ public final class RecordingManager {
         return playable
     }
 
+    /// 공유·업로드·다른 곳에 저장·묶음 내보내기에 넣어도 되는지. LMS에서 가져온 영상은 개인 복습용이라 안 된다.
+    public func canShare(_ recording: Recording) -> Bool {
+        !recording.isLMSVideo
+    }
+
     /// 녹음 파일의 실제 위치. Finder에서 보여 주거나 공유할 때 쓴다.
     public func fileURL(for recording: Recording) -> URL {
         storage.url(for: recording.relativePath)
@@ -136,6 +162,7 @@ public final class RecordingManager {
     /// macOS 공유 메뉴에 넘길 파일. 파일이 없으면 nil이라 공유 메뉴를 보이지 않는다.
     /// 어디에 올릴지는 사용자가 공유 메뉴에서 고르며, 앱이 먼저 올리는 일은 없다.
     public func shareURL(for recording: Recording) -> URL? {
+        guard canShare(recording) else { return nil }
         let url = fileURL(for: recording)
         return storage.fileExists(at: url) ? url : nil
     }
@@ -149,6 +176,7 @@ public final class RecordingManager {
 
     /// 녹음 파일을 `destination`으로 복사한다. 원본은 그대로 둔다.
     public func export(_ recording: Recording, to destination: URL) throws {
+        guard canShare(recording) else { throw fail(.sharingRestricted) }
         let source = fileURL(for: recording)
         guard storage.fileExists(at: source) else { throw fail(.fileMissing) }
         do {
@@ -163,7 +191,8 @@ public final class RecordingManager {
     /// 녹음들을 파일과 북마크·메모 글이 든 한 폴더로 묶어 `parent` 안에 만든다. 원본은 그대로 둔다.
     /// 사용자가 이 폴더를 직접 Claude 같은 곳에 올려 쓴다. 앱이 어디로 보내지는 않는다.
     public func exportBundle(_ recordings: [Recording], label: String, to parent: URL, now: Date, calendar: Calendar = .current) throws -> RecordingBundleResult {
-        let items = recordings.map { recording in
+        // LMS 영상은 묶음(사용자가 다른 곳에 올릴 폴더)에 넣지 않는다.
+        let items = recordings.filter(canShare).map { recording in
             BundleRecording(
                 title: recording.title,
                 subjectName: recording.subject?.name,
@@ -231,6 +260,14 @@ public final class RecordingManager {
         } catch {
             Log.storage.error("녹음 삭제 실패 \(recording.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw fail(.fileFailed(error.localizedDescription))
+        }
+        // 함께 보관한 영상도 치운다. 실패해도 기록은 지운다 (폴더 다시 읽기는 mp4를 읽지 않는다).
+        if let video = recording.videoRelativePath {
+            do {
+                try removingFile(video)
+            } catch {
+                Log.storage.error("영상 삭제 실패 \(video, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
         context.delete(recording)
         do {
