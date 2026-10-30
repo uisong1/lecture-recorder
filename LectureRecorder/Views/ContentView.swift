@@ -1,5 +1,6 @@
 import LectureCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     let dependencies: AppDependencies
@@ -10,6 +11,7 @@ struct ContentView: View {
     }
 
     @State private var sidebar: SidebarItem? = .recorder
+    @State private var isPickingMedia = false
 
     private func subjectRow(_ subject: Subject, unplayed: UnplayedCounts) -> some View {
         let unplayedCount = unplayed.count(for: .subject(subject.persistentModelID))
@@ -104,7 +106,27 @@ struct ContentView: View {
         .onChange(of: dependencies.recording.lastSaved) {
             dependencies.library.reload()
         }
+        .dropDestination(for: URL.self) { urls, _ in
+            dependencies.mediaImport.begin(urls: urls.filter(\.isFileURL))
+            return true
+        }
+        .fileImporter(isPresented: $isPickingMedia, allowedContentTypes: [.mpeg4Movie, .mpeg4Audio], allowsMultipleSelection: true) { result in
+            switch result {
+            case .success(let urls): dependencies.mediaImport.begin(urls: urls)
+            case .failure(let error): Log.storage.error("가져올 파일 선택 실패: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        .sheet(isPresented: Binding(get: { dependencies.mediaImport.isPresented }, set: { if !$0 { dependencies.mediaImport.close() } })) {
+            MediaImportSheet(model: dependencies.mediaImport, subjects: dependencies.subjects)
+        }
         .toolbar {
+            Button {
+                isPickingMedia = true
+            } label: {
+                Label("mp4·m4a 가져오기", systemImage: "square.and.arrow.down")
+            }
+            .help("mp4 영상이나 m4a 소리 파일을 끌어다 놓거나 골라서 녹음 목록에 넣습니다")
+            .accessibilityIdentifier("importMedia")
             SettingsLink {
                 Label("과목과 시간표 설정", systemImage: "gearshape")
             }

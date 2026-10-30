@@ -893,7 +893,8 @@ public final class RecordingController {
         }
     }
 
-    private func subject(at date: Date) -> Subject? {
+    /// `date` 시각에 시간표상 진행 중이거나 곧 시작하는 수업의 과목. 없으면 nil (미분류).
+    public func subject(at date: Date) -> Subject? {
         guard let (schedule, slots) = loadSchedule() else { return nil }
         guard case .subject(let id) = schedule.classify(at: date, calendar: calendar) else { return nil }
         return slots.first { $0.subject?.persistentModelID == id }?.subject
