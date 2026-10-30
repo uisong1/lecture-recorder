@@ -104,12 +104,16 @@ public final class MediaImportModel {
         if let notice = result.failureNotice(done: "가져왔고") {
             message = notice
         } else {
-            close()
+            reset()
         }
     }
 
     public func close() {
         guard !isImporting else { return }
+        reset()
+    }
+
+    private func reset() {
         isPresented = false
         items = []
         message = nil
