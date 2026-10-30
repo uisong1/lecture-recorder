@@ -91,6 +91,20 @@ final class FakeHaltStore: LMSHaltStoring, @unchecked Sendable {
         #expect(model.subject === ds)
     }
 
+    @Test func 페이지에서_읽은_강의명은_비어_있을_때만_채운다() {
+        let model = makeModel()
+        model.updateCourseNameIfEmpty("자료구조")
+        #expect(model.courseName.isEmpty)
+
+        model.captured(candidate(course: nil))
+        model.updateCourseNameIfEmpty("자료구조 (02분반)")
+        #expect(model.courseName == "자료구조 (02분반)")
+        #expect(model.subject === ds)
+
+        model.updateCourseNameIfEmpty("운영체제")
+        #expect(model.courseName == "자료구조 (02분반)")
+    }
+
     @Test func 가져오면_쿠키와_referer로_받아_녹음_목록에_넣고_LMS_표시를_남긴다() async throws {
         var finished = 0
         let model = makeModel { finished += 1 }

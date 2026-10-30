@@ -25,6 +25,9 @@ final class AppDependencies {
     let rescan: RecordingRescanModel
     /// mp4·m4a를 끌어다 놓거나 골라서 녹음 목록으로 가져오는 창의 상태.
     let mediaImport: MediaImportModel
+    /// 앱 안 LMS 창의 웹뷰와, 거기서 잡은 영상을 가져오는 상태.
+    let lmsBrowser: LMSBrowser
+    let lmsImport: LMSImportModel
     let launchAtLogin: LaunchAtLoginModel
     /// 저장소 백업. 설정에서 백업 폴더 위치와 마지막 백업 시각을 보여 준다. UI 테스트에서는 nil.
     let storeBackup: StoreBackup?
@@ -166,6 +169,18 @@ final class AppDependencies {
             suggestSubject: { recording.subject(at: $0) },
             onFinished: { library.reload() }
         )
+        let browser = LMSBrowser()
+        lmsBrowser = browser
+        lmsImport = LMSImportModel(
+            fetcher: LMSVideoFetcher(downloader: URLSessionLMSDownloader(), isPlayable: { await SystemMediaPlayability.isPlayable($0) }),
+            importer: MediaImporter(context: context, storage: storage, files: files, extractor: SystemAudioExtractor(), durations: SystemAudioDurationReader()),
+            haltStore: UserDefaultsLMSHaltStore(),
+            subjects: { subjects.subjects },
+            cookieHeader: { await browser.cookieHeader(for: $0) },
+            keepVideo: { UserDefaults.standard.bool(forKey: LMSImportModel.keepVideoDefaultsKey) },
+            onFinished: { library.reload() }
+        )
+        browser.model = lmsImport
         timetableImport = TimetableImportModel(
             reader: VisionTimetableReader(),
             importer: TimetableImporter(context: context),

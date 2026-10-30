@@ -39,6 +39,12 @@ struct LectureRecorderApp: App {
         }
         .defaultSize(width: 860, height: 640)
 
+        Window("LMS 영상 가져오기", id: LMSBrowserWindow.windowID) {
+            LMSBrowserWindow(browser: dependencies.lmsBrowser, model: dependencies.lmsImport, subjects: dependencies.subjects)
+        }
+        .defaultSize(width: 1100, height: 760)
+        .modelContainer(dependencies.container)
+
         Settings {
             SettingsView(subjects: dependencies.subjects, schedule: dependencies.schedule, reminders: dependencies.reminders, rescan: dependencies.rescan, recording: dependencies.recording, launchAtLogin: dependencies.launchAtLogin, playback: dependencies.playback, storeBackup: dependencies.storeBackup, storage: dependencies.storage)
         }

@@ -120,6 +120,12 @@ public final class LMSImportModel {
         if !subjectEditedByUser { subject = suggestedSubject() }
     }
 
+    /// 페이지에서 강의명을 읽었다. 영상이 먼저 잡혀 강의명이 비어 있을 때만 채운다 (사용자가 고친 값은 지우지 않는다).
+    public func updateCourseNameIfEmpty(_ name: String) {
+        guard candidate != nil, !isBusy, courseName.isEmpty else { return }
+        editCourseName(name)
+    }
+
     /// 사용자가 과목을 직접 골랐다. 이후에는 강의명이 바뀌어도 과목을 바꾸지 않는다.
     public func editSubject(_ new: Subject?) {
         subject = new

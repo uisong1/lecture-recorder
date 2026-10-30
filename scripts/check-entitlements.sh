@@ -8,10 +8,11 @@ REQUIRED=(
   com.apple.security.app-sandbox
   com.apple.security.device.audio-input
   com.apple.security.files.user-selected.read-write
-)
-# 서버 없는 로컬 앱이라 네트워크 권한은 쓰지 않는다. 사용자가 고른 파일 밖의 넓은 파일 권한도 쓰지 않는다.
-FORBIDDEN=(
   com.apple.security.network.client
+)
+# 나가는 연결(network.client)은 LMS 창과 영상 받기에만 쓴다 (DECISIONS.md 2026-10-30). 서버로 받는 연결(network.server)은 쓰지 않는다.
+# 사용자가 고른 파일 밖의 넓은 파일 권한도 쓰지 않는다.
+FORBIDDEN=(
   com.apple.security.network.server
   com.apple.security.files.all
   com.apple.security.files.downloads.read-write

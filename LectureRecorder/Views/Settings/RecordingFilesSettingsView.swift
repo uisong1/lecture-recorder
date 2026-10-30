@@ -9,6 +9,7 @@ struct RecordingFilesSettingsView: View {
     let storeBackup: StoreBackup?
     let storage: RecordingStorage
 
+    @AppStorage(LMSImportModel.keepVideoDefaultsKey) private var keepLMSVideo = false
     @State private var lastBackup: Date?
     @State private var folder: RecordingsFolderInfo?
     @State private var folderMessage: String?
@@ -63,6 +64,13 @@ struct RecordingFilesSettingsView: View {
                         .foregroundStyle(Design.Palette.danger)
                         .accessibilityIdentifier("recordingsFolderMessage")
                 }
+            }
+            Section("LMS 영상") {
+                Toggle("가져올 때 영상(mp4)도 보관", isOn: $keepLMSVideo)
+                    .accessibilityIdentifier("keepLMSVideo")
+                Text("끄면 소리(m4a)만 저장합니다. 켜면 소리 파일 옆에 영상 파일이 함께 저장되어 용량이 크게 늘어납니다. LMS 영상은 개인 복습용이라 공유·업로드·다른 곳에 저장에서 빠집니다.")
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.inkMuted)
             }
             if let storeBackup {
                 Section("목록 백업") {
