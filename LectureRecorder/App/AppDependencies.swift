@@ -23,6 +23,8 @@ final class AppDependencies {
     let manager: RecordingManager
     let timetableImport: TimetableImportModel
     let rescan: RecordingRescanModel
+    /// mp4·m4a를 끌어다 놓거나 골라서 녹음 목록으로 가져오는 창의 상태.
+    let mediaImport: MediaImportModel
     let launchAtLogin: LaunchAtLoginModel
     /// 저장소 백업. 설정에서 백업 폴더 위치와 마지막 백업 시각을 보여 준다. UI 테스트에서는 nil.
     let storeBackup: StoreBackup?
@@ -157,6 +159,11 @@ final class AppDependencies {
         rescan = RecordingRescanModel(
             rescanner: RecordingRescanner(context: context, storage: storage, durations: SystemAudioDurationReader()),
             activePaths: { recording.currentRelativePath.map { [$0] } ?? [] },
+            onFinished: { library.reload() }
+        )
+        mediaImport = MediaImportModel(
+            importer: MediaImporter(context: context, storage: storage, files: files, extractor: SystemAudioExtractor(), durations: SystemAudioDurationReader()),
+            suggestSubject: { recording.subject(at: $0) },
             onFinished: { library.reload() }
         )
         timetableImport = TimetableImportModel(
