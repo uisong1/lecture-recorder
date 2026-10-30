@@ -12,6 +12,7 @@ struct ContentView: View {
 
     @State private var sidebar: SidebarItem? = .recorder
     @State private var isPickingMedia = false
+    @Environment(\.openWindow) private var openWindow
 
     private func subjectRow(_ subject: Subject, unplayed: UnplayedCounts) -> some View {
         let unplayedCount = unplayed.count(for: .subject(subject.persistentModelID))
@@ -127,6 +128,13 @@ struct ContentView: View {
             }
             .help("mp4 영상이나 m4a 소리 파일을 끌어다 놓거나 골라서 녹음 목록에 넣습니다")
             .accessibilityIdentifier("importMedia")
+            Button {
+                openWindow(id: LMSBrowserWindow.windowID)
+            } label: {
+                Label("LMS 영상 가져오기", systemImage: "graduationcap")
+            }
+            .help("LMS에 올라온 보강·대체 수업 영상을 가져옵니다 (개인 복습용)")
+            .accessibilityIdentifier("openLMS")
             SettingsLink {
                 Label("과목과 시간표 설정", systemImage: "gearshape")
             }
