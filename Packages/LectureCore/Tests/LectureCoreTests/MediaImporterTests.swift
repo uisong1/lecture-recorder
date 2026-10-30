@@ -101,7 +101,7 @@ final class FakeAudioExtractor: AudioExtracting, @unchecked Sendable {
         let source = try makeSource("notes.txt")
 
         await #expect(throws: MediaImportError.unsupportedType("notes.txt")) {
-            try await importer().importFile(at: source, subject: nil, startedAt: date(2026, 10, 28, 13, 30))
+            _ = try await importer().importFile(at: source, subject: nil, startedAt: date(2026, 10, 28, 13, 30))
         }
         #expect(try context.fetch(FetchDescriptor<Recording>()).isEmpty)
     }
@@ -110,7 +110,7 @@ final class FakeAudioExtractor: AudioExtracting, @unchecked Sendable {
         let source = try makeSource("screen.mp4", header: Data("<html>403</html>".utf8))
 
         await #expect(throws: MediaImportError.notMediaFile("screen.mp4")) {
-            try await importer().importFile(at: source, subject: nil, startedAt: date(2026, 10, 28, 13, 30))
+            _ = try await importer().importFile(at: source, subject: nil, startedAt: date(2026, 10, 28, 13, 30))
         }
         #expect(extractor.extracted.isEmpty)
         #expect(try context.fetch(FetchDescriptor<Recording>()).isEmpty)
@@ -121,7 +121,7 @@ final class FakeAudioExtractor: AudioExtracting, @unchecked Sendable {
         extractor.error = MediaImportError.noAudio("screen.mp4")
 
         await #expect(throws: MediaImportError.noAudio("screen.mp4")) {
-            try await importer().importFile(at: source, subject: nil, startedAt: date(2026, 10, 28, 13, 30))
+            _ = try await importer().importFile(at: source, subject: nil, startedAt: date(2026, 10, 28, 13, 30))
         }
         #expect(try context.fetch(FetchDescriptor<Recording>()).isEmpty)
         #expect(!files.allPaths.contains { $0.contains("미분류") && $0.hasSuffix(".m4a") })
@@ -131,7 +131,7 @@ final class FakeAudioExtractor: AudioExtracting, @unchecked Sendable {
         let source = try makeSource("broken.m4a")
 
         await #expect(throws: MediaImportError.unplayable("broken.m4a")) {
-            try await importer().importFile(at: source, subject: nil, startedAt: date(2026, 10, 28, 13, 30))
+            _ = try await importer().importFile(at: source, subject: nil, startedAt: date(2026, 10, 28, 13, 30))
         }
         #expect(!files.allPaths.contains { $0.hasSuffix(".m4a") && $0.contains("Recordings") })
         #expect(try context.fetch(FetchDescriptor<Recording>()).isEmpty)
@@ -142,7 +142,7 @@ final class FakeAudioExtractor: AudioExtracting, @unchecked Sendable {
         files.capacity = 1_000_000 + MediaImporter.spareBytes - 1
 
         await #expect(throws: MediaImportError.notEnoughSpace) {
-            try await importer().importFile(at: source, subject: nil, startedAt: date(2026, 10, 28, 13, 30))
+            _ = try await importer().importFile(at: source, subject: nil, startedAt: date(2026, 10, 28, 13, 30))
         }
         #expect(extractor.extracted.isEmpty)
     }
