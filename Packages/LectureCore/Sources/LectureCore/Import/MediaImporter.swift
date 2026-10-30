@@ -38,18 +38,30 @@ public struct MediaImporter {
     ///   - subject: nil이면 미분류.
     ///   - startedAt: 수업 날짜·시각. 파일 이름과 제목에 쓴다.
     ///   - title: 비어 있으면 "과목 10월 28일 13:30" 형식으로 만든다.
+    ///   - keepVideo: 영상(mp4)이면 소리 파일 옆에 영상도 복사해 둔다. m4a에는 영향이 없다.
+    ///   - isLMSVideo: LMS에서 받은 영상이면 true. 기록에 표시해 공유·업로드에서 뺀다.
     @discardableResult
-    public func importFile(at source: URL, subject: Subject?, startedAt: Date, title: String? = nil) async throws -> Recording {
+    public func importFile(
+        at source: URL,
+        subject: Subject?,
+        startedAt: Date,
+        title: String? = nil,
+        keepVideo: Bool = false,
+        isLMSVideo: Bool = false
+    ) async throws -> Recording {
         let name = source.lastPathComponent
         guard let kind = MediaFileKind(fileName: name) else { throw MediaImportError.unsupportedType(name) }
         guard MediaFileValidator.hasFtypBox(at: source) else { throw MediaImportError.notMediaFile(name) }
-        if let free = files.availableCapacity(at: storage.root), let size = files.fileSize(at: source), free < size + Self.spareBytes {
+        let savesVideo = keepVideo && kind == .video
+        if let free = files.availableCapacity(at: storage.root), let size = files.fileSize(at: source), free < size * (savesVideo ? 2 : 1) + Self.spareBytes {
             throw MediaImportError.notEnoughSpace
         }
 
         let relativePath = storage.newRelativePath(subjectName: subject?.name, semester: subject?.semester, startedAt: startedAt, calendar: calendar)
         let destination = storage.url(for: relativePath)
         let temporary = storage.url(for: RecordingStorage.temporaryCompressedPath(for: relativePath))
+        let videoPath = savesVideo ? (relativePath as NSString).deletingPathExtension + "." + RecordingManager.videoExtension : nil
+        let videoDestination = videoPath.map { storage.url(for: $0) }
         do {
             try storage.prepareFolder(for: relativePath)
         } catch {
@@ -67,9 +79,11 @@ public struct MediaImporter {
                 duration = measured
             }
             guard duration > 0 else { throw MediaImportError.unplayable(name) }
+            if let videoDestination { try files.copyItem(at: source, to: videoDestination) }
             try files.moveItem(at: temporary, to: destination)
         } catch {
             try? files.removeItem(at: temporary)
+            if let videoDestination { try? files.removeItem(at: videoDestination) }
             Log.storage.error("가져오기 실패 \(name, privacy: .public): \(error.localizedDescription, privacy: .public)")
             if let importError = error as? MediaImportError { throw importError }
             throw MediaImportError.fileFailed(error.localizedDescription)
@@ -85,12 +99,15 @@ public struct MediaImporter {
             duration: duration,
             relativePath: relativePath
         )
+        recording.isLMSVideo = isLMSVideo
+        recording.videoRelativePath = videoPath
         context.insert(recording)
         do {
             try context.save()
         } catch {
             context.rollback()
             try? files.removeItem(at: destination)
+            if let videoDestination { try? files.removeItem(at: videoDestination) }
             throw MediaImportError.saveFailed(error.localizedDescription)
         }
         Log.storage.notice("가져옴: \(relativePath, privacy: .public)")

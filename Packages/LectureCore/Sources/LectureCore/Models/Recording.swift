@@ -26,6 +26,11 @@ public final class Recording {
     /// 수업 전체에 대한 한 줄 메모 (예: "중간고사 범위 발표"). 비어 있으면 없는 것이다.
     /// 기본값이 빈 문자열인 속성 추가라 기존 저장소는 자동으로 옮겨진다.
     public var memo: String = ""
+    /// LMS에서 가져온 영상이면 true. 개인 복습용이라 공유·업로드·다른 곳에 저장에서 뺀다.
+    /// 기본값이 false인 속성 추가라 기존 저장소는 자동으로 옮겨진다.
+    public var isLMSVideo: Bool = false
+    /// "영상도 보관"을 켜고 가져왔을 때 영상 파일의 상대 경로 (소리 파일 옆). 없으면 소리만 있다.
+    public var videoRelativePath: String?
 
     public init(title: String, subject: Subject?, startedAt: Date, duration: TimeInterval, relativePath: String) {
         self.title = title
