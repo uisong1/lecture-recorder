@@ -29,6 +29,8 @@ final class AppDependencies {
     let lmsBrowser: LMSBrowser
     let lmsImport: LMSImportModel
     let launchAtLogin: LaunchAtLoginModel
+    /// 앱 안 "새 버전 있음 → 업데이트". UI 테스트에서는 확인하지 않는다.
+    let appUpdate: AppUpdateModel
     /// 저장소 백업. 설정에서 백업 폴더 위치와 마지막 백업 시각을 보여 준다. UI 테스트에서는 nil.
     let storeBackup: StoreBackup?
     /// 녹음 폴더. 설정에서 위치를 보여 주고 열어 준다.
@@ -109,6 +111,21 @@ final class AppDependencies {
             Task { @MainActor in await reminders.reschedule() }
         }
         launchAtLogin = LaunchAtLoginModel(controller: SystemLoginItem())
+        let appUpdate = AppUpdateModel(
+            currentBuild: Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 0,
+            checker: GitHubReleaseChecker(),
+            installer: UserScriptUpdateInstaller(),
+            isRecording: { recordingController.isRecording },
+            quit: { NSApp.terminate(nil) }
+        )
+        self.appUpdate = appUpdate
+        if !Self.isUITesting {
+            Task { await appUpdate.checkAutomaticallyIfDue(now: Date()) }
+            // 앱을 오래 켜 둬도 하루에 한 번 확인한다.
+            Timer.scheduledTimer(withTimeInterval: 60 * 60, repeats: true) { _ in
+                Task { @MainActor in await appUpdate.checkAutomaticallyIfDue(now: Date()) }
+            }
+        }
         library = RecordingLibrary(context: container.mainContext)
         manager = RecordingManager(context: container.mainContext, storage: storage)
         let context = container.mainContext

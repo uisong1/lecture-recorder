@@ -394,3 +394,10 @@
 - 한계: 폴더 다시 읽기로 되살린 녹음은 파일만으로 LMS 출처를 알 수 없어 공유 제한이 풀린다.
 - 이유: 웹뷰 세션을 쓰면 SSO·2단계 인증을 앱이 흉내 낼 필요가 없고, 사용자가 브라우저에서 보던 것과 같은 권한만 쓴다. 나가는 연결만 열어 최소 권한을 유지한다.
 
+
+## 2026-11-01. 앱 안 업데이트는 GitHub Releases + 사용자 스크립트 도우미로 한다
+- 결정: (1) main에 합쳐질 때마다 `.github/workflows/release.yml`이 `scripts/install.sh --build-only`와 같은 방식(ad-hoc 서명)으로 앱을 빌드해 GitHub Releases에 `build-<커밋 개수>` 태그, `LectureRecorder-<커밋 개수>.zip`, 본문 `sha256:` 줄로 올린다(최근 10개만 유지). (2) 앱은 `CFBundleVersion`(= install.sh/CI가 넣는 같은 커밋 개수)과 공개 릴리스 목록(`GitHubReleaseChecker`, 토큰 없음)을 비교해 더 큰 번호가 있으면 "새 버전 있음"을 보인다. 켜 둔 동안 하루에 한 번 조용히 확인하고, 설정 > 일반에서 직접 확인할 수도 있다. (3) 받기와 바꿔 끼우기는 샌드박스 밖에서 해야 해서 `~/Library/Application Scripts/com.uisong.LectureRecorder/update.sh`(= `scripts/update-helper.sh`, install.sh가 복사)를 `NSUserUnixTask`로 실행한다. 단계는 download(받기 → SHA-256 → 번들 ID·빌드 번호·서명 확인, 앱은 그대로) → 앱 종료 → install(launchd 작업이 앱 프로세스가 끝나기를 기다렸다가 기존 앱을 `.old`로 옮기고 새 앱을 복사, 실패하면 되돌림, 격리 표시 제거, 다시 열기). (4) 녹음 중에는 버튼을 막고, 받는 사이에 녹음이 시작돼도 종료 전에 한 번 더 확인한다. 종료는 `NSApp.terminate`라 기존 종료 확인(`QuitGuard`)을 그대로 거치고, 도우미는 앱이 3분 안에 끝나지 않으면 바꾸지 않고 그만둔다(강제 종료 없음). (5) 도우미는 주소가 이 저장소의 릴리스 파일 주소인지, 앱 경로가 `*/LectureRecorder.app`인지 스스로 다시 검사한다.
+- 고르지 않은 것: Sparkle(EdDSA 키 관리와 appcast 호스팅이 개인 앱에 과함, 외부 의존성), 샌드박스 해제(데이터 컨테이너 위치가 바뀌어 기존 녹음이 사라짐), 앱 안에서 직접 /Applications에 쓰기(샌드박스가 막음).
+- Gatekeeper: 앱은 Apple 서명·공증이 없는 ad-hoc 서명이다. 브라우저로 받은 파일엔 격리 표시가 붙어 막히지만, 도우미가 `curl`로 받고 `xattr -dr com.apple.quarantine`을 하므로 앱 안 업데이트에서는 경고가 뜨지 않는다. 처음 한 번은 지금처럼 `git pull && ./scripts/install.sh`가 필요하다(도우미 설치와 빌드 번호 넣기). 공증을 하려면 Apple Developer 계정(유료)이 필요해서 하지 않는다.
+- 한계: 신뢰의 뿌리는 이 GitHub 저장소다(체크섬은 같은 릴리스 본문에 있어 전송 오류는 막지만 저장소가 탈취되면 막지 못함). 개인 앱이고 서명 키를 따로 두지 않기로 했다.
+- 이유: 서버·계정 없이 CI가 이미 있는 저장소만으로 되고, 녹음 파일과 설정은 앱 밖 컨테이너에 있어 그대로 남는다.

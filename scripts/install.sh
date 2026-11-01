@@ -14,6 +14,8 @@ cd "$ROOT"
 APP_NAME="LectureRecorder"
 DEST_DIR="${INSTALL_DIR:-/Applications}"
 BUILT="build/install/Build/Products/Release/${APP_NAME}.app"
+# 빌드 번호 = main의 커밋 개수. 앱 안 업데이트 확인이 이 번호로 새 버전인지 가린다 (DECISIONS.md 2026-11-01).
+BUILD_NUMBER="${BUILD_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}"
 
 if [ "$(uname)" != "Darwin" ]; then
   echo "❌ Mac에서만 실행할 수 있어요."
@@ -46,7 +48,7 @@ echo "🔨 앱을 빌드하는 중이에요. 처음엔 몇 분 걸려요…"
 LOG="$(mktemp -t lecture-install)"
 if ! xcodebuild -project LectureRecorder.xcodeproj -scheme "$APP_NAME" -configuration Release \
   -destination 'platform=macOS' -derivedDataPath build/install \
-  CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES build >"$LOG" 2>&1; then
+  CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES CURRENT_PROJECT_VERSION="$BUILD_NUMBER" build >"$LOG" 2>&1; then
   { grep -E "error:|Fatal|FAILED" "$LOG" | awk '!seen[$0]++' | head -20; } || true
   if ! grep -qE "error:|Fatal|FAILED" "$LOG"; then tail -20 "$LOG"; fi
   echo "❌ 빌드에 실패했어요. 전체 로그: $LOG"
@@ -83,6 +85,12 @@ if ! ditto "$BUILT" "$TARGET" 2>/dev/null; then
   echo "관리자 권한이 필요해요. Mac 로그인 암호를 입력해 주세요."
   sudo ditto "$BUILT" "$TARGET"
 fi
+
+# 앱 안 "업데이트" 버튼이 쓰는 도우미를 샌드박스 밖 정해진 위치에 둔다 (앱이 이 위치의 스크립트만 실행할 수 있다).
+HELPER_DIR="$HOME/Library/Application Scripts/com.uisong.LectureRecorder"
+mkdir -p "$HELPER_DIR"
+cp "$ROOT/scripts/update-helper.sh" "$HELPER_DIR/update.sh"
+chmod +x "$HELPER_DIR/update.sh"
 
 echo "🎉 설치 완료! Launchpad나 응용 프로그램 폴더에서 $APP_NAME 을(를) 열 수 있어요."
 echo "   기존 녹음과 설정은 그대로 유지돼요."

@@ -89,6 +89,17 @@ struct ContentView: View {
                         .padding(Design.Spacing.xs)
                         .accessibilityIdentifier("recoveryNotice")
                 }
+                if let release = dependencies.appUpdate.availableRelease {
+                    HStack(spacing: Design.Spacing.xs) {
+                        Label("새 버전이 있습니다 (빌드 \(release.build))", systemImage: "arrow.down.circle")
+                            .designText(.caption)
+                            .foregroundStyle(Design.Palette.primary)
+                        SettingsLink { Text("설정에서 업데이트") }
+                            .buttonStyle(.textLink)
+                    }
+                    .padding(Design.Spacing.xs)
+                    .accessibilityIdentifier("updateNotice")
+                }
                 switch sidebar {
                 case .library:
                     RecordingListView(library: dependencies.library, playback: dependencies.playback, manager: dependencies.manager)
