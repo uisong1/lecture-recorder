@@ -3,7 +3,7 @@ import SwiftUI
 import WebKit
 
 /// 앱 안 LMS 창의 웹뷰. 사용자가 평소처럼 SSO로 로그인하고, 로그인 정보는 웹뷰의 쿠키 저장소에만 남는다 (앱이 비밀번호를 저장하지 않는다).
-/// 강의 영상을 열면 페이지가 요청하는 `screen.mp4` 주소를 알아내 `LMSImportModel`에 넘긴다.
+/// 강의 영상을 열면 페이지가 요청하는 본편 영상(`screen.mp4`, `media_files` 아래 mp4) 주소를 알아내 `LMSImportModel`에 넘긴다.
 @MainActor
 @Observable
 final class LMSBrowser: NSObject {
