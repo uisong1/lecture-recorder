@@ -34,6 +34,8 @@ git pull && ./scripts/install.sh
 
 Release로 빌드해 `/Applications/LectureRecorder.app`에 설치하고 바로 연다. 실행 중이면 먼저 종료하고(녹음 중이면 정지·저장 후 실행), 이미 설치돼 있으면 덮어쓴다. 녹음 파일과 설정은 앱 밖(`~/Library/Containers/com.uisong.LectureRecorder`)에 있어서 다시 설치해도 그대로다. 업데이트할 때도 같은 한 줄을 다시 실행하면 된다. 빌드만 해 보려면 `./scripts/install.sh --build-only`.
 
+설치한 뒤에는 앱 안 설정 > 일반 > 앱 업데이트에서 "새 버전 확인 → 업데이트"로 받을 수 있다(main에 합쳐질 때마다 CI가 GitHub Releases에 올린다). 처음 한 번은 위 한 줄로 설치해야 업데이트 도우미가 깔린다. 방식은 DECISIONS.md 2026-11-01 참고.
+
 ## 테스트
 
 ```bash

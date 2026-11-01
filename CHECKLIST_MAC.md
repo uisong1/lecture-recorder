@@ -83,3 +83,11 @@ CI(Linux·macOS)는 빌드와 단위 테스트까지만 본다. 아래는 실제
 - [ ] (LMS 영상 가져오기) 로그아웃된 상태(또는 오래 둔 뒤)에서 가져오기를 누르면 "LMS 로그인이 만료됐습니다" 문구가 뜬다. 앱은 어떤 경우에도 비밀번호를 저장하지 않는다.
 
 문제가 있으면 항목 번호와 함께 알려 주세요. 새 기능이 들어가면 이 목록에 항목을 더한다.
+
+## 앱 안 업데이트 (Mac에서 한 번 확인)
+이 기능은 Linux에서 시험할 수 없는 부분(NSUserUnixTask, launchd, 앱 교체)이 있어 Mac에서 확인이 필요합니다.
+- [ ] `git pull && ./scripts/install.sh` 후 `ls ~/Library/Application\ Scripts/com.uisong.LectureRecorder/update.sh`가 있다.
+- [ ] 설정 > 일반 > 앱 업데이트에서 "새 버전 확인"을 누르면 "최신 버전입니다"(또는 새 버전)가 뜬다. (main에 합쳐진 뒤 릴리스가 올라와야 합니다)
+- [ ] 새 버전이 있을 때 "업데이트"를 누르면 앱이 닫혔다가 새 빌드로 다시 열린다. 기존 녹음과 설정이 그대로다.
+- [ ] 녹음 중에는 업데이트 버튼이 꺼져 있다.
+- [ ] 실패하면 `~/Library/Logs/LectureRecorder-update.log`에 원인이 남는다.

@@ -1,0 +1,49 @@
+name: Release
+
+# main에 합쳐질 때마다 앱을 빌드해 GitHub Releases에 올린다. 앱 안 "업데이트"가 이 릴리스를 받는다.
+# 태그는 build-<커밋 개수>, 파일은 LectureRecorder-<커밋 개수>.zip, 본문에 sha256 한 줄을 적는다.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: 빌드해서 릴리스 올리기
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: 빌드
+        run: |
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          BUILD_NUMBER="$BUILD_NUMBER" scripts/install.sh --build-only
+      - name: 압축과 체크섬
+        run: |
+          ditto -c -k --keepParent build/install/Build/Products/Release/LectureRecorder.app "LectureRecorder-$BUILD_NUMBER.zip"
+          echo "SHA256=$(shasum -a 256 "LectureRecorder-$BUILD_NUMBER.zip" | awk '{print $1}')" >> "$GITHUB_ENV"
+      - name: 릴리스 만들기
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHORT="$(git rev-parse --short HEAD)"
+          NOTES="$(git log -1 --pretty=%s)"
+          printf '%s\n\n커밋: %s\nsha256: %s\n' "$NOTES" "$SHORT" "$SHA256" > notes.txt
+          gh release create "build-$BUILD_NUMBER" "LectureRecorder-$BUILD_NUMBER.zip" \
+            --title "빌드 $BUILD_NUMBER" --notes-file notes.txt --target "$GITHUB_SHA"
+      - name: 오래된 릴리스 정리 (최근 10개만 남김)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq 'map(select(.tagName | startswith("build-"))) | sort_by(.createdAt) | reverse | .[10:] | .[].tagName' \
+            | while read -r tag; do gh release delete "$tag" --cleanup-tag --yes; done

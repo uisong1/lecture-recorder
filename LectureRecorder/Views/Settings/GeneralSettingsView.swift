@@ -1,9 +1,11 @@
 import LectureCore
 import SwiftUI
 
-/// 앱 전반 설정 탭: 로그인 시 자동 실행, 재생 건너뛰기 길이.
+/// 앱 전반 설정 탭: 로그인 시 자동 실행, 재생 건너뛰기 길이, 앱 업데이트.
 struct GeneralSettingsView: View {
     let launchAtLogin: LaunchAtLoginModel
+    let appUpdate: AppUpdateModel
+    let isRecording: Bool
     @Bindable var playback: PlaybackController
 
     var body: some View {
@@ -33,6 +35,7 @@ struct GeneralSettingsView: View {
                     .designText(.caption)
                     .foregroundStyle(Design.Palette.inkMuted)
             }
+            AppUpdateSection(model: appUpdate, isRecording: isRecording)
         }
         .formStyle(.grouped)
         .padding(Design.Spacing.lg)
