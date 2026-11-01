@@ -14,6 +14,8 @@ final class LMSBrowser: NSObject {
     private(set) var canGoForward = false
     private(set) var isLoading = false
     private(set) var currentURL: URL?
+    /// 영상이 안 잡힐 때 원인을 볼 수 있게, 웹 페이지 안에서 본 프레임과 미디어 주소(쿼리 제외)를 모아 둔다.
+    private(set) var diagnostics = LMSDiagnostics()
 
     /// 영상 주소를 알려 줄 곳. 앱을 조립할 때 연결한다.
     @ObservationIgnored weak var model: LMSImportModel?
@@ -72,9 +74,9 @@ final class LMSBrowser: NSObject {
     }
 
     fileprivate func received(body: Any) {
-        guard let body = body as? [String: Any], let urlString = body["url"] as? String else { return }
-        guard let candidate = LMSVideoDetector.candidate(urlString: urlString, refererString: body["page"] as? String, courseName: pageCourseName) else { return }
-        model?.captured(candidate)
+        guard let body = body as? [String: Any], let report = LMSMediaReport(body: body) else { return }
+        diagnostics.record(report.summary)
+        if let candidate = report.candidate(courseName: pageCourseName) { model?.captured(candidate) }
     }
 
     /// 페이지를 다 불러오면 강의명을 읽어 둔다. 영상이 먼저 잡혔다면 비어 있던 강의명을 채운다.
@@ -88,31 +90,49 @@ final class LMSBrowser: NSObject {
         }
     }
 
-    /// 모든 프레임에서 미디어 요청을 지켜보다가 `screen.mp4`가 나오면 알린다.
-    /// 영상은 보통 iframe 안에서 뜨고 요청은 `<video>`가 직접 보내므로, 자원 목록과 `<video>`/`<source>`를 함께 본다.
-    /// 읽기만 하고 페이지를 바꾸지 않는다.
+    /// 모든 프레임에서 미디어 주소를 지켜보다가 알린다 (본편 판별은 앱 쪽에서 한다).
+    /// 영상은 보통 iframe 안의 `<video>`가 직접 요청하는데 WebKit은 그 요청을 자원 목록에 남기지 않아서,
+    /// `<video>`/`<source>`(열린 shadow DOM 포함)를 주기적으로 읽고 미디어 이벤트·`src` 설정·`fetch`·`XHR`도 함께 본다.
+    /// `fetch`와 `XHR`는 주소만 확인하고 그대로 넘겨서 페이지 동작은 바꾸지 않는다.
     private static let detectionScript = #"""
     (function () {
       if (window.__lectureRecorderHooked) return;
       window.__lectureRecorderHooked = true;
       var seen = {};
-      function report(u) {
-        if (!u || typeof u !== 'string' || seen[u]) return;
-        if (!/screen\.mp4/i.test(u)) return;
-        seen[u] = true;
-        try { window.webkit.messageHandlers.lmsVideo.postMessage({ url: u, page: location.href }); } catch (e) {}
+      var MEDIA = /\.(mp4|m4v|m4a|mp3|webm|m3u8|mpd)(\?|#|$)/i;
+      function post(message) { try { window.webkit.messageHandlers.lmsVideo.postMessage(message); } catch (e) {} }
+      function report(u, via) {
+        if (!u || typeof u !== 'string') return;
+        var a = u;
+        if (u.indexOf('blob:') !== 0 && u.indexOf('data:') !== 0) {
+          try { a = new URL(u, location.href).href; } catch (e) { return; }
+          if (!MEDIA.test(a)) return;
+        }
+        if (seen[a]) return;
+        seen[a] = true;
+        post({ kind: 'media', url: a, page: location.href, via: via });
       }
-      function scan() {
-        var nodes = document.querySelectorAll('video, source');
-        for (var i = 0; i < nodes.length; i++) { report(nodes[i].currentSrc || nodes[i].src); }
-        var entries = performance.getEntriesByType('resource');
-        for (var j = 0; j < entries.length; j++) { report(entries[j].name); }
+      function scanRoot(root, deep) {
+        var els = root.querySelectorAll('video, audio, source');
+        for (var i = 0; i < els.length; i++) { report(els[i].currentSrc || els[i].src || els[i].getAttribute('src'), 'element'); }
+        if (!deep) return;
+        var all = root.querySelectorAll('*');
+        for (var j = 0; j < all.length; j++) { if (all[j].shadowRoot) scanRoot(all[j].shadowRoot, true); }
       }
-      try { new PerformanceObserver(function (list) { list.getEntries().forEach(function (e) { report(e.name); }); }).observe({ type: 'resource', buffered: true }); } catch (e) {}
-      try { new MutationObserver(scan).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] }); } catch (e) {}
-      document.addEventListener('loadstart', scan, true);
-      document.addEventListener('DOMContentLoaded', scan);
-      scan();
+      post({ kind: 'frame', url: location.href, page: location.href, via: window === window.top ? 'top' : 'iframe' });
+      try { var f = window.fetch; if (f) window.fetch = function (i) { try { report(typeof i === 'string' ? i : (i && i.url), 'fetch'); } catch (e) {} return f.apply(this, arguments); }; } catch (e) {}
+      try { var o = XMLHttpRequest.prototype.open; XMLHttpRequest.prototype.open = function (m, u) { try { report(String(u), 'xhr'); } catch (e) {} return o.apply(this, arguments); }; } catch (e) {}
+      try {
+        var d = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
+        if (d && d.set) Object.defineProperty(HTMLMediaElement.prototype, 'src', { configurable: true, enumerable: d.enumerable, get: d.get, set: function (v) { try { report(v, 'src-setter'); } catch (e) {} return d.set.call(this, v); } });
+      } catch (e) {}
+      ['loadstart', 'loadedmetadata', 'durationchange', 'play', 'playing'].forEach(function (name) {
+        window.addEventListener(name, function (e) { var t = e.target; if (t && t.currentSrc !== undefined) report(t.currentSrc || t.src, 'event'); }, true);
+      });
+      try { new MutationObserver(function () { scanRoot(document, false); }).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] }); } catch (e) {}
+      var ticks = 0;
+      setInterval(function () { try { scanRoot(document, ticks++ % 4 === 0); } catch (e) {} }, 1500);
+      scanRoot(document, false);
     })();
     """#
 
@@ -143,12 +163,16 @@ extension LMSBrowser: WKNavigationDelegate, WKUIDelegate {
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         // 웹 주소만 연다. 다른 앱을 여는 주소 등은 막는다.
         let scheme = navigationAction.request.url?.scheme?.lowercased() ?? ""
+        if navigationAction.targetFrame?.isMainFrame == false, let url = navigationAction.request.url, let host = url.host() {
+            diagnostics.record("하위 프레임 이동: \(host)\(url.path)")
+        }
         decisionHandler(["http", "https", "about", "blob", "data"].contains(scheme) ? .allow : .cancel)
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         // 다른 페이지로 가면 이전 페이지의 영상 후보는 버린다. 새 페이지가 영상을 띄우면 다시 잡힌다.
         pageCourseName = nil
+        diagnostics.clear()
         model?.clearCandidate()
     }
 
