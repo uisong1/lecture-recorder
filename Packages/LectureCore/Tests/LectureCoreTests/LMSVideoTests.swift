@@ -14,6 +14,23 @@ func fakeMP4(moovContent: String = "trak") -> Data {
 }
 
 @Suite struct LMSVideoDetectorTests {
+    @Test func media_files_아래_mp4도_본편이고_부속_영상은_제외한다() {
+        let base = "https://cdn.example.ac.kr/ssu-contents/contents31/x/6ae/contents/media_files"
+        #expect(LMSVideoDetector.candidate(urlString: base + "/mobile/ssmovie.mp4", refererString: nil) != nil)
+        #expect(LMSVideoDetector.candidate(urlString: base + "/mobile/intro.mp4", refererString: nil) == nil)
+        #expect(LMSVideoDetector.candidate(urlString: base + "/preloader.mp4", refererString: nil) == nil)
+        #expect(LMSVideoDetector.candidate(urlString: base + "/notes.pdf", refererString: nil) == nil)
+        #expect(LMSVideoDetector.candidate(urlString: "https://commons.ssu.ac.kr/viewer/uniplayer/preloader.mp4", refererString: nil) == nil)
+    }
+
+    @Test func screen_mp4가_있으면_다른_후보보다_우선한다() {
+        let ref = URL(string: "https://commons.ssu.ac.kr/em/1")
+        let movie = LMSVideoCandidate(url: URL(string: "https://a.kr/media_files/mobile/ssmovie.mp4")!, referer: ref)
+        let screen = LMSVideoCandidate(url: URL(string: "https://a.kr/media_files/screen.mp4")!, referer: ref)
+        #expect(LMSVideoDetector.isPreferred(screen, over: movie))
+        #expect(!LMSVideoDetector.isPreferred(movie, over: screen))
+    }
+
     @Test func screen_mp4만_본편으로_본다() {
         #expect(LMSVideoDetector.candidate(urlString: "https://cdn.example.ac.kr/a/b/screen.mp4", refererString: nil) != nil)
         #expect(LMSVideoDetector.candidate(urlString: "https://cdn.example.ac.kr/a/b/preloader.mp4", refererString: nil) == nil)

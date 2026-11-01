@@ -93,6 +93,8 @@ public final class LMSImportModel {
             if courseName.isEmpty, let name = new.courseName { editCourseName(name) }
             return
         }
+        if let current = candidate, current.referer == new.referer,
+           !LMSVideoDetector.isPreferred(new, over: current) { return }
         candidate = new
         status = .idle
         customDate = nil

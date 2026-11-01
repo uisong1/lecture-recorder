@@ -401,3 +401,7 @@
 - Gatekeeper: 앱은 Apple 서명·공증이 없는 ad-hoc 서명이다. 브라우저로 받은 파일엔 격리 표시가 붙어 막히지만, 도우미가 `curl`로 받고 `xattr -dr com.apple.quarantine`을 하므로 앱 안 업데이트에서는 경고가 뜨지 않는다. 처음 한 번은 지금처럼 `git pull && ./scripts/install.sh`가 필요하다(도우미 설치와 빌드 번호 넣기). 공증을 하려면 Apple Developer 계정(유료)이 필요해서 하지 않는다.
 - 한계: 신뢰의 뿌리는 이 GitHub 저장소다(체크섬은 같은 릴리스 본문에 있어 전송 오류는 막지만 저장소가 탈취되면 막지 못함). 개인 앱이고 서명 키를 따로 두지 않기로 했다.
 - 이유: 서버·계정 없이 CI가 이미 있는 저장소만으로 되고, 녹음 파일과 설정은 앱 밖 컨테이너에 있어 그대로 남는다.
+
+## 2026-11-01. 본편 영상 판별을 `screen.mp4`에서 `media_files` 아래 mp4까지 넓힌다
+- 사용자 Mac 캡처에서 실제 본편 주소가 `.../contents/media_files/mobile/ssmovie.mp4`였고(`commons.ssu.ac.kr/em/...` 프레임 안), `screen.mp4`는 잡히지 않았다. 그래서 "이 영상 가져오기"가 뜨지 않았다.
+- 결정: `https`이고 `.mp4`이며 `preloader.mp4`·`intro.mp4`가 아니고, 이름이 `screen.mp4`이거나 경로에 `/media_files/`가 있으면 본편으로 본다. 같은 페이지에서 둘 다 잡히면 `screen.mp4`를 우선한다. 암호화·DRM 검사와 Range 없이 받기는 그대로다.

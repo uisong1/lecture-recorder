@@ -20,9 +20,26 @@ public enum LMSVideoDetector {
     /// 본편 영상의 파일 이름. 같은 페이지에 잡히는 `preloader.mp4`, `intro.mp4`는 본편이 아니라서 무시한다.
     public static let lectureFileName = "screen.mp4"
 
-    /// 본편(`screen.mp4`)인지. 쿠키를 붙여 보내므로 https만 받는다.
+    /// 본편이 아닌 부속 영상 파일 이름.
+    public static let ignoredFileNames: Set<String> = ["preloader.mp4", "intro.mp4"]
+
+    /// 강의 콘텐츠 폴더. 여기 있는 mp4(`ssmovie.mp4` 등)도 본편으로 본다.
+    public static let contentFolder = "/media_files/"
+
+    /// 본편인지. 쿠키를 붙여 보내므로 https만 받는다.
+    /// `screen.mp4`이거나 `media_files` 폴더 아래의 mp4이면 본편이고, `preloader.mp4`·`intro.mp4`는 무시한다.
     public static func isLectureVideo(_ url: URL) -> Bool {
-        url.scheme?.lowercased() == "https" && url.lastPathComponent.lowercased() == lectureFileName
+        guard url.scheme?.lowercased() == "https" else { return false }
+        let name = url.lastPathComponent.lowercased()
+        guard name.hasSuffix(".mp4"), !ignoredFileNames.contains(name) else { return false }
+        return name == lectureFileName || url.path.lowercased().contains(contentFolder)
+    }
+
+    /// 같은 페이지에서 후보가 여러 개 잡힐 때 더 좋은 쪽. `screen.mp4`(원본)를 `media_files`의 다른 파일보다 우선한다.
+    public static func isPreferred(_ new: LMSVideoCandidate, over old: LMSVideoCandidate) -> Bool {
+        let newIsScreen = new.url.lastPathComponent.lowercased() == lectureFileName
+        let oldIsScreen = old.url.lastPathComponent.lowercased() == lectureFileName
+        return newIsScreen || !oldIsScreen
     }
 
     /// 웹뷰가 보고한 주소 문자열에서 후보를 만든다. 본편이 아니면 nil.
