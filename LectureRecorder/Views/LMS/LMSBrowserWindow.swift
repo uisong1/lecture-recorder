@@ -16,7 +16,7 @@ struct LMSBrowserWindow: View {
             LMSWebView(browser: browser)
                 .accessibilityIdentifier("lmsWebView")
             Divider().overlay(Design.Palette.hairline)
-            LMSImportBar(model: model, subjects: subjects)
+            LMSImportBar(model: model, subjects: subjects, diagnostics: browser.diagnostics.lines)
         }
         .frame(minWidth: 900, minHeight: 640)
         .designCanvas()
@@ -56,6 +56,7 @@ struct LMSBrowserWindow: View {
 private struct LMSImportBar: View {
     let model: LMSImportModel
     let subjects: SubjectManager
+    let diagnostics: [String]
     @AppStorage(LMSImportModel.keepVideoDefaultsKey) private var keepVideo = false
 
     var body: some View {
@@ -69,6 +70,21 @@ private struct LMSImportBar: View {
                     .designText(.caption)
                     .foregroundStyle(Design.Palette.inkMuted)
                     .accessibilityIdentifier("lmsHint")
+                if !diagnostics.isEmpty {
+                    DisclosureGroup("감지 정보 (영상이 안 잡힐 때 캡처해서 보내 주세요)") {
+                        VStack(alignment: .leading, spacing: Design.Spacing.xxs) {
+                            ForEach(diagnostics, id: \.self) { line in
+                                Text(line)
+                                    .designText(.finePrint)
+                                    .foregroundStyle(Design.Palette.inkMuted)
+                                    .textSelection(.enabled)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .designText(.finePrint)
+                    .accessibilityIdentifier("lmsDiagnostics")
+                }
             }
             statusLine
         }
