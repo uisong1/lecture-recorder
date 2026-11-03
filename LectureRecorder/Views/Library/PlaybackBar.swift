@@ -17,7 +17,6 @@ struct PlaybackBar: View {
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.25)) { _ in
-            let _ = playback.refresh()
             VStack(spacing: Design.Spacing.xs) {
                 Text(playback.current?.title ?? "")
                     .designText(.captionStrong)
@@ -179,6 +178,14 @@ struct PlaybackBar: View {
             .padding(Design.Spacing.md)
         }
         .frame(maxWidth: .infinity)
+        // 재생이 끝났는지·다음 녹음으로 넘길지는 화면을 그리는 도중이 아니라 별도 루프에서 확인한다.
+        // 그리는 도중에 상태를 바꾸면 화면이 다시 그려지길 반복하거나, 다음 파일 불러오기가 그리기를 막을 수 있다.
+        .task {
+            while !Task.isCancelled {
+                playback.refresh()
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+        }
         .background(Design.Palette.parchment)
         .overlay(alignment: .top) { Divider() }
         .alert("수업 메모", isPresented: $editingMemo) {
