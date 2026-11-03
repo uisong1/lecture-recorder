@@ -33,6 +33,8 @@ public final class PlaybackController {
     public private(set) var current: Recording?
     public private(set) var isPlaying = false
     public var errorMessage: String?
+    /// 아래 재생 패널을 사용자가 닫았는지. 녹음을 새로 고르거나 재생을 시작하면 다시 보인다.
+    public private(set) var isPanelHidden = false
     /// 지금 재생 속도. 과목마다 마지막에 고른 속도를 기억하고, 정한 적 없는 과목(과 미분류)은 마지막으로 고른 속도를 쓴다. 앱을 다시 켜도 유지한다.
     public private(set) var rate: PlaybackRate
 
@@ -141,8 +143,16 @@ public final class PlaybackController {
     public var currentTime: TimeInterval { player.currentTime }
     public var duration: TimeInterval { player.duration }
 
-    /// 녹음을 불러온다. 같은 녹음이면 다시 불러오지 않는다.
+    /// 재생 패널을 닫는다. 안 보이는 소리가 계속 나지 않도록 재생도 멈추고, 불러온 녹음과 위치는 그대로 둔다.
+    /// 녹음 중이어도 녹음에는 영향이 없다 (재생만 멈춘다).
+    public func closePanel() {
+        pause()
+        isPanelHidden = true
+    }
+
+    /// 녹음을 불러온다. 같은 녹음이면 다시 불러오지 않는다. 닫아 둔 패널은 다시 보인다.
     public func select(_ recording: Recording?) {
+        if recording != nil { isPanelHidden = false }
         if !isSteppingTour { endTour() }
         guard recording !== current else { return }
         rememberPosition()
@@ -173,6 +183,7 @@ public final class PlaybackController {
     /// 재생을 시작한다. 녹음 중에 스피커로 나가면 시작하지 않고 확인을 요청한다 (`isConfirmingPlayback`).
     public func play() {
         guard current != nil else { return }
+        isPanelHidden = false
         if playbackNeedsConfirmation {
             isConfirmingPlayback = true
             return

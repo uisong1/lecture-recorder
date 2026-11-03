@@ -30,7 +30,7 @@ struct RecordingView: View {
                     .padding(.vertical, Design.Spacing.md)
                     .frame(maxWidth: .infinity)
             }
-            if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
+            if playback.current != nil && !playback.isPanelHidden { PlaybackPanel(playback: playback, manager: manager, library: library) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .designCanvas(Design.Palette.parchment)
