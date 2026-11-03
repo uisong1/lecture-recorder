@@ -405,3 +405,7 @@
 ## 2026-11-01. 본편 영상 판별을 `screen.mp4`에서 `media_files` 아래 mp4까지 넓힌다
 - 사용자 Mac 캡처에서 실제 본편 주소가 `.../contents/media_files/mobile/ssmovie.mp4`였고(`commons.ssu.ac.kr/em/...` 프레임 안), `screen.mp4`는 잡히지 않았다. 그래서 "이 영상 가져오기"가 뜨지 않았다.
 - 결정: `https`이고 `.mp4`이며 `preloader.mp4`·`intro.mp4`가 아니고, 이름이 `screen.mp4`이거나 경로에 `/media_files/`가 있으면 본편으로 본다. 같은 페이지에서 둘 다 잡히면 `screen.mp4`를 우선한다. 암호화·DRM 검사와 Range 없이 받기는 그대로다.
+
+## 2026-11-03: 재생 끝 확인을 화면 그리는 도중에서 별도 루프로
+- 결정: `PlaybackBar`가 0.25초마다 `playback.refresh()`를 `TimelineView` 본문 안에서 부르던 것을 `.task` 루프로 옮긴다.
+- 이유: 본문이 그려지는 도중에 재생 상태(`isPlaying`, `current` 등)를 바꾸면 화면이 다시 그려지길 반복할 수 있고, 이어서 재생으로 다음 파일을 불러오는 일도 그리기를 막는다. 녹음 재생 중 가끔 멈추는 현상의 유력한 원인이다.
