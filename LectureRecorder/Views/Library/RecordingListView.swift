@@ -283,7 +283,7 @@ struct RecordingListView: View {
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if playback.current != nil { PlaybackBar(playback: playback, manager: manager, library: library) }
+                if playback.current != nil && !playback.isPanelHidden { PlaybackPanel(playback: playback, manager: manager, library: library) }
             }
             .overlay(alignment: .bottom) { errorOverlay }
     }
