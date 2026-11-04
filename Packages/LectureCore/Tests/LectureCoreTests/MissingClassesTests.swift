@@ -53,8 +53,9 @@ import Testing
     }
 
     @Test func 조회_기간_밖의_수업은_넣지_않는다() {
-        // 6일 전(3/2 월요일)까지만 본다.
-        #expect(missing(daysBack: 4).map(\.subjectID) == ["선형대수"])
+        // 오늘(3/6)부터 4일 전(3/2 월요일)까지는 포함하고, 3일 전(3/3)까지만 보면 월요일 수업은 빠진다.
+        #expect(missing(daysBack: 4).map(\.subjectID) == ["선형대수", "운영체제"])
+        #expect(missing(daysBack: 3).map(\.subjectID) == ["선형대수"])
         #expect(missing(daysBack: 0).isEmpty)
         #expect(missing(daysBack: -1).isEmpty)
     }
