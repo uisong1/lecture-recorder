@@ -48,8 +48,9 @@ import Testing
 
     @Test func 수업이_끝나기_전에는_빠진_것이_아니다() {
         // 종료 정각이면 끝난 것이다. 1분 전이면 아직 수업 중이다.
-        #expect(missing(now: date(2026, 3, 2, 10, 15)).map(\.subjectID) == ["운영체제"])
-        #expect(missing(now: date(2026, 3, 2, 10, 14)).isEmpty)
+        // 지난주 월요일 수업은 조회 기간에서 빼고 그날만 본다.
+        #expect(missing(now: date(2026, 3, 2, 10, 15), daysBack: 3).map(\.subjectID) == ["운영체제"])
+        #expect(missing(now: date(2026, 3, 2, 10, 14), daysBack: 3).isEmpty)
     }
 
     @Test func 조회_기간_밖의_수업은_넣지_않는다() {
