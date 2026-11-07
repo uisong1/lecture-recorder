@@ -55,6 +55,8 @@ if ! xcodebuild -project LectureRecorder.xcodeproj -scheme "$APP_NAME" -configur
   exit 1
 fi
 [ -d "$BUILT" ] || { echo "❌ 빌드 결과물을 찾지 못했어요: $BUILT"; exit 1; }
+# 빌드마다 권한(마이크·알림)을 다시 묻지 않도록 서명 요구사항을 고정한다 (DECISIONS.md 2026-11-07).
+"$ROOT/scripts/sign-stable.sh" "$BUILT"
 echo "✅ 빌드 완료"
 
 if [ "$BUILD_ONLY" = 1 ]; then

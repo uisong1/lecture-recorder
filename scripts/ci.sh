@@ -36,6 +36,7 @@ if [ -d Packages/LectureCore ]; then
 fi
 
 run app-build "${XCB[@]}" build
+run sign-stable scripts/sign-stable.sh build/Build/Products/Debug/LectureRecorder.app
 
 if [ -d LectureRecorderUITests ]; then
   run app-test "${XCB[@]}" test
