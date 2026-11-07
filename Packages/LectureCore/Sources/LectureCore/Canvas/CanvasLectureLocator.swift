@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Canvas·LearningX·commons로 보내는 요청과 응답. 테스트에서는 가짜 구현을 쓴다.
 public struct CanvasHTTPResponse: Sendable {
