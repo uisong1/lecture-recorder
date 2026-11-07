@@ -94,7 +94,14 @@ struct ContentView: View {
                         Label("새 버전이 있습니다 (빌드 \(release.build))", systemImage: "arrow.down.circle")
                             .designText(.caption)
                             .foregroundStyle(Design.Palette.primary)
-                        SettingsLink { Text("설정에서 업데이트") }
+                        Button {
+                openWindow(id: LMSBackfillWindow.windowID)
+            } label: {
+                Label("녹음 없는 수업일", systemImage: "calendar.badge.exclamationmark")
+            }
+            .help("녹음이 빠진 수업일을 LMS 강의 영상의 소리로 채웁니다 (개인 복습용)")
+            .accessibilityIdentifier("openBackfill")
+            SettingsLink { Text("설정에서 업데이트") }
                             .buttonStyle(.textLink)
                     }
                     .padding(Design.Spacing.xs)

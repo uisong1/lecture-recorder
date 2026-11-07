@@ -12,6 +12,7 @@ struct SettingsView: View {
     let playback: PlaybackController
     let storeBackup: StoreBackup?
     let storage: RecordingStorage
+    let canvasToken: CanvasTokenModel
 
     var body: some View {
         TabView {
@@ -25,6 +26,8 @@ struct SettingsView: View {
                 .tabItem { Label("알림", systemImage: "bell") }
             RecordingFilesSettingsView(model: rescan, isRecording: recording.isRecording, storeBackup: storeBackup, storage: storage)
                 .tabItem { Label("녹음 파일", systemImage: "folder") }
+            CanvasSettingsView(model: canvasToken)
+                .tabItem { Label("LMS", systemImage: "graduationcap") }
         }
         .frame(width: 560, height: 560)
     }

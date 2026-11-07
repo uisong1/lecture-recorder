@@ -28,6 +28,9 @@ final class AppDependencies {
     /// 앱 안 LMS 창의 웹뷰와, 거기서 잡은 영상을 가져오는 상태.
     let lmsBrowser: LMSBrowser
     let lmsImport: LMSImportModel
+    /// 녹음 없는 수업일을 LMS 영상의 소리로 채우는 창의 상태와, 설정의 Canvas 토큰 입력.
+    let lmsBackfill: LMSBackfillModel
+    let canvasToken: CanvasTokenModel
     let launchAtLogin: LaunchAtLoginModel
     /// 앱 안 "새 버전 있음 → 업데이트". UI 테스트에서는 확인하지 않는다.
     let appUpdate: AppUpdateModel
@@ -198,6 +201,22 @@ final class AppDependencies {
             onFinished: { library.reload() }
         )
         browser.model = lmsImport
+        let tokenStore = KeychainCanvasTokenStore()
+        canvasToken = CanvasTokenModel(store: tokenStore)
+        lmsBackfill = LMSBackfillModel(
+            fetcher: LMSVideoFetcher(downloader: URLSessionLMSDownloader(), isPlayable: { await SystemMediaPlayability.isPlayable($0) }),
+            importer: MediaImporter(context: context, storage: storage, files: files, extractor: SystemAudioExtractor(), durations: SystemAudioDurationReader()),
+            haltStore: UserDefaultsLMSHaltStore(),
+            skipStore: UserDefaultsMissingClassSkipStore(),
+            subjects: { subjects.subjects },
+            recordedStarts: { ((try? context.fetch(FetchDescriptor<Recording>())) ?? []).map(\.startedAt) },
+            makeLocator: {
+                guard let token = try tokenStore.loadToken() else { throw CanvasError.noToken }
+                return CanvasLectureLocator(client: URLSessionCanvasClient(), token: token)
+            },
+            keepVideo: { UserDefaults.standard.bool(forKey: LMSImportModel.keepVideoDefaultsKey) },
+            onFinished: { library.reload() }
+        )
         timetableImport = TimetableImportModel(
             reader: VisionTimetableReader(),
             importer: TimetableImporter(context: context),
