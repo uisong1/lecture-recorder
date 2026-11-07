@@ -124,6 +124,7 @@ struct RecordingView: View {
                         .designText(.caption)
                         .foregroundStyle(Design.Palette.inkMuted)
                         .accessibilityIdentifier("expectedSubject")
+                    // 메뉴 선택 칸은 폭을 고정해야 처음 그릴 때 "자…"처럼 잘리지 않는다 (fixedSize는 항목이 채워지기 전 폭으로 굳는다).
                     Picker("과목", selection: Bindable(recording).subjectChoice) {
                         Text("자동 (시간표)").tag(SubjectChoice.automatic)
                         ForEach(recording.availableSubjects()) { subject in
@@ -132,7 +133,7 @@ struct RecordingView: View {
                         Text("미분류").tag(SubjectChoice.unclassified)
                     }
                     .pickerStyle(.menu)
-                    .fixedSize()
+                    .frame(width: 220)
                     .accessibilityIdentifier("subjectChoice")
                 }
                 Text(recording.elapsedText)
