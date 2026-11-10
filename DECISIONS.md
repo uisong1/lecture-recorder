@@ -448,3 +448,7 @@
 ## 2026-11-10. 녹음 목록 더블클릭은 simultaneousGesture로 단다
 - 결정: 행의 `onTapGesture(count: 2)`를 `simultaneousGesture(TapGesture(count: 2))`로 바꿨다.
 - 이유: macOS List 행의 onTapGesture가 한 번 클릭 선택을 가로채 행을 개별로 고를 수 없었다.
+
+## 2026-11-10. 노치 불빛은 수업 시작 정각부터 켠다
+- 결정: 노치 불빛을 수업 시작 5분 뒤가 아니라 시작 정각에 켜고(`ClassSchedule.notchAlertDelay = 0`) 10분 뒤(수업이 먼저 끝나면 그때) 끈다. 녹음을 시작하면 바로 꺼진다. 시작 알림 센터 알림("녹음 중이 아닙니다")은 그대로 시작 5분 뒤다(`missedStartDelay`).
+- 이유: 사용자가 정각부터 보이길 원했다. 시작 직후에도 녹음 전이면 눌러서 바로 녹음 창을 열 수 있어 놓칠 일이 줄어든다. 처음 시안의 "5분 뒤"는 취소한다.
