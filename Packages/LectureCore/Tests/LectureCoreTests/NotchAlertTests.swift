@@ -23,20 +23,25 @@ import Testing
         schedule.activeNotchAlert(now: now, calendar: seoulCalendar, recorded: recorded, isRecording: isRecording, dismissedStarts: dismissed)
     }
 
-    @Test func 시작_5분_뒤_정각부터_켜지고_4분_59초는_아직_꺼져_있다() {
-        #expect(alert(at: date(2026, 3, 2, 10, 4, second: 59)) == nil)
-        let on = alert(at: date(2026, 3, 2, 10, 5))
+    @Test func 기본은_정각에_켜진다() {
+        #expect(ClassSchedule<String>.notchAlertDelay == 0)
+    }
+
+    @Test func 수업_시작_정각부터_켜지고_1초_전은_아직_꺼져_있다() {
+        #expect(alert(at: date(2026, 3, 2, 9, 59, second: 59)) == nil)
+        let on = alert(at: date(2026, 3, 2, 10, 0))
         #expect(on?.subjectID == "자료구조")
         #expect(on?.classStart == date(2026, 3, 2, 10, 0))
     }
 
-    @Test func 켜진_지_10분_뒤_정각에_꺼진다() {
-        #expect(alert(at: date(2026, 3, 2, 10, 14, second: 59)) != nil)
-        #expect(alert(at: date(2026, 3, 2, 10, 15)) == nil)
-        #expect(alert(at: date(2026, 3, 2, 10, 5))?.expiresAt == date(2026, 3, 2, 10, 15))
+    @Test func 시간이_지나도_저절로_꺼지지_않고_수업이_끝나는_정각에_꺼진다() {
+        #expect(alert(at: date(2026, 3, 2, 10, 30)) != nil)
+        #expect(alert(at: date(2026, 3, 2, 11, 14, second: 59)) != nil)
+        #expect(alert(at: date(2026, 3, 2, 11, 15)) == nil)
+        #expect(alert(at: date(2026, 3, 2, 10, 0))?.expiresAt == date(2026, 3, 2, 11, 15))
     }
 
-    @Test func 수업이_먼저_끝나면_그_시각에_꺼진다() throws {
+    @Test func 짧은_수업은_끝나는_시각에_꺼진다() throws {
         let short = ClassSchedule<String>(entries: [.init(period: try period(.monday, (10, 0), (10, 8)), subjectID: "짧은수업")])
         let now = date(2026, 3, 2, 10, 6)
         #expect(short.activeNotchAlert(now: now, calendar: seoulCalendar, isRecording: false)?.expiresAt == date(2026, 3, 2, 10, 8))
@@ -67,8 +72,11 @@ import Testing
     }
 
     @Test func 연강은_한_수업으로_보고_첫_칸_시작을_기준으로_한다() {
-        // 13:00 시작 연강: 13:05에 켜지고, 14:05(둘째 칸 시작 5분 뒤)에는 새로 켜지지 않는다.
+        // 13:00 시작 연강: 13:00에 켜지고 연강이 끝나는 15:00까지 같은 수업으로 이어진다. 둘째 칸(14:00) 시작은 새 수업이 아니다.
         #expect(alert(at: date(2026, 3, 2, 13, 6))?.classEnd == date(2026, 3, 2, 15, 0))
-        #expect(alert(at: date(2026, 3, 2, 14, 6)) == nil)
+        #expect(alert(at: date(2026, 3, 2, 14, 6))?.classStart == date(2026, 3, 2, 13, 0))
+        // 첫 칸 수업을 눌러서 끈 뒤에는 둘째 칸에서도 다시 켜지지 않는다.
+        #expect(alert(at: date(2026, 3, 2, 14, 6), dismissed: [date(2026, 3, 2, 13, 0)]) == nil)
+        #expect(alert(at: date(2026, 3, 2, 15, 0)) == nil)
     }
 }

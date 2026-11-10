@@ -35,15 +35,15 @@ import Testing
         return subject
     }
 
-    @Test func 기본은_켜져_있고_수업_시작_5분_뒤에_불빛이_뜬다() throws {
+    @Test func 기본은_켜져_있고_수업_시작_정각에_불빛이_뜬다() throws {
         try addClass("자료구조", hour: 10, endHour: 11)
         #expect(controller.isNotchAlertEnabled)
-        clock.advance(by: 65 * 60 - 1)  // 10:04:59
+        clock.advance(by: 60 * 60 - 1)  // 9:59:59
         controller.refreshNotchAlert()
         #expect(controller.notchAlert == nil)
-        clock.advance(by: 1)  // 10:05
+        clock.advance(by: 1)  // 10:00
         controller.refreshNotchAlert()
-        #expect(controller.notchAlert == NotchAlertInfo(subjectName: "자료구조", classStart: date(2026, 3, 2, 10, 0), expiresAt: date(2026, 3, 2, 10, 15)))
+        #expect(controller.notchAlert == NotchAlertInfo(subjectName: "자료구조", classStart: date(2026, 3, 2, 10, 0), expiresAt: date(2026, 3, 2, 11, 0)))
     }
 
     @Test func 누르면_꺼지고_같은_수업에서는_다시_켜지지_않는다() throws {
@@ -81,11 +81,14 @@ import Testing
         #expect(controller.notchAlert != nil)
     }
 
-    @Test func 켜짐_시간이_지나면_저절로_꺼진다() throws {
+    @Test func 시간이_지나도_누르기_전에는_계속_켜져_있고_수업이_끝나면_꺼진다() throws {
         try addClass("자료구조", hour: 10, endHour: 11)
-        clock.advance(by: 66 * 60)
+        clock.advance(by: 66 * 60)  // 10:06
         controller.refreshNotchAlert()
-        clock.advance(by: 10 * 60)  // 10:16
+        clock.advance(by: 40 * 60)  // 10:46
+        controller.refreshNotchAlert()
+        #expect(controller.notchAlert != nil)
+        clock.advance(by: 14 * 60)  // 11:00
         controller.refreshNotchAlert()
         #expect(controller.notchAlert == nil)
     }
