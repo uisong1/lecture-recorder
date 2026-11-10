@@ -20,11 +20,8 @@ extension ClassSchedule {
     /// 노치 불빛이 켜지는 때. 수업 시작 정각부터 켠다 (2026-11-10 사용자 결정). 시작 알림(`missedStartDelay`)과 따로다.
     public static var notchAlertDelay: TimeInterval { 0 }
 
-    /// 노치 불빛이 켜져 있는 시간(초). 수업 시작 `notchAlertDelay` 뒤부터 이만큼 켜 둔다.
-    public static var notchAlertDuration: TimeInterval { 10 * 60 }
-
     /// 지금 노치 불빛을 켜야 하는 수업. 없으면 nil.
-    /// - 수업 시작 `delay`(기본 정각) 뒤부터 `duration` 동안, 수업이 끝나기 전일 때만 켠다 (시작 시각은 포함, 끝 시각은 제외).
+    /// - 수업 시작 `delay`(기본 정각) 뒤부터 수업이 끝나기 전까지 켠다 (시작 시각은 포함, 끝 시각은 제외). 시간이 지났다고 저절로 꺼지지 않고, 사용자가 누르거나 끄거나 녹음을 시작해야 꺼진다.
     /// - 지금 녹음 중이거나, 같은 과목의 녹음이 이 수업 시작 `leadMinutes`분 전부터 종료 전 사이에 있으면 켜지 않는다.
     /// - `dismissedStarts`에 시작 시각이 있는 수업(이미 불빛을 눌렀거나 끈 수업)은 다시 켜지 않는다.
     /// - 둘 이상이 겹치면 시작이 늦은 수업을 보인다.
@@ -35,14 +32,13 @@ extension ClassSchedule {
         isRecording: Bool,
         dismissedStarts: Set<Date> = [],
         delay: TimeInterval = ClassSchedule.notchAlertDelay,
-        duration: TimeInterval = ClassSchedule.notchAlertDuration,
         leadMinutes: Int = ClassSchedule.defaultLeadMinutes
     ) -> NotchAlert<SubjectID>? {
         guard !isRecording else { return nil }
         let lead = Double(max(leadMinutes, 0) * 60)
         let candidates = todaysClasses(now: now, calendar: calendar).compactMap { entry -> NotchAlert<SubjectID>? in
             let from = entry.start.addingTimeInterval(delay)
-            let until = min(from.addingTimeInterval(duration), entry.end)
+            let until = entry.end
             guard now >= from, now < until else { return nil }
             if dismissedStarts.contains(entry.start) { return nil }
             let earliest = entry.start.addingTimeInterval(-lead)

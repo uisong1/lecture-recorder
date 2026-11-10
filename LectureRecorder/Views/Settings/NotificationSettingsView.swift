@@ -32,7 +32,7 @@ struct NotificationSettingsView: View {
                     isOn: Binding(get: { reminders.isNotchAlertEnabled }, set: { reminders.setNotchAlertEnabled($0) })
                 )
                 .accessibilityIdentifier("notchAlertToggle")
-                Text("수업 시작 시각에 녹음 전이면 화면 맨 위 가운데에 파란 불빛이 10분 동안 켜집니다(녹음을 시작하면 꺼집니다). 누르면 그 과목이 골라진 녹음 창이 열리고, 녹음은 \"녹음 시작\"을 눌러야만 시작됩니다. 소리는 나지 않습니다.")
+                Text("수업 시작 시각에 녹음 전이면 화면 맨 위 가운데에 파란 불빛이 켜지고, 눌러서 끄거나 녹음을 시작하기 전까지(수업이 끝나면 저절로) 켜져 있습니다. 누르면 그 과목이 골라진 녹음 창이 열리고, 녹음은 \"녹음 시작\"을 눌러야만 시작됩니다. 소리는 나지 않습니다.")
                     .designText(.caption)
                     .foregroundStyle(Design.Palette.inkMuted)
             }

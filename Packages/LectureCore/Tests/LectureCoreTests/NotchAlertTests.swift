@@ -34,13 +34,14 @@ import Testing
         #expect(on?.classStart == date(2026, 3, 2, 10, 0))
     }
 
-    @Test func 켜진_지_10분_뒤_정각에_꺼진다() {
-        #expect(alert(at: date(2026, 3, 2, 10, 9, second: 59)) != nil)
-        #expect(alert(at: date(2026, 3, 2, 10, 10)) == nil)
-        #expect(alert(at: date(2026, 3, 2, 10, 0))?.expiresAt == date(2026, 3, 2, 10, 10))
+    @Test func 시간이_지나도_저절로_꺼지지_않고_수업이_끝나는_정각에_꺼진다() {
+        #expect(alert(at: date(2026, 3, 2, 10, 30)) != nil)
+        #expect(alert(at: date(2026, 3, 2, 11, 14, second: 59)) != nil)
+        #expect(alert(at: date(2026, 3, 2, 11, 15)) == nil)
+        #expect(alert(at: date(2026, 3, 2, 10, 0))?.expiresAt == date(2026, 3, 2, 11, 15))
     }
 
-    @Test func 수업이_먼저_끝나면_그_시각에_꺼진다() throws {
+    @Test func 짧은_수업은_끝나는_시각에_꺼진다() throws {
         let short = ClassSchedule<String>(entries: [.init(period: try period(.monday, (10, 0), (10, 8)), subjectID: "짧은수업")])
         let now = date(2026, 3, 2, 10, 6)
         #expect(short.activeNotchAlert(now: now, calendar: seoulCalendar, isRecording: false)?.expiresAt == date(2026, 3, 2, 10, 8))
