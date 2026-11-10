@@ -902,6 +902,14 @@ public final class RecordingController {
 }
 
 extension RecordingController: ReminderRecordingStarting {
+    /// 이름이 `subjectName`인 과목을 녹음 화면의 과목으로 골라 둔다. 녹음은 시작하지 않는다. 녹음 중이거나 과목이 없으면 아무것도 하지 않는다.
+    @discardableResult
+    public func selectSubject(named subjectName: String) -> Bool {
+        guard !isRecording, let subject = availableSubjects().first(where: { $0.name == subjectName }) else { return false }
+        subjectChoice = .subject(subject.persistentModelID)
+        return true
+    }
+
     /// 수업 시작 알림의 "녹음 시작" 버튼. 알림에 적힌 과목으로 녹음을 시작한다.
     /// 이미 녹음 중이면 건드리지 않는다. 시작하지 못하면 이유를 `errorMessage`에 남겨 녹음 화면에서 보이게 한다.
     public func startRecording(forSubjectNamed subjectName: String) async -> ReminderStartOutcome {

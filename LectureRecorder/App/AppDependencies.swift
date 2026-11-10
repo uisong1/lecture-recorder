@@ -16,6 +16,8 @@ final class AppDependencies {
     let subjects: SubjectManager
     let schedule: ScheduleManager
     let reminders: ClassReminderController
+    /// 수업 시작 후 녹음 전이면 노치 자리에 불빛을 띄운다. 누르면 그 과목을 골라 두고 녹음 창을 연다.
+    let notchAlert: NotchAlertPresenter
     let recording: RecordingController
     let playback: PlaybackController
     let mediaKeys: MediaKeyController
@@ -106,6 +108,12 @@ final class AppDependencies {
             isRecording: { recordingController.isRecording }
         )
         let reminders = reminders
+        let notchPresenter = NotchAlertPresenter(reminders: reminders) { info in
+            recordingController.selectSubject(named: info.subjectName)
+            Self.bringAppToFront()
+        }
+        notchAlert = notchPresenter
+        if !Self.isUITesting { notchPresenter.start() }
         schedule.onChange = { Task { await reminders.reschedule() } }
         subjects.onChange = { Task { await reminders.reschedule() } }
         Task { await reminders.reschedule() }

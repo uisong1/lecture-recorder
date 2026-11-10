@@ -75,6 +75,19 @@ public enum ReminderStartOutcome: Equatable, Sendable {
     case failed
 }
 
+/// 노치 불빛이 알리는 수업. 화면에 보일 이름과 꺼질 시각만 담는다.
+public struct NotchAlertInfo: Equatable, Sendable {
+    public let subjectName: String
+    public let classStart: Date
+    public let expiresAt: Date
+
+    public init(subjectName: String, classStart: Date, expiresAt: Date) {
+        self.subjectName = subjectName
+        self.classStart = classStart
+        self.expiresAt = expiresAt
+    }
+}
+
 #if canImport(SwiftData)
 import Observation
 import SwiftData
@@ -90,6 +103,13 @@ public final class ClassReminderController {
     public private(set) var isEnabled: Bool
     /// 화면에 보일 안내 (권한 거부 등). 문제가 없으면 nil.
     public private(set) var message: String?
+    public static let notchDefaultsKey = "notchAlertEnabled"
+    /// 노치 불빛을 쓰는지. 기본은 켜짐. 알림 권한과는 상관없다(소리도 알림도 없는 화면 효과다).
+    public private(set) var isNotchAlertEnabled: Bool
+    /// 지금 노치에 불빛으로 알릴 수업. 없으면 nil. `refreshNotchAlert()`가 갱신한다.
+    public private(set) var notchAlert: NotchAlertInfo?
+    /// 이미 누르거나 끈 수업의 시작 시각. 같은 수업에서 불빛이 다시 켜지지 않게 한다.
+    private var dismissedNotchStarts: Set<Date> = []
 
     private let context: ModelContext
     private let notifications: any NotificationScheduling
@@ -125,6 +145,7 @@ public final class ClassReminderController {
         self.defaults = defaults
         self.leadMinutes = leadMinutes
         isEnabled = defaults.bool(forKey: Self.defaultsKey)
+        isNotchAlertEnabled = defaults.object(forKey: Self.notchDefaultsKey) as? Bool ?? true
         notifications.setResponseHandler { [weak self] response in
             await self?.handle(response)
         }
@@ -173,6 +194,41 @@ public final class ClassReminderController {
     public func reschedule() async {
         guard isEnabled else { return }
         await notifications.replaceAll(with: plannedNotifications() + plannedMissedStartNotifications())
+    }
+
+    /// 노치 불빛을 켜고 끈다. 끄면 지금 떠 있는 불빛도 사라진다.
+    public func setNotchAlertEnabled(_ enabled: Bool) {
+        isNotchAlertEnabled = enabled
+        defaults.set(enabled, forKey: Self.notchDefaultsKey)
+        refreshNotchAlert()
+    }
+
+    /// 지금 시각 기준으로 노치 불빛을 켤지 다시 정한다. 앱이 몇 초마다 부른다.
+    public func refreshNotchAlert() {
+        let next = currentNotchAlert()
+        if next != notchAlert { notchAlert = next }
+    }
+
+    /// 불빛을 눌렀거나 껐다. 이 수업에서는 다시 켜지 않는다.
+    public func dismissNotchAlert() {
+        if let current = notchAlert { dismissedNotchStarts.insert(current.classStart) }
+        notchAlert = nil
+    }
+
+    private func currentNotchAlert() -> NotchAlertInfo? {
+        guard isNotchAlertEnabled, !isRecording(), let (schedule, names) = loadSchedule() else { return nil }
+        let current = now()
+        // 지난 날의 기록은 필요 없으니 오늘 것만 남긴다.
+        let dayStart = calendar.startOfDay(for: current)
+        dismissedNotchStarts = dismissedNotchStarts.filter { $0 >= dayStart }
+        guard let alert = schedule.activeNotchAlert(
+            now: current,
+            calendar: calendar,
+            recorded: todaysRecordings(),
+            isRecording: false,
+            dismissedStarts: dismissedNotchStarts
+        ), let name = names[alert.subjectID], !name.isEmpty else { return nil }
+        return NotchAlertInfo(subjectName: name, classStart: alert.classStart, expiresAt: alert.expiresAt)
     }
 
     /// 시간표와 과목 이름. 읽지 못하면 nil.
