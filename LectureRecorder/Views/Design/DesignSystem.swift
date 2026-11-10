@@ -80,15 +80,18 @@ extension View {
 struct PillButtonStyle: ButtonStyle {
     enum Kind { case primary, secondary, dark }
     var kind: Kind = .primary
+    /// 좁은 곳(메뉴 막대 창)용. 글자와 여백을 줄인다.
+    var isCompact = false
 
     func makeBody(configuration: Configuration) -> some View {
-        PillLabel(label: configuration.label, kind: kind, isPressed: configuration.isPressed, foreground: foreground, background: background)
+        PillLabel(label: configuration.label, kind: kind, isCompact: isCompact, isPressed: configuration.isPressed, foreground: foreground, background: background)
     }
 
     /// 키보드 포커스는 `Environment`로만 알 수 있어서 뷰로 한 번 감싼다.
     private struct PillLabel<Label: View>: View {
         let label: Label
         let kind: Kind
+        let isCompact: Bool
         let isPressed: Bool
         let foreground: Color
         let background: Color
@@ -97,10 +100,10 @@ struct PillButtonStyle: ButtonStyle {
 
         var body: some View {
             label
-                .designText(.body)
+                .designText(isCompact ? .caption : .body)
                 .foregroundStyle(foreground)
-                .padding(.vertical, 11)
-                .padding(.horizontal, 22)
+                .padding(.vertical, isCompact ? 6 : 11)
+                .padding(.horizontal, isCompact ? 12 : 22)
                 .background(background, in: Capsule())
                 .overlay {
                     if kind == .secondary { Capsule().strokeBorder(Design.Palette.primary, lineWidth: 1) }
@@ -145,6 +148,8 @@ extension ButtonStyle where Self == PillButtonStyle {
     static var pill: PillButtonStyle { PillButtonStyle(kind: .primary) }
     static var pillSecondary: PillButtonStyle { PillButtonStyle(kind: .secondary) }
     static var pillDark: PillButtonStyle { PillButtonStyle(kind: .dark) }
+    static var pillCompact: PillButtonStyle { PillButtonStyle(kind: .primary, isCompact: true) }
+    static var pillSecondaryCompact: PillButtonStyle { PillButtonStyle(kind: .secondary, isCompact: true) }
 }
 
 extension ButtonStyle where Self == TextLinkButtonStyle {
