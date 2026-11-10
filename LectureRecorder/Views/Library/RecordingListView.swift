@@ -51,7 +51,8 @@ struct RecordingListView: View {
         List(library.recordings, selection: Bindable(library).selectedIDs) { recording in
             row(for: recording)
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) { play(recording) }
+                // 더블클릭만 재생. 일반 onTapGesture는 List의 한 번 클릭 선택을 막아서 동시 제스처로 단다.
+                .simultaneousGesture(TapGesture(count: 2).onEnded { play(recording) })
                 .contextMenu { rowMenu(for: recording) }
         }
     }
