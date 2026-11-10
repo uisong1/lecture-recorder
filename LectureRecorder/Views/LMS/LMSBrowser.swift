@@ -64,6 +64,19 @@ final class LMSBrowser: NSObject {
     func goForward() { webView.goForward() }
     func reload() { webView.reload() }
 
+    /// 창을 닫아도 웹뷰는 앱이 계속 들고 있어서, 재생 중이던 영상 소리가 그대로 남는다.
+    /// 닫을 때 모든 프레임의 미디어를 멈추고 재생을 중단 상태로 둔다. 페이지 위치와 로그인은 그대로라 다시 열면 이어서 쓸 수 있다.
+    func stopMedia() {
+        webView.evaluateJavaScript(Self.pauseScript, completionHandler: nil)
+        webView.pauseAllMediaPlayback(completionHandler: nil)
+        webView.setAllMediaPlaybackSuspended(true, completionHandler: nil)
+    }
+
+    /// 창을 다시 열면 중단했던 재생 기능을 풀어 둔다 (자동으로 다시 재생하지는 않는다).
+    func resumeMediaAbility() {
+        webView.setAllMediaPlaybackSuspended(false, completionHandler: nil)
+    }
+
     /// 이 주소에 보낼 쿠키를 웹뷰 저장소에서 꺼내 `Cookie` 헤더 값으로 만든다. 도메인·경로가 맞는 것만 담긴다.
     func cookieHeader(for url: URL) async -> String? {
         let cookies = await webView.configuration.websiteDataStore.httpCookieStore.allCookies()
@@ -133,6 +146,19 @@ final class LMSBrowser: NSObject {
       var ticks = 0;
       setInterval(function () { try { scanRoot(document, ticks++ % 4 === 0); } catch (e) {} }, 1500);
       scanRoot(document, false);
+    })();
+    """#
+
+    /// 모든 프레임에서 `<video>`/`<audio>`를 멈춘다 (열린 shadow DOM 포함). 메인 프레임에서 같은 출처 iframe 안까지 따라가고,
+    /// 다른 출처 iframe은 `pauseAllMediaPlayback`이 맡는다.
+    static let pauseScript = #"""
+    (function () {
+      function stop(root) {
+        try { root.querySelectorAll('video, audio').forEach(function (m) { try { m.pause(); } catch (e) {} }); } catch (e) {}
+        try { root.querySelectorAll('*').forEach(function (n) { if (n.shadowRoot) stop(n.shadowRoot); }); } catch (e) {}
+        try { root.querySelectorAll('iframe').forEach(function (f) { try { if (f.contentDocument) stop(f.contentDocument); } catch (e) {} }); } catch (e) {}
+      }
+      stop(document);
     })();
     """#
 
