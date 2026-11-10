@@ -444,3 +444,7 @@
 ## 2026-11-10. 메뉴 막대 녹음 창을 작게 줄인다
 - 결정: 너비 260→220, 바깥 여백 17→12, 줄 간격 12→8, 제목 17→14px(굵게), 시간 14→12px로 줄이고, 알약 버튼에 작은 크기(`pillCompact`, `pillSecondaryCompact`: 글자 14px, 세로 6·가로 12)를 더했다. 녹음 중에는 "녹음 정지"가 한 줄, "일시정지"와 "북마크"는 그 아래 한 줄에 나란히 놓는다. 색·모서리·누름 효과는 DESIGN.md 그대로다.
 - 이유: 녹음 중 잠깐 보는 창인데 버튼 세 개가 세로로 쌓여 화면을 너무 차지했다.
+
+## 2026-11-10. 녹음 목록 더블클릭은 simultaneousGesture로 단다
+- 결정: 행의 `onTapGesture(count: 2)`를 `simultaneousGesture(TapGesture(count: 2))`로 바꿨다.
+- 이유: macOS List 행의 onTapGesture가 한 번 클릭 선택을 가로채 행을 개별로 고를 수 없었다.
