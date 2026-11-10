@@ -24,28 +24,28 @@ struct MenuBarContent: View {
         TimelineView(.periodic(from: .now, by: 0.5)) { _ in
             content(for: recording.menuBarStatus)
         }
-        .padding(Design.Spacing.md)
-        .frame(width: 260)
+        .padding(Design.Spacing.sm)
+        .frame(width: 220)
         .designCanvas()
     }
 
     private func content(for status: MenuBarStatus) -> some View {
-        VStack(alignment: .leading, spacing: Design.Spacing.sm) {
+        VStack(alignment: .leading, spacing: Design.Spacing.xs) {
             HStack(spacing: Design.Spacing.xs) {
                 if status.isRecording {
                     Circle()
                         .fill(status.isPaused ? Design.Palette.inkMuted : Design.Palette.danger)
-                        .frame(width: 10, height: 10)
+                        .frame(width: 8, height: 8)
                         .accessibilityHidden(true)
                 }
                 Text(status.headline)
-                    .designText(.bodyStrong)
+                    .designText(.captionStrong)
                     .foregroundStyle(status.isRecording && !status.isPaused ? Design.Palette.danger : Design.Palette.ink)
                     .accessibilityIdentifier("menuBarHeadline")
             }
             if !status.detail.isEmpty {
                 Text(status.detail)
-                    .designText(.caption)
+                    .designText(.finePrint)
                     .monospacedDigit()
                     .foregroundStyle(Design.Palette.inkMuted)
                     .accessibilityIdentifier("menuBarDetail")
@@ -68,19 +68,19 @@ struct MenuBarContent: View {
                 Label(status.toggleTitle, systemImage: status.isRecording ? "stop.fill" : "mic.fill")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.pill)
+            .buttonStyle(.pillCompact)
             .disabled(!status.canToggle)
             .accessibilityIdentifier("menuBarToggle")
 
             if status.isRecording {
-                VStack(spacing: Design.Spacing.xs) {
+                HStack(spacing: Design.Spacing.xs) {
                     Button {
                         recording.togglePause()
                     } label: {
                         Label(status.pauseTitle, systemImage: status.isPaused ? "play.fill" : "pause.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.pillSecondary)
+                    .buttonStyle(.pillSecondaryCompact)
                     .disabled(!status.canPause)
                     .accessibilityIdentifier("menuBarPause")
 
@@ -90,7 +90,7 @@ struct MenuBarContent: View {
                         Label(status.bookmarkTitle, systemImage: "bookmark")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.pillSecondary)
+                    .buttonStyle(.pillSecondaryCompact)
                     .disabled(!status.canBookmark)
                     .accessibilityIdentifier("menuBarBookmark")
                 }
