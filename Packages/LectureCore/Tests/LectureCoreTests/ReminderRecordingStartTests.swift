@@ -19,6 +19,17 @@ extension RecordingControllerTests {
         #expect(controller.errorMessage == nil)
     }
 
+    @Test func 과목만_골라_두고_녹음은_시작하지_않는다() throws {
+        _ = try addBackToBackClasses()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+
+        #expect(controller.selectSubject(named: "선형대수"))
+        #expect(controller.subjectChoice != .automatic)
+        #expect(!controller.isRecording)
+        #expect(recorder.startedURLs.isEmpty)
+        #expect(!controller.selectSubject(named: "없는 과목"))
+    }
+
     @Test func 이미_녹음_중이면_알림_버튼을_무시한다() async throws {
         _ = try addBackToBackClasses()
         let controller = makeController(at: date(2026, 3, 2, 10, 0))
