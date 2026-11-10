@@ -20,7 +20,12 @@ struct LMSBrowserWindow: View {
         }
         .frame(minWidth: 900, minHeight: 640)
         .designCanvas()
-        .onAppear { browser.loadHomeIfNeeded() }
+        .onAppear {
+            browser.resumeMediaAbility()
+            browser.loadHomeIfNeeded()
+        }
+        // 창을 닫아도 웹뷰는 살아 있으므로, 영상 소리가 남지 않게 닫을 때 멈춘다.
+        .onDisappear { browser.stopMedia() }
     }
 
     private var toolbar: some View {
