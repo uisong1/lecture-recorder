@@ -43,6 +43,17 @@ final class AppDependencies {
 
     /// 알림 버튼으로 녹음을 시작하지 못했을 때 창을 보여 준다. Dock 아이콘을 누른 것과 같아서, 창이 닫혀 있어도 다시 열린다.
     private static func bringAppToFront() {
+        // 이미 열려 있거나 Dock에 내려가 있는 창은 바로 앞으로 가져온다. 노치 패널 같은 보조 창은 건드리지 않는다.
+        let windows = NSApp.windows.filter { $0.canBecomeMain && !($0 is NSPanel) && $0.styleMask.contains(.titled) }
+        if !windows.isEmpty {
+            NSApp.activate(ignoringOtherApps: true)
+            for window in windows {
+                if window.isMiniaturized { window.deminiaturize(nil) }
+            }
+            windows.first?.makeKeyAndOrderFront(nil)
+            return
+        }
+        // 창이 하나도 없으면 Dock 아이콘을 누른 것처럼 다시 열게 한다.
         NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: NSWorkspace.OpenConfiguration()) { _, error in
             if let error {
                 Log.recording.error("앱을 앞으로 가져오지 못함: \(error.localizedDescription, privacy: .public)")
