@@ -57,6 +57,16 @@ import Testing
         #expect(controller.notchAlert == nil)
     }
 
+    @Test func 불빛을_두_번_꺼도_안전하고_다시_켜지지_않는다() throws {
+        try addClass("자료구조", hour: 10, endHour: 11)
+        clock.advance(by: 66 * 60)
+        controller.refreshNotchAlert()
+        controller.dismissNotchAlert()
+        controller.dismissNotchAlert()
+        controller.refreshNotchAlert()
+        #expect(controller.notchAlert == nil)
+    }
+
     @Test func 녹음을_시작하면_꺼지고_이미_녹음한_수업은_켜지지_않는다() throws {
         try addClass("자료구조", hour: 10, endHour: 11)
         clock.advance(by: 66 * 60)
