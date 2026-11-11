@@ -80,3 +80,24 @@ import Testing
         #expect(alert(at: date(2026, 3, 2, 15, 0)) == nil)
     }
 }
+
+@Suite struct NotchDisplayTests {
+    let info = NotchAlertInfo(subjectName: "자료구조", classStart: Date(timeIntervalSince1970: 0), expiresAt: Date(timeIntervalSince1970: 3600))
+
+    @Test func 녹음_중이면_날개이고_배너보다_먼저다() {
+        #expect(NotchDisplay.resolve(isEnabled: true, isRecording: true, isPaused: false, alert: info) == .recording(isPaused: false))
+        #expect(NotchDisplay.resolve(isEnabled: true, isRecording: true, isPaused: true, alert: nil) == .recording(isPaused: true))
+    }
+
+    @Test func 녹음_전_수업이_있으면_배너다() {
+        #expect(NotchDisplay.resolve(isEnabled: true, isRecording: false, isPaused: false, alert: info) == .alert(info))
+    }
+
+    @Test func 아무것도_없으면_보이지_않는다() {
+        #expect(NotchDisplay.resolve(isEnabled: true, isRecording: false, isPaused: false, alert: nil) == .none)
+    }
+
+    @Test func 설정에서_끄면_녹음_중에도_보이지_않는다() {
+        #expect(NotchDisplay.resolve(isEnabled: false, isRecording: true, isPaused: false, alert: info) == .none)
+    }
+}
