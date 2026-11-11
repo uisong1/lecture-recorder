@@ -35,10 +35,16 @@ final class NotchAlertPresenter {
         if info != shown { show(info) }
     }
 
+    /// 패널은 없애지 않고 숨기기만 한다. 누르는 순간 그 버튼이 달린 창을 바로 해제하면 앱이 꺼지므로(2026-11-11),
+    /// 눌림 처리 중에는 `hideAfterClick`으로 현재 이벤트가 끝난 뒤에 숨긴다.
     private func hide() {
         panel?.orderOut(nil)
-        panel = nil
         shown = nil
+    }
+
+    private func hideAfterClick() {
+        shown = nil
+        DispatchQueue.main.async { [weak self] in self?.panel?.orderOut(nil) }
     }
 
     private func show(_ info: NotchAlertInfo) {
@@ -51,7 +57,7 @@ final class NotchAlertPresenter {
             onOpen: { [weak self] in self?.open(info) },
             onDismiss: { [weak self] in
                 self?.reminders.dismissNotchAlert()
-                self?.hide()
+                self?.hideAfterClick()
             }
         )
         let panel = self.panel ?? Self.makePanel()
@@ -64,8 +70,9 @@ final class NotchAlertPresenter {
 
     private func open(_ info: NotchAlertInfo) {
         reminders.dismissNotchAlert()
-        hide()
-        onOpen(info)
+        hideAfterClick()
+        // 창을 여는 일도 눌림 처리가 끝난 뒤에 한다.
+        DispatchQueue.main.async { [onOpen] in onOpen(info) }
     }
 
     private static func makePanel() -> NSPanel {
