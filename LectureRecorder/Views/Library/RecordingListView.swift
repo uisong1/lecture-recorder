@@ -1,5 +1,6 @@
 import AppKit
 import LectureCore
+import SwiftData
 import SwiftUI
 
 /// 고른 과목의 녹음을 고른 순서(기본 최신순)로 보여주고, 눌러서 재생한다.
@@ -50,11 +51,19 @@ struct RecordingListView: View {
     private var recordingList: some View {
         List(library.recordings, selection: Bindable(library).selectedIDs) { recording in
             row(for: recording)
-                .contentShape(Rectangle())
-                // 더블클릭만 재생. 일반 onTapGesture는 List의 한 번 클릭 선택을 막아서 동시 제스처로 단다.
-                .simultaneousGesture(TapGesture(count: 2).onEnded { play(recording) })
-                .contextMenu { rowMenu(for: recording) }
         }
+        // 행에 직접 제스처를 달지 않고 macOS 기본 방식으로 받는다: 한 번 클릭은 List가 선택하고,
+        // 더블클릭(primaryAction)만 재생한다. 우클릭 메뉴도 같은 API라 눌린 행이 정확히 넘어온다.
+        .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
+            rowMenu(for: ids)
+        } primaryAction: { ids in
+            if ids.count == 1, let recording = recording(for: ids) { play(recording) }
+        }
+    }
+
+    private func recording(for ids: Set<PersistentIdentifier>) -> Recording? {
+        guard ids.count == 1, let id = ids.first else { return nil }
+        return library.recordings.first { $0.persistentModelID == id }
     }
 
     private func isPlaying(_ recording: Recording) -> Bool {
@@ -150,10 +159,10 @@ struct RecordingListView: View {
     }
 
     @ViewBuilder
-    private func rowMenu(for recording: Recording) -> some View {
-        if library.isMultiSelecting && library.selectedIDs.contains(recording.persistentModelID) {
+    private func rowMenu(for ids: Set<PersistentIdentifier>) -> some View {
+        if ids.count > 1 {
             bulkActions
-        } else {
+        } else if let recording = recording(for: ids) {
             singleActions(for: recording)
         }
     }
