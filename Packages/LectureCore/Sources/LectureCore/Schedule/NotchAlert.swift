@@ -51,3 +51,20 @@ extension ClassSchedule {
         return candidates.max { $0.classStart < $1.classStart }
     }
 }
+
+/// 노치 자리에 지금 무엇을 보일지. 녹음 중이면 날개, 녹음 전 수업이 있으면 배너, 아니면 아무것도 없다 (DECISIONS.md 2026-11-11).
+public enum NotchDisplay: Equatable, Sendable {
+    case none
+    /// 수업이 시작됐는데 녹음 전이다. 파란 배너로 알린다.
+    case alert(NotchAlertInfo)
+    /// 녹음 중이다. 노치 양옆의 검은 날개에 빨간 막대를 보인다. 일시정지면 막대가 멈춘다.
+    case recording(isPaused: Bool)
+
+    /// 녹음 중이 배너보다 먼저다. 설정에서 노치 표시를 끄면 둘 다 보이지 않는다.
+    public static func resolve(isEnabled: Bool, isRecording: Bool, isPaused: Bool, alert: NotchAlertInfo?) -> NotchDisplay {
+        guard isEnabled else { return .none }
+        if isRecording { return .recording(isPaused: isPaused) }
+        if let alert { return .alert(alert) }
+        return .none
+    }
+}

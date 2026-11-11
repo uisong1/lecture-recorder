@@ -119,8 +119,12 @@ final class AppDependencies {
             isRecording: { recordingController.isRecording }
         )
         let reminders = reminders
-        let notchPresenter = NotchAlertPresenter(reminders: reminders) { info in
-            recordingController.selectSubject(named: info.subjectName)
+        let notchPresenter = NotchAlertPresenter(
+            reminders: reminders,
+            isRecording: { recordingController.isRecording },
+            isPaused: { recordingController.isPaused }
+        ) { info in
+            if let info { recordingController.selectSubject(named: info.subjectName) }
             Self.bringAppToFront()
         }
         notchAlert = notchPresenter
