@@ -144,6 +144,61 @@ struct TextLinkButtonStyle: ButtonStyle {
     }
 }
 
+/// 위젯 줄 오른쪽의 아이콘만 있는 버튼. 회색 아이콘, 눌리면 0.95배.
+struct IconPlainButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        IconLabel(label: configuration.label, isPressed: configuration.isPressed)
+    }
+
+    private struct IconLabel<Label: View>: View {
+        let label: Label
+        let isPressed: Bool
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            label
+                .font(.system(size: 16))
+                .foregroundStyle(Design.Palette.inkMuted)
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
+                .scaleEffect(isPressed ? 0.95 : 1)
+                .opacity(isEnabled ? 1 : 0.4)
+        }
+    }
+}
+
+/// 위젯 줄의 주 동작(정지·시작) 버튼. 파란 동그라미 안에 흰 아이콘.
+struct IconFilledButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        IconLabel(label: configuration.label, isPressed: configuration.isPressed)
+    }
+
+    private struct IconLabel<Label: View>: View {
+        let label: Label
+        let isPressed: Bool
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            label
+                .font(.system(size: 14))
+                .foregroundStyle(Design.Palette.onPrimary)
+                .frame(width: 32, height: 32)
+                .background(Design.Palette.primary, in: Circle())
+                .contentShape(Circle())
+                .scaleEffect(isPressed ? 0.95 : 1)
+                .opacity(isEnabled ? 1 : 0.4)
+        }
+    }
+}
+
+extension ButtonStyle where Self == IconPlainButtonStyle {
+    static var iconPlain: IconPlainButtonStyle { IconPlainButtonStyle() }
+}
+
+extension ButtonStyle where Self == IconFilledButtonStyle {
+    static var iconFilled: IconFilledButtonStyle { IconFilledButtonStyle() }
+}
+
 extension ButtonStyle where Self == PillButtonStyle {
     static var pill: PillButtonStyle { PillButtonStyle(kind: .primary) }
     static var pillSecondary: PillButtonStyle { PillButtonStyle(kind: .secondary) }
