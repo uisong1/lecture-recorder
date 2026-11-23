@@ -33,6 +33,8 @@ final class AppDependencies {
     /// 녹음 없는 수업일을 LMS 영상의 소리로 채우는 창의 상태와, 설정의 Canvas 토큰 입력.
     let lmsBackfill: LMSBackfillModel
     let canvasToken: CanvasTokenModel
+    /// 설정 > LMS의 "강의자료 PDF 가져오기".
+    let lectureMaterials: LectureMaterialsModel
     let launchAtLogin: LaunchAtLoginModel
     /// 앱 안 "새 버전 있음 → 업데이트". UI 테스트에서는 확인하지 않는다.
     let appUpdate: AppUpdateModel
@@ -239,6 +241,13 @@ final class AppDependencies {
             },
             keepVideo: { UserDefaults.standard.bool(forKey: LMSImportModel.keepVideoDefaultsKey) },
             onFinished: { library.reload() }
+        )
+        lectureMaterials = LectureMaterialsModel(
+            makeSyncer: {
+                guard let token = try tokenStore.loadToken() else { throw CanvasError.noToken }
+                return LectureMaterialsSyncer(locator: CanvasLectureLocator(client: URLSessionCanvasClient(), token: token), storage: storage, files: files)
+            },
+            subjects: { subjects.subjects.map { MaterialsSubject(name: $0.name, semester: $0.semester) } }
         )
         timetableImport = TimetableImportModel(
             reader: VisionTimetableReader(),

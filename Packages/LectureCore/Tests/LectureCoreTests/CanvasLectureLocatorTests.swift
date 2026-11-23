@@ -12,6 +12,8 @@ final class FakeCanvasClient: CanvasHTTPClient, @unchecked Sendable {
     var cookies: [String: String] = [:]
     /// (주소에 들어 있는 글자, 응답). 위에서부터 처음 맞는 것을 쓴다.
     var routes: [(match: String, status: Int, body: String)] = []
+    /// (주소에 들어 있는 글자, `Link` 헤더 값).
+    var links: [(match: String, link: String)] = []
 
     var requests: [URLRequest] { lock.withLock { _requests } }
 
@@ -19,7 +21,8 @@ final class FakeCanvasClient: CanvasHTTPClient, @unchecked Sendable {
         lock.withLock { _requests.append(request) }
         let url = request.url ?? URL(string: "https://invalid.example")!
         let route = routes.first { url.absoluteString.contains($0.match) }
-        return CanvasHTTPResponse(data: Data((route?.body ?? "").utf8), statusCode: route?.status ?? 404, url: url)
+        let link = links.first { url.absoluteString.contains($0.match) }?.link
+        return CanvasHTTPResponse(data: Data((route?.body ?? "").utf8), statusCode: route?.status ?? 404, url: url, linkHeader: link)
     }
 
     func cookieValue(named name: String, for url: URL) async -> String? { cookies[name] }

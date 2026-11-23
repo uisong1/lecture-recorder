@@ -49,6 +49,14 @@ public struct RecordingStorage: Sendable {
         return "\(semesterFolder)/\(subject)"
     }
 
+    /// LMS에서 받은 강의자료(PDF)를 넣는 과목 폴더 안의 하위 폴더 이름. 녹음 목록은 오디오 파일만 읽으므로 섞이지 않는다.
+    public static let materialsFolder = "강의자료"
+
+    /// 과목의 강의자료 폴더 (`Recordings` 기준): `<학기>/<과목>/강의자료`.
+    public static func materialsFolderPath(semester: String?, subjectName: String?) -> String {
+        folderPath(semester: semester, subjectName: subjectName) + "/" + materialsFolder
+    }
+
     /// "03-02 월 10-00" 형식의 기본 파일 이름 (확장자 제외). 연도는 학기 폴더가 알려 준다.
     /// 시각의 ':'는 파일 이름에 쓸 수 없어 '-'로 쓴다.
     public static func baseFileName(for startedAt: Date, calendar: Calendar) -> String {

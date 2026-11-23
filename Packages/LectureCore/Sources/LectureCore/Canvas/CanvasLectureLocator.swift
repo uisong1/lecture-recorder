@@ -9,11 +9,14 @@ public struct CanvasHTTPResponse: Sendable {
     public let statusCode: Int
     /// 리다이렉트를 따라간 뒤의 주소.
     public let url: URL
+    /// `Link` 응답 헤더(다음 쪽 주소). 없으면 nil.
+    public let linkHeader: String?
 
-    public init(data: Data, statusCode: Int, url: URL) {
+    public init(data: Data, statusCode: Int, url: URL, linkHeader: String? = nil) {
         self.data = data
         self.statusCode = statusCode
         self.url = url
+        self.linkHeader = linkHeader
     }
 }
 
@@ -121,14 +124,66 @@ public struct CanvasLectureLocator: Sendable {
         return playback
     }
 
+    // MARK: 강의자료(PDF)
+
+    /// 과목의 PDF 강의자료 목록(읽기만 한다). 파일 메뉴가 열려 있으면 과목 파일에서, 학교가 막아 뒀으면
+    /// 주차별 모듈의 파일 항목에서 찾는다. 잠겨서 받을 수 없는 파일은 `lockedCount`로 센다.
+    public func pdfFiles(courseID: Int) async throws -> CanvasFileList {
+        var result = CanvasFileList()
+        do {
+            var next: String? = "/api/v1/courses/\(courseID)/files?content_types%5B%5D=application%2Fpdf&per_page=100"
+            var pages = 0
+            while let path = next, pages < 20 {
+                let response = try await getResponse(path, bearer: token)
+                result.merge(try CanvasParsing.files(from: response.data))
+                next = CanvasParsing.nextPage(fromLinkHeader: response.linkHeader).flatMap { relativePath(of: $0) }
+                pages += 1
+            }
+            return result
+        } catch CanvasError.unauthorized, CanvasError.httpStatus(403), CanvasError.httpStatus(404) {
+            // 이 과목은 파일 메뉴가 닫혀 있다. 모듈에 올린 파일 항목으로 대신한다.
+        }
+        let modules = try await get("/api/v1/courses/\(courseID)/modules?include%5B%5D=items&per_page=100", bearer: token)
+        for fileID in try CanvasParsing.fileItemIDs(fromModules: modules) {
+            // 파일 하나가 안 열려도(삭제·권한) 나머지는 계속 찾는다.
+            guard let data = try? await get("/api/v1/courses/\(courseID)/files/\(fileID)", bearer: token) else {
+                result.failedLookups += 1
+                continue
+            }
+            result.merge(try CanvasParsing.files(from: data))
+        }
+        return result
+    }
+
+    /// PDF 파일 하나를 받는다. 실제 PDF가 아니면(로그인 안내 페이지 등) `invalidResponse`.
+    public func download(_ file: CanvasFile) async throws -> Data {
+        var request = URLRequest(url: file.downloadURL)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue(Self.browserUserAgent, forHTTPHeaderField: "User-Agent")
+        let data = try await send(request).data
+        guard data.starts(with: Data("%PDF".utf8)) else { throw CanvasError.invalidResponse }
+        return data
+    }
+
+    /// 다음 쪽 주소를 baseURL 기준 경로로 바꾼다. 다른 호스트면 따라가지 않는다.
+    private func relativePath(of url: URL) -> String? {
+        guard url.host == baseURL.host else { return nil }
+        let query = url.query.map { "?\($0)" } ?? ""
+        return url.path + query
+    }
+
     // MARK: 도우미
 
     private func get(_ path: String, bearer: String) async throws -> Data {
+        try await getResponse(path, bearer: bearer).data
+    }
+
+    private func getResponse(_ path: String, bearer: String) async throws -> CanvasHTTPResponse {
         var request = URLRequest(url: try Self.url(baseURL.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")) + path))
         request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(Self.browserUserAgent, forHTTPHeaderField: "User-Agent")
-        return try await send(request).data
+        return try await send(request)
     }
 
     private func send(_ request: URLRequest) async throws -> CanvasHTTPResponse {

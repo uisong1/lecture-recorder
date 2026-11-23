@@ -191,3 +191,7 @@
 ## 2026-10-26 3-64 백업에서 되살리는 길 안내
 - 한 일: `StoreBackup.lastBackupDate/folderURL/storeFolderURL`(테스트 5개)과 설정 > 녹음 파일의 "목록 백업" 영역(마지막 백업 날짜, 백업·저장소 폴더 열기, 복원 순서 안내). 설정 창 높이를 560으로 늘림.
 - Mac에서 확인 필요: CHECKLIST_MAC.md 7번의 백업 항목(안내 글이 창 안에 다 보이는지, 폴더 열기가 샌드박스 안에서 되는지).
+
+## 2026-11-23 LMS 강의자료 PDF 가져오기
+- 한 일: 설정 > LMS에 "강의자료 PDF 가져오기"와 "녹음 폴더 열기". 과목마다 PDF를 `Recordings/<학기>/<과목>/강의자료/`에 저장하고, 받은 파일은 건너뛰며, 잠김·실패·이름이 안 맞는 강의를 결과 줄에 알려 준다. `CanvasParsing.files/fileItemIDs/nextPage`, `CanvasLectureLocator.pdfFiles/download`, `LectureMaterialsSyncer`, `LectureMaterialsModel`(테스트 추가).
+- Mac에서 확인 필요: 실제 계정에서 버튼을 눌러 PDF가 과목 폴더에 들어오는지, 파일 메뉴가 닫힌 과목에서 모듈 항목으로 찾아지는지, 앱 과목 이름과 LMS 강의명이 맞는지.
