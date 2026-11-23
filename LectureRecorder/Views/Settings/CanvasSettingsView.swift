@@ -20,7 +20,13 @@ struct CanvasSettingsView: View {
                         .buttonStyle(.pillSecondary)
                         .accessibilityIdentifier("canvasTokenDelete")
                 } else {
-                    SecureField("Canvas 액세스 토큰", text: $model.input)
+                    Text("토큰을 먼저 저장해야 강의자료와 영상을 가져올 수 있습니다.")
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.inkMuted)
+                        .accessibilityIdentifier("canvasTokenHint")
+                    SecureField("토큰을 붙여 넣으세요", text: $model.input)
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel("Canvas 액세스 토큰")
                         .accessibilityIdentifier("canvasTokenField")
                     Button("저장") { model.save() }
                         .buttonStyle(.pill)
