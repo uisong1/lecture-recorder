@@ -130,6 +130,8 @@ public struct CanvasLectureLocator: Sendable {
     /// 주차별 모듈의 파일 항목에서 찾는다. 잠겨서 받을 수 없는 파일은 `lockedCount`로 센다.
     public func pdfFiles(courseID: Int) async throws -> CanvasFileList {
         var result = CanvasFileList()
+        var tabNote = "파일 메뉴 막힘"
+        var tabOpened = false
         do {
             var next: String? = "/api/v1/courses/\(courseID)/files?content_types%5B%5D=application%2Fpdf&per_page=100"
             var pages = 0
@@ -139,12 +141,26 @@ public struct CanvasLectureLocator: Sendable {
                 next = CanvasParsing.nextPage(fromLinkHeader: response.linkHeader).flatMap { relativePath(of: $0) }
                 pages += 1
             }
-            return result
+            tabOpened = true
+            tabNote = "파일 메뉴 PDF \(result.files.count + result.lockedCount)개"
+            // 파일 메뉴에서 하나라도 찾았으면 그대로 쓴다. 비어 있으면 모듈의 파일 항목도 본다.
+            if !result.files.isEmpty || result.lockedCount > 0 {
+                result.note = tabNote
+                return result
+            }
         } catch CanvasError.unauthorized, CanvasError.httpStatus(403), CanvasError.httpStatus(404) {
             // 이 과목은 파일 메뉴가 닫혀 있다. 모듈에 올린 파일 항목으로 대신한다.
         }
-        let modules = try await get("/api/v1/courses/\(courseID)/modules?include%5B%5D=items&per_page=100", bearer: token)
-        for fileID in try CanvasParsing.fileItemIDs(fromModules: modules) {
+        let modules: Data
+        do {
+            modules = try await get("/api/v1/courses/\(courseID)/modules?include%5B%5D=items&per_page=100", bearer: token)
+        } catch where tabOpened {
+            // 파일 메뉴는 열렸는데 비어 있고 모듈도 못 읽었다. 오류로 끝내지 않고 못 찾았다고 알린다.
+            result.note = "\(tabNote), 모듈 읽기 실패"
+            return result
+        }
+        let fileIDs = try CanvasParsing.fileItemIDs(fromModules: modules)
+        for fileID in fileIDs {
             // 파일 하나가 안 열려도(삭제·권한) 나머지는 계속 찾는다.
             guard let data = try? await get("/api/v1/courses/\(courseID)/files/\(fileID)", bearer: token) else {
                 result.failedLookups += 1
@@ -152,6 +168,8 @@ public struct CanvasLectureLocator: Sendable {
             }
             result.merge(try CanvasParsing.files(from: data))
         }
+        let kinds = CanvasParsing.moduleItemTypeCounts(from: modules).sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ")
+        result.note = "\(tabNote), 모듈 파일 항목 \(fileIDs.count)개, 모듈 항목 종류: \(kinds.isEmpty ? "없음" : kinds)"
         return result
     }
 
