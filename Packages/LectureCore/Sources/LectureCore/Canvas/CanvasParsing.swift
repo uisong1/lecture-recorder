@@ -77,6 +77,39 @@ public struct CommonsPlayback: Equatable, Sendable {
     }
 }
 
+/// 과목의 파일 하나(강의자료). 받을 주소는 Canvas가 파일마다 발급한 것이라 로그·화면에 남기지 않는다.
+public struct CanvasFile: Equatable, Sendable {
+    public let id: Int
+    public let displayName: String
+    public let downloadURL: URL
+    /// 바이트. 모르면 nil.
+    public let size: Int64?
+
+    public init(id: Int, displayName: String, downloadURL: URL, size: Int64?) {
+        self.id = id
+        self.displayName = displayName
+        self.downloadURL = downloadURL
+        self.size = size
+    }
+}
+
+/// 과목에서 찾은 PDF 목록과, 못 받는 파일 수.
+public struct CanvasFileList: Equatable, Sendable {
+    public var files: [CanvasFile] = []
+    /// 잠겨 있어(교수님이 공개 전·기간 만료) 받을 수 없는 PDF 수.
+    public var lockedCount = 0
+    /// 모듈 항목을 열지 못한 수.
+    public var failedLookups = 0
+
+    public init() {}
+
+    mutating func merge(_ other: CanvasFileList) {
+        for file in other.files where !files.contains(where: { $0.id == file.id }) { files.append(file) }
+        lockedCount += other.lockedCount
+        failedLookups += other.failedLookups
+    }
+}
+
 public enum CanvasParsingError: Error, Equatable {
     case notJSON
 }
@@ -114,6 +147,63 @@ public enum CanvasParsing {
             }
         }
         return result
+    }
+
+    /// 파일 목록(배열) 또는 파일 하나(객체) 응답에서 PDF만 모은다. 잠긴 파일(`locked_for_user`·주소 없음)은 세기만 한다.
+    public static func files(from data: Data) throws -> CanvasFileList {
+        let parsed = try? JSONSerialization.jsonObject(with: data)
+        let objects: [[String: Any]]
+        if let array = parsed as? [[String: Any]] {
+            objects = array
+        } else if let object = parsed as? [String: Any] {
+            objects = [object]
+        } else {
+            throw CanvasParsingError.notJSON
+        }
+        var list = CanvasFileList()
+        for object in objects {
+            guard let id = object["id"] as? Int else { continue }
+            let name = ((object["display_name"] as? String) ?? (object["filename"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let contentType = ((object["content-type"] as? String) ?? (object["content_type"] as? String) ?? "").lowercased()
+            guard contentType == "application/pdf" || name.lowercased().hasSuffix(".pdf") else { continue }
+            guard (object["locked_for_user"] as? Bool) != true,
+                  let address = object["url"] as? String, let url = URL(string: address), url.scheme?.lowercased() == "https"
+            else {
+                list.lockedCount += 1
+                continue
+            }
+            let size = (object["size"] as? NSNumber)?.int64Value
+            list.files.append(CanvasFile(id: id, displayName: name.isEmpty ? "강의자료 \(id).pdf" : name, downloadURL: url, size: size))
+        }
+        return list
+    }
+
+    /// 모듈 항목 중 파일(`File`) 항목의 파일 번호.
+    public static func fileItemIDs(fromModules data: Data) throws -> [Int] {
+        guard let modules = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw CanvasParsingError.notJSON
+        }
+        var ids: [Int] = []
+        for module in modules {
+            for item in (module["items"] as? [[String: Any]]) ?? [] {
+                guard item["type"] as? String == "File", let id = item["content_id"] as? Int, !ids.contains(id) else { continue }
+                ids.append(id)
+            }
+        }
+        return ids
+    }
+
+    /// `Link` 헤더의 `rel="next"` 주소. 없으면 nil.
+    public static func nextPage(fromLinkHeader header: String?) -> URL? {
+        guard let header else { return nil }
+        for part in header.split(separator: ",") {
+            let pieces = part.split(separator: ";").map { $0.trimmingCharacters(in: .whitespaces) }
+            guard pieces.count >= 2, pieces.dropFirst().contains(#"rel="next""#),
+                  pieces[0].hasPrefix("<"), pieces[0].hasSuffix(">")
+            else { continue }
+            return URL(string: String(pieces[0].dropFirst().dropLast()))
+        }
+        return nil
     }
 
     /// 주소에서 `lecture_attendance/items/view/<번호>`의 번호. 다른 모양이면 nil.

@@ -20,7 +20,7 @@ public final class URLSessionCanvasClient: CanvasHTTPClient, @unchecked Sendable
     public func send(_ request: URLRequest) async throws -> CanvasHTTPResponse {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw CanvasError.invalidResponse }
-        return CanvasHTTPResponse(data: data, statusCode: http.statusCode, url: http.url ?? request.url ?? URL(fileURLWithPath: "/"))
+        return CanvasHTTPResponse(data: data, statusCode: http.statusCode, url: http.url ?? request.url ?? URL(fileURLWithPath: "/"), linkHeader: http.value(forHTTPHeaderField: "Link"))
     }
 
     public func cookieValue(named name: String, for url: URL) async -> String? {

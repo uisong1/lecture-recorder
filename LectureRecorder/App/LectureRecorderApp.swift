@@ -52,7 +52,7 @@ struct LectureRecorderApp: App {
         .modelContainer(dependencies.container)
 
         Settings {
-            SettingsView(subjects: dependencies.subjects, schedule: dependencies.schedule, reminders: dependencies.reminders, rescan: dependencies.rescan, recording: dependencies.recording, launchAtLogin: dependencies.launchAtLogin, appUpdate: dependencies.appUpdate, playback: dependencies.playback, storeBackup: dependencies.storeBackup, storage: dependencies.storage, canvasToken: dependencies.canvasToken)
+            SettingsView(subjects: dependencies.subjects, schedule: dependencies.schedule, reminders: dependencies.reminders, rescan: dependencies.rescan, recording: dependencies.recording, launchAtLogin: dependencies.launchAtLogin, appUpdate: dependencies.appUpdate, playback: dependencies.playback, storeBackup: dependencies.storeBackup, storage: dependencies.storage, canvasToken: dependencies.canvasToken, lectureMaterials: dependencies.lectureMaterials)
         }
         .modelContainer(dependencies.container)
     }
