@@ -24,6 +24,8 @@ public struct MaterialsSyncReport: Equatable, Sendable {
     public var unmatchedCourses: [String] = []
     /// 모듈의 파일 항목 중 열지 못한 수.
     public var unreadableItems = 0
+    /// 받을 PDF를 하나도 못 찾은 강의의 설명("강의명: 어디서 몇 개 찾았는지").
+    public var emptyCourseNotes: [String] = []
     /// 못 읽은 LMS 강의 이름.
     public var failedCourses: [String] = []
 
@@ -39,6 +41,7 @@ public struct MaterialsSyncReport: Equatable, Sendable {
         if !failed.isEmpty { parts.append("\(failed.count)개는 받지 못했습니다(\(failed.prefix(3).joined(separator: ", "))\(failed.count > 3 ? " 외" : "")).") }
         if unreadableItems > 0 { parts.append("열지 못한 파일 항목이 \(unreadableItems)개 있습니다.") }
         if locked > 0 { parts.append("잠겨서 받을 수 없는 PDF가 \(locked)개 있습니다.") }
+        if !emptyCourseNotes.isEmpty { parts.append("PDF를 못 찾은 강의 — " + emptyCourseNotes.joined(separator: " / ")) }
         if !failedCourses.isEmpty { parts.append("읽지 못한 강의: \(failedCourses.joined(separator: ", ")).") }
         if !unmatchedCourses.isEmpty { parts.append("앱에 같은 이름의 과목이 없어 건너뛴 강의: \(unmatchedCourses.joined(separator: ", ")).") }
         return parts.joined(separator: " ")
@@ -87,6 +90,7 @@ public struct LectureMaterialsSyncer: Sendable {
                 report.failedCourses.append(course.name)
                 continue
             }
+            if list.files.isEmpty, list.lockedCount == 0, !list.note.isEmpty { report.emptyCourseNotes.append("\(subject.name): \(list.note)") }
             report.locked += list.lockedCount
             report.unreadableItems += list.failedLookups
             let folder = storage.url(for: RecordingStorage.materialsFolderPath(semester: subject.semester, subjectName: subject.name))

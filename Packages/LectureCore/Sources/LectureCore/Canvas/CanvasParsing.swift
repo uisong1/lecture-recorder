@@ -100,6 +100,8 @@ public struct CanvasFileList: Equatable, Sendable {
     public var lockedCount = 0
     /// 모듈 항목을 열지 못한 수.
     public var failedLookups = 0
+    /// 어디서 얼마나 찾았는지 한 줄 설명(결과 화면용).
+    public var note = ""
 
     public init() {}
 
@@ -176,6 +178,18 @@ public enum CanvasParsing {
             list.files.append(CanvasFile(id: id, displayName: name.isEmpty ? "강의자료 \(id).pdf" : name, downloadURL: url, size: size))
         }
         return list
+    }
+
+    /// 모듈 항목의 종류별 개수(`File`, `ExternalTool`, `Page` …). 자료를 못 찾을 때 어디에 있는지 짐작하는 데 쓴다.
+    public static func moduleItemTypeCounts(from data: Data) -> [String: Int] {
+        guard let modules = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [:] }
+        var counts: [String: Int] = [:]
+        for module in modules {
+            for item in (module["items"] as? [[String: Any]]) ?? [] {
+                counts[(item["type"] as? String) ?? "?", default: 0] += 1
+            }
+        }
+        return counts
     }
 
     /// 모듈 항목 중 파일(`File`) 항목의 파일 번호.

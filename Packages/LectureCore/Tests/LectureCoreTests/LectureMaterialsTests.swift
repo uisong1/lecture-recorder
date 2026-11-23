@@ -64,7 +64,7 @@ import Testing
         client.routes = [("/files?content_types", 200, "[]")]
         client.links = [("/files?content_types", #"<https://evil.example/api/v1/courses/9/files?page=2>; rel="next""#)]
         _ = try await locator(client).pdfFiles(courseID: 9)
-        #expect(client.requests.count == 1)
+        #expect(client.requests.allSatisfy { $0.url?.host == "canvas.ssu.ac.kr" })
     }
 
     @Test func fallsBackToModuleFileItemsWhenFilesTabIsClosed() async throws {
@@ -77,6 +77,32 @@ import Testing
         let list = try await locator(client).pdfFiles(courseID: 9)
         #expect(list.files.map(\.id) == [41])
         #expect(list.failedLookups == 1)
+    }
+
+    @Test func emptyFilesTabFallsBackToModuleFileItemsAndExplainsWhenNothingFound() async throws {
+        let client = FakeCanvasClient()
+        client.routes = [
+            ("/files?content_types", 200, "[]"),
+            ("/modules?include", 200, #"[{"name":"1주차","items":[{"type":"ExternalTool","title":"강의"},{"type":"ExternalTool","title":"강의2"},{"type":"Page","title":"안내"}]}]"#),
+        ]
+        let list = try await locator(client).pdfFiles(courseID: 9)
+        #expect(list.files.isEmpty)
+        #expect(list.note == "파일 메뉴 PDF 0개, 모듈 파일 항목 0개, 모듈 항목 종류: ExternalTool 2, Page 1")
+
+        client.routes = [
+            ("/files?content_types", 200, "[]"),
+            ("/modules?include", 200, #"[{"name":"1주차","items":[{"type":"File","content_id":51}]}]"#),
+            ("/files/51", 200, #"{"id":51,"display_name":"숨은 자료.pdf","content-type":"application/pdf","size":3,"url":"https://canvas.ssu.ac.kr/files/51/download"}"#),
+        ]
+        #expect(try await locator(client).pdfFiles(courseID: 9).files.map(\.id) == [51])
+    }
+
+    @Test func emptyTabWithUnreadableModulesIsNotAnError() async throws {
+        let client = FakeCanvasClient()
+        client.routes = [("/files?content_types", 200, "[]"), ("/modules?include", 500, "")]
+        let list = try await locator(client).pdfFiles(courseID: 9)
+        #expect(list.files.isEmpty)
+        #expect(list.note.contains("모듈 읽기 실패"))
     }
 
     @Test func expiredTokenIsReportedAsUnauthorized() async {
@@ -159,6 +185,15 @@ import Testing
         #expect(report.failed == ["가짜.pdf"])
         #expect(report.downloaded == 1)
         #expect(files.written["\(folder)/가짜.pdf"] == nil)
+    }
+
+    @Test func reportsWhereItLookedForCoursesWithoutPDFs() async throws {
+        let c = client(list: [])
+        c.routes.insert(("/courses/7/modules?include", 200, #"[{"name":"1주차","items":[{"type":"ExternalTool","title":"강의"}]}]"#), at: 0)
+        let report = try await syncer(c).sync(subjects: [os])
+        #expect(report.downloaded == 0)
+        #expect(report.emptyCourseNotes == ["운영체제: 파일 메뉴 PDF 0개, 모듈 파일 항목 0개, 모듈 항목 종류: ExternalTool 1"])
+        #expect(report.summary.contains("PDF를 못 찾은 강의"))
     }
 
     @Test func tooLargeFileIsNotDownloaded() async throws {
