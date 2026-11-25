@@ -87,7 +87,7 @@ import Testing
         ]
         let list = try await locator(client).pdfFiles(courseID: 9)
         #expect(list.files.isEmpty)
-        #expect(list.note == "파일 메뉴 PDF 0개, 모듈 파일 항목 0개, 모듈 항목 종류: ExternalTool 2, Page 1")
+        #expect(list.note == "파일 메뉴 PDF 0개, 모듈 파일 항목 0개, 과제 첨부 PDF 0개, 모듈 항목 종류: ExternalTool 2, Page 1")
 
         client.routes = [
             ("/files?content_types", 200, "[]"),
@@ -192,8 +192,9 @@ import Testing
         c.routes.insert(("/courses/7/modules?include", 200, #"[{"name":"1주차","items":[{"type":"ExternalTool","title":"강의"}]}]"#), at: 0)
         let report = try await syncer(c).sync(subjects: [os])
         #expect(report.downloaded == 0)
-        #expect(report.emptyCourseNotes == ["운영체제: 파일 메뉴 PDF 0개, 모듈 파일 항목 0개, 모듈 항목 종류: ExternalTool 1"])
-        #expect(report.summary.contains("PDF를 못 찾은 강의"))
+        #expect(report.emptyCourseNotes == ["운영체제: 파일 메뉴 PDF 0개, 모듈 파일 항목 0개, 과제 첨부 PDF 0개, 모듈 항목 종류: ExternalTool 1 / 강의 항목 없음"])
+        #expect(report.headline == "받을 PDF를 찾지 못했습니다. PDF를 못 찾은 강의 1개.")
+        #expect(report.detailLines.first?.hasPrefix("못 찾음 · 운영체제") == true)
     }
 
     @Test func tooLargeFileIsNotDownloaded() async throws {
@@ -234,5 +235,78 @@ import Testing
     @Test func materialsFolderPathSitsInsideSubjectFolder() {
         #expect(RecordingStorage.materialsFolderPath(semester: "2026년 2학기", subjectName: "운영체제") == "2026년 2학기/운영체제/강의자료")
         #expect(RecordingStorage.materialsFolderPath(semester: "", subjectName: "운영체제") == "학기 미정/운영체제/강의자료")
+    }
+}
+
+@Suite struct CommonsDocumentParsingTests {
+    static let slidesXML = """
+    <content><content_playing_info><content_type>sharedocs</content_type><content_duration>0</content_duration></content_playing_info>
+    <service_root><doc><file_uri>https://ssu-toast.commonscdn.com/contents31/x/docs/lec1.pdf?token=SECRET</file_uri>
+    <thumb>https://ssu-toast.commonscdn.com/contents31/x/thumb.png</thumb></doc></service_root></content>
+    """
+
+    @Test func findsPDFLinksAndOutlineWithoutSecrets() {
+        let documents = CanvasParsing.documents(fromContentXML: Self.slidesXML)
+        #expect(documents.contentType == "sharedocs")
+        #expect(documents.pdfURLs.map(\.lastPathComponent) == ["lec1.pdf"])
+        #expect(documents.outline.contains("pdf"))
+        #expect(documents.outline.contains("ssu-toast.commonscdn.com"))
+        #expect(!documents.outline.contains("SECRET"))
+    }
+
+    @Test func noPDFGivesOutlineOnly() {
+        let documents = CanvasParsing.documents(fromContentXML: "<content><a/></content>")
+        #expect(documents.pdfURLs.isEmpty)
+        #expect(documents.outline.contains("태그 content·a"))
+    }
+
+    @Test func assignmentFileLinks() throws {
+        let modules = #"[{"items":[{"type":"Assignment","content_id":61},{"type":"Assignment","content_id":61},{"type":"File","content_id":9}]}]"#
+        #expect(CanvasParsing.assignmentIDs(fromModules: Data(modules.utf8)) == [61])
+        let json = #"{"description":"<a href=\"https://canvas.ssu.ac.kr/courses/7/files/71/download?wrap=1\">자료</a> <a href=\"/courses/7/files/72\">b</a> <a href=\"/courses/7/files/71\">c</a>"}"#
+        let html = CanvasParsing.assignmentDescription(from: Data(json.utf8))
+        #expect(CanvasParsing.fileIDs(inHTML: html) == [71, 72])
+        #expect(CanvasParsing.assignmentDescription(from: Data("{}".utf8)) == "")
+    }
+}
+
+@Suite struct LectureMaterialsSlideSyncTests {
+    let files = FakeFileStore()
+    let storage: RecordingStorage
+
+    init() {
+        storage = RecordingStorage(root: URL(filePath: "/tmp/LectureRecorderTests/Recordings", directoryHint: .isDirectory), files: files)
+    }
+
+    func client() -> FakeCanvasClient {
+        let client = FakeCanvasClient()
+        client.cookies["xn_api_token"] = "LEARNINGX-SECRET"
+        client.routes = [
+            ("/api/v1/courses?enrollment_state", 200, #"[{"id":7,"name":"운영체제"}]"#),
+            ("/courses/7/files?content_types", 403, ""),
+            ("/courses/7/modules?include", 200, #"[{"name":"9주차","items":[{"title":"슬라이드","type":"ExternalTool","external_url":"https://canvas.ssu.ac.kr/learningx/lti/lecture_attendance/items/view/981471"}]}]"#),
+            ("sessionless_launch?url=", 200, #"{"url":"https://canvas.ssu.ac.kr/courses/7/external_tools/sessionless_launch?verifier=v"}"#),
+            ("sessionless_launch?verifier", 200, #"<form action="https://canvas.ssu.ac.kr/learningx/lti/lecture_attendance/items/view/981471" method="post"><input name="a" value="b"></form>"#),
+            ("/lecture_attendance/items/view/981471", 200, "<html></html>"),
+            ("/attendance_items/981471", 200, #"{"item_content_type":"commons","item_content_data":{"content_id":"abc123"}}"#),
+            ("content.php", 200, CommonsDocumentParsingTests.slidesXML),
+            ("/docs/lec1.pdf", 200, "%PDF-1 slide"),
+        ]
+        return client
+    }
+
+    @Test func downloadsSlidePDFsFromLearningXItemsWithoutSendingTheCanvasToken() async throws {
+        let c = client()
+        let syncer = LectureMaterialsSyncer(locator: CanvasLectureLocator(client: c, token: "SECRET"), storage: storage, files: files)
+        let subject = MaterialsSubject(name: "운영체제", semester: "2026년 2학기")
+        let report = try await syncer.sync(subjects: [subject])
+        #expect(report.downloaded == 1)
+        #expect(files.written["/tmp/LectureRecorderTests/Recordings/2026년 2학기/운영체제/강의자료/9주차 슬라이드.pdf"] == Data("%PDF-1 slide".utf8))
+        let download = try #require(c.request(containing: "/docs/lec1.pdf"))
+        #expect(download.value(forHTTPHeaderField: "Authorization") == nil)
+
+        let again = try await syncer.sync(subjects: [subject])
+        #expect(again.downloaded == 0)
+        #expect(again.skipped == 1)
     }
 }

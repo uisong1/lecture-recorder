@@ -31,21 +31,33 @@ public struct MaterialsSyncReport: Equatable, Sendable {
 
     public init() {}
 
-    public var summary: String {
+    /// 결과 한 줄 요약.
+    public var headline: String {
         var parts: [String] = []
         if downloaded == 0 && skipped == 0 && failed.isEmpty {
-            parts.append("새로 받을 PDF가 없습니다.")
+            parts.append(emptyCourseNotes.isEmpty ? "새로 받을 PDF가 없습니다." : "받을 PDF를 찾지 못했습니다.")
         } else {
             parts.append("\(downloaded)개를 받았고 \(skipped)개는 이미 있어 건너뛰었습니다.")
         }
-        if !failed.isEmpty { parts.append("\(failed.count)개는 받지 못했습니다(\(failed.prefix(3).joined(separator: ", "))\(failed.count > 3 ? " 외" : "")).") }
-        if unreadableItems > 0 { parts.append("열지 못한 파일 항목이 \(unreadableItems)개 있습니다.") }
-        if locked > 0 { parts.append("잠겨서 받을 수 없는 PDF가 \(locked)개 있습니다.") }
-        if !emptyCourseNotes.isEmpty { parts.append("PDF를 못 찾은 강의 — " + emptyCourseNotes.joined(separator: " / ")) }
-        if !failedCourses.isEmpty { parts.append("읽지 못한 강의: \(failedCourses.joined(separator: ", ")).") }
-        if !unmatchedCourses.isEmpty { parts.append("앱에 같은 이름의 과목이 없어 건너뛴 강의: \(unmatchedCourses.joined(separator: ", ")).") }
+        if !failed.isEmpty { parts.append("\(failed.count)개는 받지 못했습니다.") }
+        if !emptyCourseNotes.isEmpty { parts.append("PDF를 못 찾은 강의 \(emptyCourseNotes.count)개.") }
         return parts.joined(separator: " ")
     }
+
+    /// 접어 두는 자세한 내용(줄마다 하나).
+    public var detailLines: [String] {
+        var lines: [String] = []
+        if !failed.isEmpty { lines.append("받지 못한 파일: " + failed.joined(separator: ", ")) }
+        if unreadableItems > 0 { lines.append("열지 못한 파일 항목: \(unreadableItems)개") }
+        if locked > 0 { lines.append("잠겨서 받을 수 없는 PDF: \(locked)개") }
+        lines += emptyCourseNotes.map { "못 찾음 · " + $0 }
+        if !failedCourses.isEmpty { lines.append("읽지 못한 강의: " + failedCourses.joined(separator: ", ")) }
+        if !unmatchedCourses.isEmpty { lines.append("앱에 같은 이름의 과목이 없어 건너뛴 강의: " + unmatchedCourses.joined(separator: ", ")) }
+        return lines
+    }
+
+    /// 요약과 자세한 내용을 한 문장으로 합친 것(테스트·로그용).
+    public var summary: String { ([headline] + detailLines).joined(separator: " ") }
 }
 
 /// Canvas 과목의 PDF 강의자료를 받아 앱 과목의 녹음 폴더 안(`<학기>/<과목>/강의자료/`)에 저장한다.
@@ -78,9 +90,9 @@ public struct LectureMaterialsSyncer: Sendable {
                 continue
             }
             progress("\(subject.name) 자료 목록을 읽는 중")
-            let list: CanvasFileList
+            let found: CanvasFileList
             do {
-                list = try await locator.pdfFiles(courseID: course.id)
+                found = try await locator.pdfFiles(courseID: course.id)
             } catch CanvasError.unauthorized {
                 throw CanvasError.unauthorized
             } catch {
@@ -89,6 +101,13 @@ public struct LectureMaterialsSyncer: Sendable {
 #endif
                 report.failedCourses.append(course.name)
                 continue
+            }
+            var list = found
+            if list.files.isEmpty, list.lockedCount == 0 {
+                progress("\(subject.name) 슬라이드 항목을 확인하는 중")
+                let probe = try await documentFiles(courseID: course.id, progress: progress)
+                list.files = probe.files
+                if probe.files.isEmpty, !probe.note.isEmpty { list.note += " / " + probe.note }
             }
             if list.files.isEmpty, list.lockedCount == 0, !list.note.isEmpty { report.emptyCourseNotes.append("\(subject.name): \(list.note)") }
             report.locked += list.lockedCount
@@ -102,10 +121,52 @@ public struct LectureMaterialsSyncer: Sendable {
         return report
     }
 
+    /// 강의 항목(LearningX 슬라이드·문서)에서 PDF 주소를 찾는다. 앞의 몇 개로 먼저 확인해 PDF가 보이면 나머지도 찾고,
+    /// 안 보이면 응답 구조 요약만 남긴다. 항목은 하나씩 천천히 열고, 열지 못한 항목은 건너뛴다.
+    private func documentFiles(courseID: Int, progress: @Sendable (String) -> Void) async throws -> (files: [CanvasFile], note: String) {
+        let items: [CanvasLectureItem]
+        do { items = try await locator.lectureItems(courseID: courseID) } catch CanvasError.unauthorized { throw CanvasError.unauthorized } catch { return ([], "") }
+        var found: [CanvasFile] = []
+        var outline = ""
+        var opened = 0
+        for (index, item) in items.enumerated() {
+            try Task.checkCancellation()
+            // 처음 3개에서 PDF가 하나도 안 나오면 이 과목은 더 보지 않는다.
+            if index >= 3, found.isEmpty { break }
+            if index >= Self.maxDocumentItems { break }
+            do {
+                let documents = try await locator.documents(courseID: courseID, item: item)
+                opened += 1
+                if outline.isEmpty { outline = documents.outline }
+                for (offset, url) in documents.pdfURLs.enumerated() {
+                    let suffix = documents.pdfURLs.count > 1 ? " \(offset + 1)" : ""
+                    found.append(CanvasFile(id: item.itemID * 100 + offset, displayName: "\(item.moduleName) \(item.title)\(suffix)", downloadURL: url, size: nil))
+                }
+            } catch CanvasError.unauthorized {
+                throw CanvasError.unauthorized
+            } catch CanvasError.protectedContent {
+                // 보호 표시가 있으면 우회하지 않고 이 항목은 건너뛴다.
+                continue
+            } catch {
+                continue
+            }
+        }
+        let note = items.isEmpty ? "강의 항목 없음" : "LearningX 항목 \(items.count)개 중 \(opened)개 확인, PDF 주소 \(found.count)개" + (outline.isEmpty ? "" : " (\(outline))")
+        return (found, note)
+    }
+
+    /// 한 과목에서 슬라이드·문서 항목을 열어 보는 최대 개수.
+    static let maxDocumentItems = 80
+
     private func save(_ file: CanvasFile, in folder: URL, subject: String, report: inout MaterialsSyncReport, progress: @Sendable (String) -> Void) async {
         let base = Self.fileName(for: file.displayName)
         // 같은 이름에 크기가 다른 파일이 이미 있으면(다른 자료) 번호를 붙여 따로 둔다.
         var destination = folder.appending(path: base, directoryHint: .notDirectory)
+        // 크기를 모르는 자료(슬라이드 PDF)는 같은 이름이 있으면 받은 것으로 본다.
+        if file.size == nil, files.fileExists(at: destination) {
+            report.skipped += 1
+            return
+        }
         if files.fileExists(at: destination), !Self.sameSize(files.fileSize(at: destination), file.size) {
             destination = folder.appending(path: Self.fileName(for: file.displayName, id: file.id), directoryHint: .notDirectory)
         }
