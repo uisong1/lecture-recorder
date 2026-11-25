@@ -90,6 +90,23 @@ public struct CanvasLectureLocator: Sendable {
 
     /// 항목의 영상 재생 정보. 영상이 아니면 `notVideo`, 보호 표시가 있으면 `protectedContent`.
     public func playback(courseID: Int, item: CanvasLectureItem) async throws -> CommonsPlayback {
+        let xml = try await commonsContentXML(courseID: courseID, item: item)
+        let playback = CanvasParsing.playback(fromContentXML: xml)
+        if playback.hasProtectionMarker { throw CanvasError.protectedContent }
+        guard playback.isDownloadableVideo else { throw CanvasError.notVideo }
+        return playback
+    }
+
+    /// 슬라이드·문서 항목에서 받을 수 있는 PDF 주소와, 응답 구조 요약(주소·토큰 없이 태그 이름과 확장자만).
+    /// 보호 표시가 있으면 `protectedContent`.
+    public func documents(courseID: Int, item: CanvasLectureItem) async throws -> CommonsDocuments {
+        let xml = try await commonsContentXML(courseID: courseID, item: item)
+        if CanvasParsing.playback(fromContentXML: xml).hasProtectionMarker { throw CanvasError.protectedContent }
+        return CanvasParsing.documents(fromContentXML: xml)
+    }
+
+    /// LearningX 항목의 commons `content.php` XML. commons 콘텐츠가 아니면 `notVideo`.
+    private func commonsContentXML(courseID: Int, item: CanvasLectureItem) async throws -> String {
         // 1. 토큰으로 LearningX 실행 주소를 받는다(공식 API).
         let launchQuery = Self.percentEncode(item.launchURL)
         let launchData = try await get("/api/v1/courses/\(courseID)/external_tools/sessionless_launch?url=\(launchQuery)", bearer: token)
@@ -115,13 +132,10 @@ public struct CanvasLectureLocator: Sendable {
         let content = try CanvasParsing.learningXContent(from: detail)
         guard content.isCommons, let contentID = content.contentID else { throw CanvasError.notVideo }
 
-        // 4. commons 재생 정보에서 영상 주소를 읽는다.
+        // 4. commons 재생 정보(XML)를 읽는다.
         let infoURL = try Self.url("\(Self.commonsHost)/viewer/ssplayer/uniplayer_support/content.php?content_id=\(Self.percentEncode(contentID))")
         let info = try await send(Self.browserRequest(url: infoURL, referer: try Self.url("\(Self.commonsHost)/em/\(Self.percentEncode(contentID))")))
-        let playback = CanvasParsing.playback(fromContentXML: String(decoding: info.data, as: UTF8.self))
-        if playback.hasProtectionMarker { throw CanvasError.protectedContent }
-        guard playback.isDownloadableVideo else { throw CanvasError.notVideo }
-        return playback
+        return String(decoding: info.data, as: UTF8.self)
     }
 
     // MARK: 강의자료(PDF)
@@ -168,15 +182,32 @@ public struct CanvasLectureLocator: Sendable {
             }
             result.merge(try CanvasParsing.files(from: data))
         }
+        // 과제 설명에 붙은 파일 링크도 본다(파일 메뉴가 막힌 과목은 보통 여기로 올라온다).
+        let assignmentIDs = CanvasParsing.assignmentIDs(fromModules: modules)
+        var assignmentFiles = 0
+        for assignmentID in assignmentIDs.prefix(40) {
+            guard let data = try? await get("/api/v1/courses/\(courseID)/assignments/\(assignmentID)", bearer: token) else { continue }
+            for fileID in CanvasParsing.fileIDs(inHTML: CanvasParsing.assignmentDescription(from: data)) where !fileIDs.contains(fileID) {
+                guard let fileData = try? await get("/api/v1/courses/\(courseID)/files/\(fileID)", bearer: token) else { continue }
+                let found = (try? CanvasParsing.files(from: fileData)) ?? CanvasFileList()
+                assignmentFiles += found.files.count
+                result.merge(found)
+            }
+        }
         let kinds = CanvasParsing.moduleItemTypeCounts(from: modules).sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ")
-        result.note = "\(tabNote), 모듈 파일 항목 \(fileIDs.count)개, 모듈 항목 종류: \(kinds.isEmpty ? "없음" : kinds)"
+        result.note = "\(tabNote), 모듈 파일 항목 \(fileIDs.count)개, 과제 첨부 PDF \(assignmentFiles)개, 모듈 항목 종류: \(kinds.isEmpty ? "없음" : kinds)"
         return result
     }
 
     /// PDF 파일 하나를 받는다. 실제 PDF가 아니면(로그인 안내 페이지 등) `invalidResponse`.
     public func download(_ file: CanvasFile) async throws -> Data {
         var request = URLRequest(url: file.downloadURL)
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if file.downloadURL.host == baseURL.host {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        } else {
+            // 토큰은 Canvas에만 보낸다. 다른 서버(commons)에는 Referer만 붙인다.
+            request.setValue(Self.commonsHost + "/", forHTTPHeaderField: "Referer")
+        }
         request.setValue(Self.browserUserAgent, forHTTPHeaderField: "User-Agent")
         let data = try await send(request).data
         guard data.starts(with: Data("%PDF".utf8)) else { throw CanvasError.invalidResponse }

@@ -62,9 +62,20 @@ struct CanvasSettingsView: View {
                         Text(message).designText(.caption).foregroundStyle(Design.Palette.inkMuted)
                     }
                     .accessibilityIdentifier("materialsWorking")
-                case .done(let message):
-                    Text(message).designText(.caption).foregroundStyle(Design.Palette.inkMuted)
+                case .done(let headline, let details):
+                    Text(headline).designText(.caption).foregroundStyle(Design.Palette.ink)
                         .accessibilityIdentifier("materialsDone")
+                    if !details.isEmpty {
+                        DisclosureGroup("자세히 보기") {
+                            Text(details)
+                                .designText(.caption)
+                                .foregroundStyle(Design.Palette.inkMuted)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityIdentifier("materialsDetails")
+                        }
+                        .designText(.caption)
+                    }
                 case .failed(let message):
                     Label(message, systemImage: "exclamationmark.circle")
                         .designText(.caption)

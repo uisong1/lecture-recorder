@@ -112,6 +112,20 @@ public struct CanvasFileList: Equatable, Sendable {
     }
 }
 
+/// 슬라이드·문서 항목(commons)에서 읽은 받을 수 있는 PDF 주소와 응답 구조 요약.
+public struct CommonsDocuments: Equatable, Sendable {
+    public let contentType: String
+    public let pdfURLs: [URL]
+    /// 태그 이름·파일 확장자·호스트만 적은 구조 요약(주소의 경로·쿼리·토큰은 넣지 않는다).
+    public let outline: String
+
+    public init(contentType: String, pdfURLs: [URL], outline: String) {
+        self.contentType = contentType
+        self.pdfURLs = pdfURLs
+        self.outline = outline
+    }
+}
+
 public enum CanvasParsingError: Error, Equatable {
     case notJSON
 }
@@ -190,6 +204,52 @@ public enum CanvasParsing {
             }
         }
         return counts
+    }
+
+    /// 모듈 항목 중 과제(`Assignment`)의 과제 번호.
+    public static func assignmentIDs(fromModules data: Data) -> [Int] {
+        guard let modules = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        var ids: [Int] = []
+        for module in modules {
+            for item in (module["items"] as? [[String: Any]]) ?? [] {
+                guard item["type"] as? String == "Assignment", let id = item["content_id"] as? Int, !ids.contains(id) else { continue }
+                ids.append(id)
+            }
+        }
+        return ids
+    }
+
+    /// 과제 상세 응답의 설명(HTML). 없으면 빈 문자열.
+    public static func assignmentDescription(from data: Data) -> String {
+        ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["description"] as? String ?? ""
+    }
+
+    /// HTML 안의 `/files/<번호>` 링크의 파일 번호(중복 없이).
+    public static func fileIDs(inHTML html: String) -> [Int] {
+        var ids: [Int] = []
+        for match in allMatches(#"/files/(\d+)"#, in: html) {
+            if let id = Int(match[1]), !ids.contains(id) { ids.append(id) }
+        }
+        return ids
+    }
+
+    /// commons `content.php` XML에서 받을 수 있는 PDF 주소와 구조 요약을 읽는다.
+    public static func documents(fromContentXML xml: String) -> CommonsDocuments {
+        let contentType = firstMatch(#"<content_type>\s*(?:<!\[CDATA\[)?([^<\]]*)"#, in: xml)?[1].trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var pdfs: [URL] = []
+        var extensions: [String] = []
+        var hosts: [String] = []
+        for match in allMatches(#"https://[^\s<>"'\]]+"#, in: xml) {
+            guard let url = URL(string: unescape(match[0])) else { continue }
+            let ext = url.pathExtension.lowercased()
+            if ext == "pdf", !pdfs.contains(url) { pdfs.append(url) }
+            if !ext.isEmpty, ext.count <= 5, !extensions.contains(ext) { extensions.append(ext) }
+            if let host = url.host, !hosts.contains(host) { hosts.append(host) }
+        }
+        var tags: [String] = []
+        for match in allMatches(#"<([A-Za-z_][A-Za-z0-9_]*)"#, in: xml) where !tags.contains(match[1]) { tags.append(match[1]) }
+        let outline = "형식 \(contentType.isEmpty ? "?" : contentType), 태그 \(tags.prefix(25).joined(separator: "·")), 파일 확장자 \(extensions.isEmpty ? "없음" : extensions.prefix(8).joined(separator: "·")), 호스트 \(hosts.isEmpty ? "없음" : hosts.prefix(4).joined(separator: "·"))"
+        return CommonsDocuments(contentType: contentType, pdfURLs: pdfs, outline: outline)
     }
 
     /// 모듈 항목 중 파일(`File`) 항목의 파일 번호.

@@ -9,7 +9,7 @@ public final class LectureMaterialsModel {
     public enum Status: Equatable {
         case idle
         case working(String)
-        case done(String)
+        case done(headline: String, details: String)
         case failed(String)
     }
 
@@ -51,7 +51,7 @@ public final class LectureMaterialsModel {
                     self.status = .working(message)
                 }
             }
-            status = .done(report.summary)
+            status = .done(headline: report.headline, details: report.detailLines.joined(separator: "\n"))
             onFinished()
         } catch {
             Log.app.error("LMS 강의자료 가져오기 실패: \(error.localizedDescription, privacy: .public)")
