@@ -117,7 +117,7 @@ import Testing
         client.routes = [("/files/1/download", 200, "%PDF-1.4 fake")]
         #expect(try await locator(client).download(file) == Data("%PDF-1.4 fake".utf8))
         client.routes = [("/files/1/download", 200, "<html>로그인</html>")]
-        await #expect(throws: CanvasError.invalidResponse) { try await locator(client).download(file) }
+        await #expect(throws: CanvasError.notPDF("HTML")) { try await locator(client).download(file) }
     }
 }
 
@@ -182,7 +182,7 @@ import Testing
     @Test func nonPDFResponseIsReportedAsFailureAndOthersContinue() async throws {
         let c = client(list: [fileJSON(id: 3, name: "가짜.pdf", size: 5), fileJSON(id: 2, name: "진짜.pdf", size: 14)])
         let report = try await syncer(c).sync(subjects: [os])
-        #expect(report.failed == ["가짜.pdf"])
+        #expect(report.failed == ["가짜.pdf(PDF 아님: HTML)"])
         #expect(report.downloaded == 1)
         #expect(files.written["\(folder)/가짜.pdf"] == nil)
     }
@@ -254,6 +254,28 @@ import Testing
         #expect(!documents.outline.contains("SECRET"))
     }
 
+    @Test func sharedocsDownloadURIIsUsedButVideoDownloadURIIsNot() {
+        let slides = "<content><content_playing_info><content_type>sharedocs</content_type><content_download_uri><![CDATA[http://commons.ssu.ac.kr/viewer/download.php?cid=1&amp;sig=SECRET]]></content_download_uri></content_playing_info></content>"
+        let documents = CanvasParsing.documents(fromContentXML: slides)
+        #expect(documents.pdfURLs.map(\.absoluteString) == ["https://commons.ssu.ac.kr/viewer/download.php?cid=1&sig=SECRET"])
+        #expect(!documents.isVideo)
+        #expect(!documents.outline.contains("SECRET"))
+
+        let video = slides.replacingOccurrences(of: "sharedocs", with: "video1")
+        let videoDocuments = CanvasParsing.documents(fromContentXML: video)
+        #expect(videoDocuments.pdfURLs.isEmpty)
+        #expect(videoDocuments.isVideo)
+    }
+
+    @Test func nonCommonsLearningXItemReportsTypeKeysAndPDFLinks() {
+        let json = #"{"item_content_type":"pdf","item_content_data":{"file_url":"https://canvas.ssu.ac.kr/files/9/lec.pdf","title":"x","token":"SECRET"}}"#
+        let documents = CanvasParsing.learningXOtherDocuments(from: Data(json.utf8))
+        #expect(documents.contentType == "pdf")
+        #expect(documents.pdfURLs.map(\.lastPathComponent) == ["lec.pdf"])
+        #expect(documents.outline.contains("데이터 키 file_url·title·token"))
+        #expect(!documents.outline.contains("SECRET"))
+    }
+
     @Test func noPDFGivesOutlineOnly() {
         let documents = CanvasParsing.documents(fromContentXML: "<content><a/></content>")
         #expect(documents.pdfURLs.isEmpty)
@@ -308,5 +330,35 @@ import Testing
         let again = try await syncer.sync(subjects: [subject])
         #expect(again.downloaded == 0)
         #expect(again.skipped == 1)
+    }
+}
+
+@Suite struct LectureMaterialsDownloadURITests {
+    @Test func downloadsSharedocsFromContentDownloadURIAndScansBeyondVideoItems() async throws {
+        let files = FakeFileStore()
+        let storage = RecordingStorage(root: URL(filePath: "/tmp/LectureRecorderTests/Recordings", directoryHint: .isDirectory), files: files)
+        let client = FakeCanvasClient()
+        client.cookies["xn_api_token"] = "T"
+        let item: (Int) -> String = { #"{"title":"항목\#($0)","type":"ExternalTool","external_url":"https://canvas.ssu.ac.kr/learningx/lti/lecture_attendance/items/view/\#($0)"}"# }
+        // 영상 항목 4개 뒤에 슬라이드 항목이 있다. 영상은 자료로 세지 않으므로 끝까지 가서 찾는다.
+        client.routes = [
+            ("/api/v1/courses?enrollment_state", 200, #"[{"id":7,"name":"운영체제"}]"#),
+            ("/courses/7/files?content_types", 403, ""),
+            ("/courses/7/modules?include", 200, "[{\"name\":\"1주차\",\"items\":[" + (1...5).map(item).joined(separator: ",") + "]}]"),
+            ("sessionless_launch?url=", 200, #"{"url":"https://canvas.ssu.ac.kr/courses/7/external_tools/sessionless_launch?verifier=v"}"#),
+            ("sessionless_launch?verifier", 200, #"<form action="https://canvas.ssu.ac.kr/learningx/lti/lecture_attendance/items/view/1" method="post"><input name="a" value="b"></form>"#),
+            ("/lecture_attendance/items/view/", 200, "<html></html>"),
+            ("/attendance_items/", 200, #"{"item_content_type":"commons","item_content_data":{"content_id":"abc"}}"#),
+            ("content.php", 200, "<content><content_playing_info><content_type>video1</content_type><content_duration>10</content_duration></content_playing_info></content>"),
+        ]
+        // 5번째 항목만 슬라이드. 항목 번호는 같은 응답을 쓰므로 content_id로 구분한다.
+        client.routes.insert(("/attendance_items/5", 200, #"{"item_content_type":"commons","item_content_data":{"content_id":"slide5"}}"#), at: 0)
+        client.routes.insert(("content_id=slide5", 200, "<content><content_playing_info><content_type>sharedocs</content_type><content_download_uri>https://commons.ssu.ac.kr/viewer/download.php?cid=5</content_download_uri></content_playing_info></content>"), at: 0)
+        client.routes.insert(("/viewer/download.php?cid=5", 200, "%PDF-1 five"), at: 0)
+        let syncer = LectureMaterialsSyncer(locator: CanvasLectureLocator(client: client, token: "SECRET"), storage: storage, files: files)
+        let report = try await syncer.sync(subjects: [MaterialsSubject(name: "운영체제", semester: "2026년 2학기")])
+        #expect(report.downloaded == 1)
+        #expect(files.written["/tmp/LectureRecorderTests/Recordings/2026년 2학기/운영체제/강의자료/1주차 항목5.pdf"] == Data("%PDF-1 five".utf8))
+        #expect(client.request(containing: "/viewer/download.php?cid=5")?.value(forHTTPHeaderField: "Authorization") == nil)
     }
 }

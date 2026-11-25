@@ -46,6 +46,8 @@ public enum CanvasError: Error, Equatable, LocalizedError {
     case protectedContent
     /// LearningX로 넘어가는 양식이나 세션을 얻지 못했다.
     case sessionUnavailable
+    /// 받은 내용이 PDF가 아니다(`kind`는 HTML·Office 같은 대략의 종류).
+    case notPDF(String)
 
     public var errorDescription: String? {
         switch self {
@@ -56,6 +58,7 @@ public enum CanvasError: Error, Equatable, LocalizedError {
         case .notVideo: "이 항목은 영상이 아니에요."
         case .protectedContent: "이 영상에 암호화(DRM) 표시가 있어요. 우회하지 않고 멈췄어요."
         case .sessionUnavailable: "LearningX에 접속하지 못했어요. 잠시 뒤 다시 시도해 주세요."
+        case .notPDF(let kind): "받은 파일이 PDF가 아니에요 (\(kind))."
         }
     }
 }
@@ -90,7 +93,7 @@ public struct CanvasLectureLocator: Sendable {
 
     /// 항목의 영상 재생 정보. 영상이 아니면 `notVideo`, 보호 표시가 있으면 `protectedContent`.
     public func playback(courseID: Int, item: CanvasLectureItem) async throws -> CommonsPlayback {
-        let xml = try await commonsContentXML(courseID: courseID, item: item)
+        guard case .commons(let xml) = try await learningXPayload(courseID: courseID, item: item) else { throw CanvasError.notVideo }
         let playback = CanvasParsing.playback(fromContentXML: xml)
         if playback.hasProtectionMarker { throw CanvasError.protectedContent }
         guard playback.isDownloadableVideo else { throw CanvasError.notVideo }
@@ -98,15 +101,26 @@ public struct CanvasLectureLocator: Sendable {
     }
 
     /// 슬라이드·문서 항목에서 받을 수 있는 PDF 주소와, 응답 구조 요약(주소·토큰 없이 태그 이름과 확장자만).
-    /// 보호 표시가 있으면 `protectedContent`.
+    /// commons가 아닌 항목(LearningX가 직접 가진 자료)도 같은 모양으로 돌려준다. 보호 표시가 있으면 `protectedContent`.
     public func documents(courseID: Int, item: CanvasLectureItem) async throws -> CommonsDocuments {
-        let xml = try await commonsContentXML(courseID: courseID, item: item)
-        if CanvasParsing.playback(fromContentXML: xml).hasProtectionMarker { throw CanvasError.protectedContent }
-        return CanvasParsing.documents(fromContentXML: xml)
+        switch try await learningXPayload(courseID: courseID, item: item) {
+        case .commons(let xml):
+            if CanvasParsing.playback(fromContentXML: xml).hasProtectionMarker { throw CanvasError.protectedContent }
+            return CanvasParsing.documents(fromContentXML: xml)
+        case .other(let documents):
+            return documents
+        }
     }
 
-    /// LearningX 항목의 commons `content.php` XML. commons 콘텐츠가 아니면 `notVideo`.
-    private func commonsContentXML(courseID: Int, item: CanvasLectureItem) async throws -> String {
+    private enum LearningXPayload {
+        /// commons `content.php` XML.
+        case commons(String)
+        /// commons가 아닌 항목: 형식과 데이터 키, 데이터 안의 PDF 주소.
+        case other(CommonsDocuments)
+    }
+
+    /// LearningX 항목의 내용. commons면 `content.php` XML, 아니면 항목 상세에서 읽은 요약.
+    private func learningXPayload(courseID: Int, item: CanvasLectureItem) async throws -> LearningXPayload {
         // 1. 토큰으로 LearningX 실행 주소를 받는다(공식 API).
         let launchQuery = Self.percentEncode(item.launchURL)
         let launchData = try await get("/api/v1/courses/\(courseID)/external_tools/sessionless_launch?url=\(launchQuery)", bearer: token)
@@ -130,12 +144,14 @@ public struct CanvasLectureLocator: Sendable {
         // 3. 항목 상세에서 commons 콘텐츠 번호를 읽는다.
         let detail = try await get("/learningx/api/v1/courses/\(courseID)/attendance_items/\(item.itemID)", bearer: learningXToken)
         let content = try CanvasParsing.learningXContent(from: detail)
-        guard content.isCommons, let contentID = content.contentID else { throw CanvasError.notVideo }
+        guard content.isCommons, let contentID = content.contentID else {
+            return .other(CanvasParsing.learningXOtherDocuments(from: detail))
+        }
 
         // 4. commons 재생 정보(XML)를 읽는다.
         let infoURL = try Self.url("\(Self.commonsHost)/viewer/ssplayer/uniplayer_support/content.php?content_id=\(Self.percentEncode(contentID))")
         let info = try await send(Self.browserRequest(url: infoURL, referer: try Self.url("\(Self.commonsHost)/em/\(Self.percentEncode(contentID))")))
-        return String(decoding: info.data, as: UTF8.self)
+        return .commons(String(decoding: info.data, as: UTF8.self))
     }
 
     // MARK: 강의자료(PDF)
@@ -210,7 +226,10 @@ public struct CanvasLectureLocator: Sendable {
         }
         request.setValue(Self.browserUserAgent, forHTTPHeaderField: "User-Agent")
         let data = try await send(request).data
-        guard data.starts(with: Data("%PDF".utf8)) else { throw CanvasError.invalidResponse }
+        guard data.starts(with: Data("%PDF".utf8)) else {
+            let kind = data.starts(with: Data("PK".utf8)) ? "ZIP·Office 문서" : (data.first == UInt8(ascii: "<") ? "HTML" : "알 수 없는 형식")
+            throw CanvasError.notPDF(kind)
+        }
         return data
     }
 

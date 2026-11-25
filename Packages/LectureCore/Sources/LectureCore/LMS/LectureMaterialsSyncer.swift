@@ -129,14 +129,18 @@ public struct LectureMaterialsSyncer: Sendable {
         var found: [CanvasFile] = []
         var outline = ""
         var opened = 0
-        for (index, item) in items.enumerated() {
+        var documentLike = 0
+        var typeCounts: [String: Int] = [:]
+        for item in items.prefix(Self.maxDocumentItems) {
             try Task.checkCancellation()
-            // 처음 3개에서 PDF가 하나도 안 나오면 이 과목은 더 보지 않는다.
-            if index >= 3, found.isEmpty { break }
-            if index >= Self.maxDocumentItems { break }
+            // 영상이 아닌 항목을 5개 열어도 PDF가 하나도 안 나오면 이 과목은 더 보지 않는다.
+            if documentLike >= 5, found.isEmpty { break }
             do {
                 let documents = try await locator.documents(courseID: courseID, item: item)
                 opened += 1
+                typeCounts[documents.contentType.isEmpty ? "?" : documents.contentType, default: 0] += 1
+                if documents.isVideo { continue }
+                documentLike += 1
                 if outline.isEmpty { outline = documents.outline }
                 for (offset, url) in documents.pdfURLs.enumerated() {
                     let suffix = documents.pdfURLs.count > 1 ? " \(offset + 1)" : ""
@@ -144,14 +148,13 @@ public struct LectureMaterialsSyncer: Sendable {
                 }
             } catch CanvasError.unauthorized {
                 throw CanvasError.unauthorized
-            } catch CanvasError.protectedContent {
-                // 보호 표시가 있으면 우회하지 않고 이 항목은 건너뛴다.
-                continue
             } catch {
+                // 보호 표시(DRM)가 있는 항목은 우회하지 않고 건너뛴다. 열지 못한 항목도 건너뛴다.
                 continue
             }
         }
-        let note = items.isEmpty ? "강의 항목 없음" : "LearningX 항목 \(items.count)개 중 \(opened)개 확인, PDF 주소 \(found.count)개" + (outline.isEmpty ? "" : " (\(outline))")
+        let kinds = typeCounts.sorted { $0.key < $1.key }.map { "\($0.key) \($0.value)" }.joined(separator: ", ")
+        let note = items.isEmpty ? "강의 항목 없음" : "LearningX 항목 \(items.count)개 중 \(opened)개 확인(\(kinds.isEmpty ? "없음" : kinds)), PDF 주소 \(found.count)개" + (outline.isEmpty ? "" : " (\(outline))")
         return (found, note)
     }
 
@@ -204,7 +207,11 @@ public struct LectureMaterialsSyncer: Sendable {
 #if canImport(os)
             Log.app.error("LMS 강의자료 저장 실패: \(error.localizedDescription, privacy: .public)")
 #endif
-            report.failed.append(base)
+            if case CanvasError.notPDF(let kind) = error {
+                report.failed.append("\(base)(PDF 아님: \(kind))")
+            } else {
+                report.failed.append(base)
+            }
         }
     }
 
