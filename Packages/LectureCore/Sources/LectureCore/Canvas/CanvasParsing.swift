@@ -119,6 +119,9 @@ public struct CommonsDocuments: Equatable, Sendable {
     /// 태그 이름·파일 확장자·호스트만 적은 구조 요약(주소의 경로·쿼리·토큰은 넣지 않는다).
     public let outline: String
 
+    /// 영상 항목이면 true(영상은 자료로 세지 않는다).
+    public var isVideo: Bool { contentType.lowercased().hasPrefix("video") }
+
     public init(contentType: String, pdfURLs: [URL], outline: String) {
         self.contentType = contentType
         self.pdfURLs = pdfURLs
@@ -246,10 +249,35 @@ public enum CanvasParsing {
             if !ext.isEmpty, ext.count <= 5, !extensions.contains(ext) { extensions.append(ext) }
             if let host = url.host, !hosts.contains(host) { hosts.append(host) }
         }
+        // 슬라이드·문서(sharedocs)는 content_download_uri에 원본 내려받기 주소가 있다. 영상은 쓰지 않는다.
+        if contentType.lowercased() == "sharedocs",
+           let raw = firstMatch(#"<content_download_uri[^>]*>\s*(?:<!\[CDATA\[)?\s*([^<\]\s]+)"#, in: xml)?[1],
+           var address = URL(string: unescape(raw)) {
+            if address.scheme?.lowercased() == "http", var parts = URLComponents(url: address, resolvingAgainstBaseURL: false) {
+                parts.scheme = "https"
+                address = parts.url ?? address
+            }
+            if address.scheme?.lowercased() == "https", !pdfs.contains(address) { pdfs.append(address) }
+        }
         var tags: [String] = []
         for match in allMatches(#"<([A-Za-z_][A-Za-z0-9_]*)"#, in: xml) where !tags.contains(match[1]) { tags.append(match[1]) }
         let outline = "형식 \(contentType.isEmpty ? "?" : contentType), 태그 \(tags.prefix(25).joined(separator: "·")), 파일 확장자 \(extensions.isEmpty ? "없음" : extensions.prefix(8).joined(separator: "·")), 호스트 \(hosts.isEmpty ? "없음" : hosts.prefix(4).joined(separator: "·"))"
         return CommonsDocuments(contentType: contentType, pdfURLs: pdfs, outline: outline)
+    }
+
+    /// commons가 아닌 LearningX 항목의 형식과 데이터 키, 데이터 안의 PDF 주소.
+    public static func learningXOtherDocuments(from data: Data) -> CommonsDocuments {
+        let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        let type = (object?["item_content_type"] as? String) ?? ""
+        let payload = object?["item_content_data"] as? [String: Any] ?? [:]
+        var pdfs: [URL] = []
+        for value in payload.values {
+            guard let text = value as? String, let url = URL(string: text), url.scheme?.lowercased() == "https",
+                  url.pathExtension.lowercased() == "pdf", !pdfs.contains(url) else { continue }
+            pdfs.append(url)
+        }
+        let keys = payload.keys.sorted().prefix(12).joined(separator: "·")
+        return CommonsDocuments(contentType: type, pdfURLs: pdfs, outline: "형식 \(type.isEmpty ? "?" : type)(LearningX), 데이터 키 \(keys.isEmpty ? "없음" : keys)")
     }
 
     /// 모듈 항목 중 파일(`File`) 항목의 파일 번호.
