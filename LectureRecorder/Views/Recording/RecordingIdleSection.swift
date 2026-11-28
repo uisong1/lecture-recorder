@@ -11,6 +11,27 @@ struct RecordingIdleSection: View {
     let showsFirstRunGuide: Bool
 
     var body: some View {
+        // 시안 01: 과목 고르기를 대기 카드 첫 줄로 둔다.
+        HStack {
+            Text("과목")
+                .designText(.caption)
+                .foregroundStyle(Design.Palette.inkMuted)
+            Spacer()
+            // 메뉴 선택 칸은 폭을 고정해야 처음 그릴 때 "자…"처럼 잘리지 않는다 (fixedSize는 항목이 채워지기 전 폭으로 굳는다).
+            Picker("과목", selection: Bindable(recording).subjectChoice) {
+                Text("자동 (시간표)").tag(SubjectChoice.automatic)
+                ForEach(recording.availableSubjects()) { subject in
+                    Text(subject.name).tag(SubjectChoice.subject(subject.persistentModelID))
+                }
+                Text("미분류").tag(SubjectChoice.unclassified)
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(width: 200)
+            .accessibilityIdentifier("subjectChoice")
+        }
+        Rectangle().fill(Design.Palette.fill).frame(height: 1)
+
         if !recording.isPermissionDenied {
             micCheck
         }
@@ -96,12 +117,20 @@ struct RecordingIdleSection: View {
 
     private var micCheck: some View {
         VStack(spacing: Design.Spacing.xs) {
-            Button(recording.isPreviewing ? "확인 중…" : "마이크 확인") {
-                Task { await recording.startPreview() }
+            HStack {
+                Label("마이크: \(recording.inputDeviceName ?? "시스템 기본")", systemImage: "mic")
+                    .designText(.caption)
+                    .foregroundStyle(Design.Palette.ink)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("inputDevice")
+                Spacer()
+                Button(recording.isPreviewing ? "확인 중…" : "마이크 확인") {
+                    Task { await recording.startPreview() }
+                }
+                .buttonStyle(.pillSecondaryCompact)
+                .disabled(recording.isPreviewing)
+                .accessibilityIdentifier("checkMicrophone")
             }
-            .buttonStyle(.pillSecondary)
-            .disabled(recording.isPreviewing)
-            .accessibilityIdentifier("checkMicrophone")
             if recording.isPreviewing {
                 InputLevelBar(level: recording.previewLevel)
                     .accessibilityIdentifier("previewLevel")
