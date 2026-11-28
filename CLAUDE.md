@@ -123,3 +123,10 @@ open "$(xcodebuild -scheme LectureRecorder -showBuildSettings | awk '/ BUILT_PRO
 - `.claude/skills`(Swift 동시성·SwiftUI·프로토콜 DI 테스트·actor 저장), `.claude/agents`(swift-reviewer, swift-build-resolver, silent-failure-hunter), `.claude/rules`(Swift 코딩·패턴·테스트)는 Everything Claude Code(MIT)에서 가져온 참고 도구다. 출처는 `.claude/ECC-NOTICE.md`.
 - 이 파일, DESIGN.md, REQUIREMENTS.md와 충돌하면 항상 이 저장소 규칙이 우선이다. 예: 강조색·그림자는 DESIGN.md, 비밀값은 Keychain, 받아쓰기·요약·유료 API 금지.
 - 코드 리뷰 때 swift-reviewer와 silent-failure-hunter(삼켜진 오류 찾기)를 쓰면 좋다. 녹음 앱이라 조용히 실패하는 코드가 가장 위험하다.
+
+## 모든 요청에 자동 적용 (2026-11-28 사용자 결정)
+작업 요청을 받으면 바로 시작하기 전에 항상 다음을 먼저 한다.
+1. `.claude/skills/prompt-optimizer`의 방식으로 요청을 속으로 다듬는다: 의도, 빠진 맥락(대상 파일·완료 기준), 이 저장소 규칙(CLAUDE.md, DESIGN.md, 새 기능은 시안 먼저)을 채운다. 사용자에게 되묻느라 멈추지 않고, 가장 그럴듯한 해석으로 진행한다.
+2. `.claude/skills`, `.claude/agents`에서 맞는 것을 찾아 쓴다(예: Swift 코드 → swift-reviewer·swift-concurrency-6-2, 오류 삼킴 점검 → silent-failure-hunter).
+3. 해석이 애매했으면 답장에 "이렇게 이해하고 했어요"를 한 줄 적는다. 다듬은 프롬프트 전문은 보여주지 않는다.
+이 규칙도 CLAUDE.md의 다른 규칙(기능 범위, 디자인 먼저 확인, 녹음 안정성)을 넘지 못한다.
