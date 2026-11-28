@@ -146,9 +146,16 @@ struct RecordingFilesSettingsView: View {
                 .buttonStyle(.pillSecondaryCompact)
                 .disabled(health.isRetrying || isRecording)
         case .unrecovered:
-            // 남은 기록은 다음에 앱을 켤 때 다시 시도한다. 지금은 파일을 직접 찾아볼 수 있게 폴더를 연다.
-            Button("파일 위치 보기") { openRecordingsFolder() }
-                .buttonStyle(.pillSecondaryCompact)
+            // 남은 기록은 다음에 앱을 켤 때도 다시 시도한다. 녹음 중에는 지금 녹음의 기록을 건드리지 않게 막는다.
+            HStack(spacing: Design.Spacing.xs) {
+                Button("다시 시도") { health.retryRecoveryNow() }
+                    .buttonStyle(.pillCompact)
+                    .disabled(health.isRetrying || isRecording)
+                Button("파일 위치 보기") { openRecordingsFolder() }
+                    .buttonStyle(.pillSecondaryCompact)
+            }
+        case .checkFailed:
+            EmptyView()
         }
     }
 

@@ -65,17 +65,27 @@ public struct RecordingCompressor {
     }
 
     /// 아직 압축되지 않았고 지금 압축 중도 아닌 녹음의 수와 CAF 파일 크기 합. 설정·목록의 "압축하지 못한 녹음" 알림에 쓴다.
-    public func uncompressedSummary() -> (count: Int, bytes: Int64) {
+    /// 압축을 기다리는(진행 중이 아닌) 녹음 수와 크기. DB를 읽지 못하면 nil이라, 화면이 "모두 잘 저장돼 있어요"로 잘못 보이지 않는다.
+    public func uncompressedSummary() -> StorageHealth.UncompressedSummary? {
         let pending: [Recording]
         do {
             pending = try context.fetch(FetchDescriptor<Recording>()).filter { RecordingStorage.isWorkingPath($0.relativePath) }
         } catch {
             Log.recording.error("압축 안 된 녹음 조회 실패: \(error.localizedDescription, privacy: .public)")
-            return (0, 0)
+            return nil
         }
         let waiting = pending.filter { !tracker.isActive($0.persistentModelID) }
-        let bytes = waiting.reduce(Int64(0)) { $0 + (files.fileSize(at: storage.url(for: $1.relativePath)) ?? 0) }
-        return (waiting.count, bytes)
+        var bytes: Int64 = 0
+        var unknown = 0
+        for recording in waiting {
+            if let size = files.fileSize(at: storage.url(for: recording.relativePath)) {
+                bytes += size
+            } else {
+                unknown += 1
+            }
+        }
+        if unknown > 0 { Log.recording.notice("압축 안 된 녹음 \(unknown, privacy: .public)개의 크기를 읽지 못함") }
+        return StorageHealth.UncompressedSummary(count: waiting.count, bytes: bytes, unknownSizes: unknown)
     }
 
     /// 이미 있는 압축본이 원본 CAF 길이를 다 담았으면 그 길이(초)를, 아니거나 잴 수 없으면 nil을 돌려준다.

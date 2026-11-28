@@ -50,6 +50,15 @@ final class AppDependencies {
     let transcription: TranscriptionCenter
 
     /// 알림 버튼으로 녹음을 시작하지 못했을 때 창을 보여 준다. Dock 아이콘을 누른 것과 같아서, 창이 닫혀 있어도 다시 열린다.
+    /// 앱이 꺼졌다 켜지며 되살린 녹음을 알린다. 여러 개면 개수도 함께 알린다.
+    private static func recoveryNotice(for recovered: [Recording]) -> String? {
+        guard let first = recovered.first else { return nil }
+        if recovered.count == 1 {
+            return "이전에 녹음 중 앱이 꺼져서 '\(first.title)'을 되살렸습니다. 끝부분이 없을 수 있습니다."
+        }
+        return "이전에 앱이 꺼져서 녹음 \(recovered.count)개('\(first.title)' 외 \(recovered.count - 1)개)를 되살렸습니다. 끝부분이 없을 수 있습니다."
+    }
+
     private static func bringAppToFront() {
         // 이미 열려 있거나 Dock에 내려가 있는 창은 바로 앞으로 가져온다. 노치 패널 같은 보조 창은 건드리지 않는다.
         let windows = NSApp.windows.filter { $0.canBecomeMain && !($0 is NSPanel) && $0.styleMask.contains(.titled) }
@@ -195,16 +204,16 @@ final class AppDependencies {
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             MainActor.assumeIsolated { mediaKeys.publish() }
         }
-        let recoveryReport = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal).recoverAll()
-        recoveryNotice = recoveryReport.recovered.first.map {
-            "이전에 녹음 중 앱이 꺼져서 '\($0.title)'을 되살렸습니다. 끝부분이 없을 수 있습니다."
-        }
+        let recovery = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal)
+        let recoveryReport = recovery.recoverAll()
+        recoveryNotice = Self.recoveryNotice(for: recoveryReport.recovered)
+        let recoveryReason = recoveryReport.firstError?.localizedDescription
         if recoveryReport.failed > 0 {
             // 실패한 기록은 저널에 남아 다음 실행 때 다시 시도한다. 일부만 실패해도 알린다.
-            Log.recording.error("녹음 복구 실패 \(recoveryReport.failed, privacy: .public)건")
-            problems.append("꺼진 녹음 \(recoveryReport.failed)개를 되살리지 못했습니다. 설정 > 녹음 파일에서 확인해 주세요.")
+            Log.recording.error("녹음 복구 실패 \(recoveryReport.failed, privacy: .public)건: \(recoveryReason ?? "", privacy: .public)")
+            problems.append("꺼진 녹음 \(recoveryReport.failed)개를 되살리지 못했습니다(\(recoveryReason ?? "이유 모름")). 설정 > 녹음 파일에서 다시 시도할 수 있어요.")
         }
-        storageHealth.setUnrecovered(recoveryReport.failed)
+        storageHealth.setUnrecovered(recoveryReport.failed, reason: recoveryReason)
         let migrator = RecordingMigrator(context: container.mainContext, storage: storage)
         // 예전 폴더 구조의 녹음을 학기/과목 폴더로 옮긴다. 복사해 확인한 뒤에만 원본을 지우고, 실패하면 그대로 둔다.
         // 옮기고 남은 빈 예전 폴더는 정리한다. 녹음이 막 시작된 폴더를 지우지 않도록 녹음 중이면 건너뛴다.
@@ -218,6 +227,15 @@ final class AppDependencies {
             if report.moved > 0, !recording.isRecording { storage.removeEmptyFolders() }
             library.reload()
             return report.failed
+        }
+        storageHealth.retryRecovery = {
+            // 녹음 중이거나 저장 실패한 녹음이 남아 있으면 그 기록을 "꺼진 녹음"으로 잘못 되살리지 않게 건너뛴다.
+            guard !recording.isRecording, recording.saveFailure == nil else {
+                return (storageHealth.unrecoveredCount, "녹음을 끝내고 저장한 뒤 다시 시도해 주세요")
+            }
+            let report = recovery.recoverAll()
+            if !report.recovered.isEmpty { library.reload() }
+            return (report.failed, report.firstError?.localizedDescription)
         }
         let subjects = subjects
         let schedule = schedule

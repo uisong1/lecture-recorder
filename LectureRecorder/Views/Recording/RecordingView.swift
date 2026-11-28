@@ -58,7 +58,7 @@ struct RecordingView: View {
         VStack(alignment: .leading, spacing: Design.Spacing.md) {
             ScreenHeader("녹음", subtitle: screenSubtitle)
             if let failure = recording.saveFailure {
-                WarningNote(title: UnsavedRecordingNotice.title, detail: UnsavedRecordingNotice.detail, isStrong: true) {
+                WarningNote(title: failure.title, detail: failure.detail, isStrong: true) {
                     Button("다시 저장") { recording.retrySave() }
                         .buttonStyle(.pillCompact)
                         .accessibilityIdentifier("retrySaveRecording")
@@ -135,7 +135,7 @@ struct RecordingView: View {
             }
 
             // 저장 실패는 위의 사라지지 않는 알림이 보여 주므로 같은 문구를 두 번 보이지 않는다.
-            if let message = recording.errorMessage, recording.saveFailure == nil || !message.hasPrefix("녹음을 저장하지 못했습니다") {
+            if let message = recording.displayedErrorMessage {
                 Label(message, systemImage: "exclamationmark.triangle")
                     .designText(.caption)
                     .foregroundStyle(Design.Palette.danger)

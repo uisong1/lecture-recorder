@@ -21,6 +21,17 @@ final class FailingRecordingJournal: RecordingJournaling, @unchecked Sendable {
     func clearUnsaved(relativePath: String) {}
 }
 
+/// 저장은 되지만 앞 녹음을 따로 보관하지는 못하는 저널.
+final class KeepFailingJournal: RecordingJournaling, @unchecked Sendable {
+    private var current: PendingRecording?
+    func load() -> PendingRecording? { current }
+    func save(_ pending: PendingRecording) throws { current = pending }
+    func clear() { current = nil }
+    func keepUnsaved(_ pending: PendingRecording) throws { throw CocoaError(.fileWriteOutOfSpace) }
+    func loadUnsaved() -> [PendingRecording] { [] }
+    func clearUnsaved(relativePath: String) {}
+}
+
 /// 테스트에서 시간을 마음대로 흘리는 시계.
 @MainActor
 final class TestClock {
@@ -135,10 +146,11 @@ final class TestClock {
         #expect(stoppedCount == 1)
         #expect(journal.load()?.relativePath == path)
 
-        // 다시 저장도 실패하면 알림은 그대로 남는다.
+        // 다시 저장도 실패하면 알림은 그대로 남고, 알림 안에 다시 실패한 이유를 보인다.
         controller.retrySave()
-        #expect(controller.saveFailure != nil)
-        #expect(controller.errorMessage != nil)
+        #expect(controller.saveFailure?.retryFailed == true)
+        #expect(controller.saveFailure?.detail.contains("다시 저장하지 못했어요") == true)
+        #expect(controller.displayedErrorMessage == nil)
 
         gate.fails = false
         controller.retrySave()
@@ -171,6 +183,56 @@ final class TestClock {
         #expect(journal.load()?.relativePath == secondPath)
         #expect(!journal.loadUnsaved().contains { $0.relativePath == firstPath })
         #expect(controller.isRecording)
+    }
+
+    @Test func 저장하지_못한_녹음이_또_생기면_앞_녹음을_덮어쓰지_않고_함께_다시_저장한다() async throws {
+        let gate = SaveGate()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock, saveContext: { context in
+            if gate.fails { throw CocoaError(.fileWriteUnknown) }
+            try context.save()
+        })
+        gate.fails = true
+        try await controller.start()
+        let firstPath = try #require(controller.currentRelativePath)
+        #expect(throws: RecordingError.self) { try controller.stop() }
+        clock.advance(by: 120)
+        try await controller.start()
+        let secondPath = try #require(controller.currentRelativePath)
+        #expect(throws: RecordingError.self) { try controller.stop() }
+
+        #expect(controller.saveFailure?.recordings.map(\.relativePath) == [firstPath, secondPath])
+        #expect(controller.saveFailure?.title == "녹음 2개의 정보를 저장하지 못했어요")
+
+        gate.fails = false
+        controller.retrySave()
+
+        #expect(controller.saveFailure == nil)
+        let saved = try container.mainContext.fetch(FetchDescriptor<Recording>()).map(\.relativePath)
+        #expect(Set(saved) == [firstPath, secondPath])
+        #expect(journal.load() == nil)
+        #expect(journal.loadUnsaved().isEmpty)
+    }
+
+    @Test func 앞_녹음의_저널을_보관하지_못하면_되살리기_경고를_계속_보인다() async throws {
+        let gate = SaveGate()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let keeping = KeepFailingJournal()
+        let controller = makeController(at: clock.now, clock: clock, journal: keeping, saveContext: { context in
+            if gate.fails { throw CocoaError(.fileWriteUnknown) }
+            try context.save()
+        })
+        gate.fails = true
+        try await controller.start()
+        #expect(throws: RecordingError.self) { try controller.stop() }
+        gate.fails = false
+        clock.advance(by: 60)
+
+        try await controller.start()
+
+        #expect(controller.recoveryJournalFailed)
+        controller.addBookmark()
+        #expect(controller.recoveryJournalFailed)
     }
 
     @Test func 녹음기가_스스로_끝난_뒤_정지하면_파일_크기로_길이를_본다() async throws {
