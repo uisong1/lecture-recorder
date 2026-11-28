@@ -310,3 +310,64 @@ extension Color {
         })
     }
 }
+
+/// 녹음·전사·모든 녹음 화면이 함께 쓰는 틀 (2026-11-28 정렬 시안 A).
+/// 같은 왼쪽 여백에서 큰 제목 → 회색 요약 → 오른쪽 버튼, 그 아래 내용. 탭을 바꿔도 제목과 카드 왼쪽 끝이 같다.
+enum ScreenLayout {
+    /// 화면 안 좌우 여백.
+    static let horizontalPadding: CGFloat = 28
+    static let topPadding: CGFloat = 24
+    /// 내용 최대 폭. 넓은 창에서도 줄이 너무 길어지지 않게 하고, 왼쪽 정렬로 둔다.
+    static let maxContentWidth: CGFloat = 760
+}
+
+/// 화면 맨 위 머리: 큰 제목, 회색 요약 한 줄, 오른쪽 버튼들.
+struct ScreenHeader<Trailing: View>: View {
+    let title: String
+    let subtitle: String?
+    let trailing: Trailing
+    var titleID: String?
+
+    init(_ title: String, subtitle: String? = nil, titleID: String? = nil, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.subtitle = subtitle
+        self.titleID = titleID
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Design.Spacing.sm) {
+            VStack(alignment: .leading, spacing: Design.Spacing.xxs) {
+                Text(title)
+                    .designText(.displayLg)
+                    .foregroundStyle(Design.Palette.ink)
+                    .lineLimit(2)
+                    .accessibilityIdentifier(titleID ?? "screenTitle")
+                if let subtitle {
+                    Text(subtitle)
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.inkMuted)
+                }
+            }
+            Spacer(minLength: Design.Spacing.sm)
+            HStack(spacing: Design.Spacing.xs) { trailing }
+        }
+    }
+}
+
+extension ScreenHeader where Trailing == EmptyView {
+    init(_ title: String, subtitle: String? = nil, titleID: String? = nil) {
+        self.init(title, subtitle: subtitle, titleID: titleID) { EmptyView() }
+    }
+}
+
+extension View {
+    /// 화면 내용을 공통 틀(왼쪽 정렬, 같은 여백, 최대 폭)에 놓는다.
+    func screenColumn() -> some View {
+        frame(maxWidth: ScreenLayout.maxContentWidth, alignment: .topLeading)
+            .padding(.horizontal, ScreenLayout.horizontalPadding)
+            .padding(.top, ScreenLayout.topPadding)
+            .padding(.bottom, Design.Spacing.lg)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}
