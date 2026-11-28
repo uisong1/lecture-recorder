@@ -126,7 +126,8 @@ struct RecordingListView: View {
         .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
             rowMenu(for: ids)
         } primaryAction: { ids in
-            if ids.count == 1, let recording = recording(for: ids) { play(recording) }
+            // 펼친 줄은 전사 문장 더블클릭이 줄 재생/일시정지로 번지지 않게 더블클릭 재생을 받지 않는다(재생 버튼은 그대로).
+            if ids.count == 1, let recording = recording(for: ids), !expansion.isExpanded(recording.persistentModelID) { play(recording) }
         }
     }
 

@@ -104,7 +104,6 @@ struct SidebarView: View {
                         .fill(isSelected ? Design.Palette.onPrimary : Design.Palette.ink)
                         .frame(width: 6, height: 6)
                         .accessibilityHidden(true)
-                        .accessibilityIdentifier("sidebar-unplayed-dot")
                 }
                 Spacer(minLength: Design.Spacing.xxs)
                 if let count, count > 0 {
