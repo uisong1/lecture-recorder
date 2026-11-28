@@ -56,6 +56,27 @@ struct RecordingListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    /// 시안 02: 과목 이름과 "녹음 12개 · 안 들은 녹음 2개".
+    private var listHeader: some View {
+        let unplayed = library.recordings.filter(\.isUnplayed).count
+        return VStack(alignment: .leading, spacing: Design.Spacing.xxs) {
+            Text(listTitle)
+                .designText(.displayLg)
+                .foregroundStyle(Design.Palette.ink)
+            Text("녹음 \(library.recordings.count)개" + (unplayed > 0 ? " · 안 들은 녹음 \(unplayed)개" : ""))
+                .designText(.caption)
+                .foregroundStyle(Design.Palette.inkMuted)
+        }
+    }
+
+    private var listTitle: String {
+        switch library.selection {
+        case .subject(let id): library.subjects.first { $0.persistentModelID == id }?.name ?? "과목"
+        case .unclassified: RecordingStorage.unclassifiedFolder
+        case .all, nil: "모든 녹음"
+        }
+    }
+
     private var emptyDescription: String {
         switch library.selection {
         case .unclassified: "시간표에 없는 시간에 녹음하면 여기에 모여요."
