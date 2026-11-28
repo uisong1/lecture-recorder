@@ -2,6 +2,8 @@ import Foundation
 import Testing
 @testable import LectureCore
 
+#if canImport(SwiftData)
+@MainActor
 @Suite struct PlaybackPanelVisibilityTests {
     let player = FakeAudioPlayer()
     let root = URL(filePath: "/tmp/LectureRecorderTests/Recordings", directoryHint: .isDirectory)
