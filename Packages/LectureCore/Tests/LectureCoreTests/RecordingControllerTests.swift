@@ -131,7 +131,8 @@ final class TestClock {
 
         #expect(controller.saveFailure?.relativePath == path)
         #expect(controller.lastSaved == nil)
-        #expect(stoppedCount == 0)
+        // 녹음은 끝났으니 정지 뒤 처리(전사 재개 등)는 한다.
+        #expect(stoppedCount == 1)
         #expect(journal.load()?.relativePath == path)
 
         // 다시 저장도 실패하면 알림은 그대로 남는다.
@@ -184,6 +185,8 @@ final class TestClock {
         let saved = try controller.stop()
 
         #expect(abs(saved.duration - 300) < 1)
+        // 사용자가 직접 멈춘 것이니 "녹음기가 멈춰 저장했어요" 안내는 띄우지 않는다.
+        #expect(controller.recorderStallNotice == nil)
     }
 
     @Test func 임시_저장소면_녹음_화면에서_처음_시작할_때_한_번만_묻는다() async throws {

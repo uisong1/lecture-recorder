@@ -93,6 +93,8 @@ public final class RecordingController {
     /// 임시 저장소 상태에서 녹음 화면의 시작 버튼을 처음 눌렀을 때 띄우는 확인. 확인하면 녹음한다.
     public private(set) var temporaryStorePrompt = false
     private var temporaryStoreAcknowledged = false
+    /// 저장 실패한 녹음을 "다시 저장"으로 저장했을 때 불린다. 목록을 다시 읽는 데 쓴다.
+    public var onSaveRetried: (@MainActor () -> Void)?
     /// 정지 뒤 압축이 한 건 끝날 때마다 불린다(성공·실패 모두). 저장 상태 알림을 다시 세는 데 쓴다.
     public var onCompressionFinished: (@MainActor () -> Void)?
     public var errorMessage: String?
@@ -642,20 +644,21 @@ public final class RecordingController {
     @discardableResult
     public func stop() throws(RecordingError) -> Recording {
         // 녹음기가 인코딩 오류 등으로 스스로 끝났다면(멈춤 감지 전이라도) 경과 시간을 믿지 말고 파일 크기로 길이를 본다.
-        try finishRecording(recorderStalled: recorder.hasEnded)
+        try finishRecording(recorderStalled: false, measureFromFile: recorder.hasEnded)
     }
 
     /// 멈춘 녹음을 이어 녹음한 파일의 제목 끝에 붙는다. 같은 수업의 앞 파일과 같은 과목 목록에서 이어져 보인다.
     public static let continuationTitleSuffix = " (이어서)"
 
     /// 녹음을 닫고 저장한다. 녹음기가 멈춘 경우 `currentTime`이 0으로 돌아갈 수 있으니 실제 파일 크기로 길이를 어림한다.
-    private func finishRecording(recorderStalled: Bool) throws(RecordingError) -> Recording {
+    /// - Parameter measureFromFile: 녹음기가 비정상으로 끝나 경과 시간을 믿을 수 없으면 true. 멈춤 안내 없이 길이만 파일 크기로 본다.
+    private func finishRecording(recorderStalled: Bool, measureFromFile: Bool = false) throws(RecordingError) -> Recording {
         guard let startedAt = state.startedAt, let relativePath = currentRelativePath else {
             throw .notRecording
         }
         stallResumeNotice = nil
         var duration = recorder.stop()
-        if recorderStalled {
+        if recorderStalled || measureFromFile {
             let bytes = files.fileSize(at: storage.url(for: relativePath)) ?? 0
             duration = max(duration, Double(bytes) * 8 / RecordingRecovery.workingBitsPerSecond)
         }
@@ -703,6 +706,8 @@ public final class RecordingController {
             // 파일은 이미 디스크에 있고 저널도 남아 있어 다음 실행 때 복구된다. "다시 저장"할 때까지 화면에 남긴다.
             Log.recording.fault("녹음 메타데이터 저장 실패 \(relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
             saveFailure = UnsavedRecordingNotice(recording: recording, reason: error.localizedDescription)
+            // 녹음 자체는 끝났으므로 전사 재개·알림 재예약 같은 정지 뒤 처리는 그대로 한다.
+            onStopped?()
             throw .saveFailed(error.localizedDescription)
         }
         saveFailure = nil
@@ -735,7 +740,8 @@ public final class RecordingController {
         if journal?.load()?.relativePath == recording.relativePath { journal?.clear() }
         journal?.clearUnsaved(relativePath: recording.relativePath)
         if !isRecording { lastSaved = recording }
-        onStopped?()
+        // 정지 뒤 처리(onStopped)는 정지할 때 이미 했다. 새 녹음 중이면 전사를 다시 켜면 안 된다.
+        onSaveRetried?()
         startCompression(of: recording)
     }
 

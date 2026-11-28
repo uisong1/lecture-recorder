@@ -44,6 +44,8 @@ struct SettingsView: View {
                 .tag("lms")
         }
         .frame(width: 560, height: 560)
+        // 다른 화면에서 "녹음 파일" 탭으로 열었더라도 다음에는 평소처럼 첫 탭으로 연다.
+        .onDisappear { selectedTab = SettingsTab.general }
     }
 }
 

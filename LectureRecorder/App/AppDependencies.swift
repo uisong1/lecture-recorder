@@ -294,6 +294,7 @@ final class AppDependencies {
             }
         }
         recording.isUsingTemporaryStore = usesTemporaryStore
+        recording.onSaveRetried = { library.reload() }
         let transcription = TranscriptionCenter(
             context: context,
             storage: storage,
