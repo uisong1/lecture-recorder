@@ -537,3 +537,8 @@
 - 저장: 전사 결과는 녹음 옆 파일이 아니라 SwiftData `Recording.transcriptData`(`.externalStorage`, JSON)에 둔다. TODO 5-2는 "녹음 옆 파일"이었지만, 과목 이동·이름 변경·학기 폴더 이동 때 파일을 함께 옮겨야 하는 문제가 없고 녹음 폴더를 건드리지 않아 더 안전하다. 기본값 nil 속성 추가라 경량 마이그레이션.
 - 안 쓴 것: 앱 안 Swift 패키지 `qwen3-asr-swift`는 Xcode 프로젝트에 MLX Swift 의존성을 더하고 한국어 품질을 다시 확인해야 해서 뒤로 미뤘다. 사용자가 확인한 품질을 그대로 얻는 도우미 방식을 먼저 쓴다.
 - 압축 전(.caf) 녹음과 녹음 중인 파일은 전사 목록에서 뺀다(압축이 끝나면 경로가 바뀜).
+
+## 2026-11-28. ECC 에이전트·skill을 PR 흐름에 고정한다
+- 결정: CLAUDE.md "ECC 활용 규칙"에 5가지를 넣었다. 모든 PR은 swift-reviewer 리뷰, 녹음·저장·전사 PR은 silent-failure-hunter 추가, macOS CI가 깨지면 swift-build-resolver, 기능·버그 수정은 테스트 먼저, 공개 문구는 brand-discovery·brand-voice로 후보만 만들어 TODO "확인 필요"에 제안.
+- 이유: 사용자가 "5가지 다 적용"이라고 했다. 녹음 앱은 조용한 실패가 가장 위험해서 리뷰를 머지 조건에 넣는 효과가 크다.
+- 첫 적용: 앱 이름·한 줄 소개 후보 5개를 TODO "확인 필요"에 올렸다(정하는 건 사용자).
