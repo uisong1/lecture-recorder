@@ -505,3 +505,7 @@
 ## 2026-11-28. ECC 마케팅 도구도 일단 보관해 둔다
 - 결정: 사용자가 "마케팅은 일단 넣어두자"고 해서 skills(marketing-campaign, brand-voice, brand-discovery, content-engine, seo), agents(marketing-agent, seo-specialist), command(marketing-campaign)를 `.claude/`에 추가했다. 글을 외부에 올리는 social-publisher, crosspost, x-api 등은 넣지 않았다.
 - 이유: 지금 앱 개발에는 쓰지 않지만 나중에 소개글·홍보 문구가 필요할 때 쓸 수 있다. 유료 API와 외부 게시는 쓰지 않는다는 규칙은 그대로다.
+
+## 2026-11-28. ECC prompt-optimizer skill 추가
+- 결정: 사용자가 요청해 `prompt-optimizer`를 `.claude/skills/`에 넣었다. 말을 다듬어 붙여넣을 프롬프트로 바꿔 주는 조언 전용 skill이며 작업은 실행하지 않는다.
+- 한계: "프롬프트 다듬어줘"처럼 부를 때만 동작하고 모든 말에 자동 적용되지 않는다. 안에 나오는 ECC 명령(/tdd 등)은 우리 저장소에 없다.

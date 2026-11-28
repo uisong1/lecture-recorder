@@ -27,6 +27,7 @@ SOFTWARE.
 ## 가져온 것
 - skills: swift-actor-persistence, swift-concurrency-6-2, swift-protocol-di-testing, swiftui-patterns
 - agents: swift-reviewer, swift-build-resolver, silent-failure-hunter
+- skills(prompt-optimizer, 2026-11-28 사용자 요청)
 - skills(마케팅, 2026-11-28 사용자 요청으로 보관): marketing-campaign, brand-voice, brand-discovery, content-engine, seo
 - agents(마케팅): marketing-agent, seo-specialist / commands: marketing-campaign
 - rules: swift-coding-style, swift-patterns, swift-testing (rules/swift에서 "common 확장" 문구만 뺌)
