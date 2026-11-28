@@ -15,6 +15,10 @@ final class CompressionTracker {
     func end(_ id: PersistentIdentifier) {
         active.remove(id)
     }
+
+    func isActive(_ id: PersistentIdentifier) -> Bool {
+        active.contains(id)
+    }
 }
 
 /// 정지한 녹음(CAF)을 m4a로 압축해 `Recording`의 경로를 바꾼다.
@@ -58,6 +62,20 @@ public struct RecordingCompressor {
             done += 1
         }
         return done
+    }
+
+    /// 아직 압축되지 않았고 지금 압축 중도 아닌 녹음의 수와 CAF 파일 크기 합. 설정·목록의 "압축하지 못한 녹음" 알림에 쓴다.
+    public func uncompressedSummary() -> (count: Int, bytes: Int64) {
+        let pending: [Recording]
+        do {
+            pending = try context.fetch(FetchDescriptor<Recording>()).filter { RecordingStorage.isWorkingPath($0.relativePath) }
+        } catch {
+            Log.recording.error("압축 안 된 녹음 조회 실패: \(error.localizedDescription, privacy: .public)")
+            return (0, 0)
+        }
+        let waiting = pending.filter { !tracker.isActive($0.persistentModelID) }
+        let bytes = waiting.reduce(Int64(0)) { $0 + (files.fileSize(at: storage.url(for: $1.relativePath)) ?? 0) }
+        return (waiting.count, bytes)
     }
 
     /// 이미 있는 압축본이 원본 CAF 길이를 다 담았으면 그 길이(초)를, 아니거나 잴 수 없으면 nil을 돌려준다.

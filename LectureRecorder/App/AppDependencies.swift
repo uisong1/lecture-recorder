@@ -42,6 +42,10 @@ final class AppDependencies {
     let storeBackup: StoreBackup?
     /// 녹음 폴더. 설정에서 위치를 보여 주고 열어 준다.
     let storage: RecordingStorage
+    /// 압축·폴더 정리·되살리기 실패를 모아 설정과 모든 녹음 화면에 보인다.
+    let storageHealth: StorageHealth
+    /// DB를 열지 못해 메모리 저장소로 켜졌는지.
+    let usesTemporaryStore: Bool
     /// 사이드바 "전사" 탭: 녹음이 끝난 뒤 Qwen3-ASR로 글로 바꾸는 대기열. 녹음 중에는 멈춘다.
     let transcription: TranscriptionCenter
 
@@ -69,7 +73,10 @@ final class AppDependencies {
         var problems: [String] = []
         let storeBackup = Self.makeStoreBackup()
         self.storeBackup = storeBackup
-        let container = Self.makeContainer(problems: &problems, backup: storeBackup)
+        let (container, usesTemporaryStore) = Self.makeContainer(problems: &problems, backup: storeBackup)
+        self.usesTemporaryStore = usesTemporaryStore
+        let storageHealth = StorageHealth()
+        self.storageHealth = storageHealth
         // UI 테스트에서는 사용자의 실제 휴지통 대신 임시 폴더로 옮긴다.
         let files: any FileStoring = Self.isUITesting
             ? LocalFileStore(trashDirectory: FileManager.default.temporaryDirectory.appending(path: "LectureRecorder/FakeTrash", directoryHint: .isDirectory))
@@ -188,21 +195,29 @@ final class AppDependencies {
         Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
             MainActor.assumeIsolated { mediaKeys.publish() }
         }
-        do {
-            let recovery = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal)
-            recoveryNotice = try recovery.recoverIfNeeded().map {
-                "이전에 녹음 중 앱이 꺼져서 '\($0.title)'을 되살렸습니다. 끝부분이 없을 수 있습니다."
-            }
-        } catch {
-            Log.recording.error("녹음 복구 실패: \(error.localizedDescription, privacy: .public)")
-            problems.append("꺼진 녹음을 되살리지 못했습니다: \(error.localizedDescription)")
-            recoveryNotice = nil
+        let recoveryReport = RecordingRecovery(context: container.mainContext, storage: storage, journal: journal).recoverAll()
+        recoveryNotice = recoveryReport.recovered.first.map {
+            "이전에 녹음 중 앱이 꺼져서 '\($0.title)'을 되살렸습니다. 끝부분이 없을 수 있습니다."
         }
+        if recoveryReport.failed > 0 {
+            // 실패한 기록은 저널에 남아 다음 실행 때 다시 시도한다. 일부만 실패해도 알린다.
+            Log.recording.error("녹음 복구 실패 \(recoveryReport.failed, privacy: .public)건")
+            problems.append("꺼진 녹음 \(recoveryReport.failed)개를 되살리지 못했습니다. 설정 > 녹음 파일에서 확인해 주세요.")
+        }
+        storageHealth.setUnrecovered(recoveryReport.failed)
         let migrator = RecordingMigrator(context: container.mainContext, storage: storage)
         // 예전 폴더 구조의 녹음을 학기/과목 폴더로 옮긴다. 복사해 확인한 뒤에만 원본을 지우고, 실패하면 그대로 둔다.
         // 옮기고 남은 빈 예전 폴더는 정리한다. 녹음이 막 시작된 폴더를 지우지 않도록 녹음 중이면 건너뛴다.
         Task {
-            if await migrator.migrateIfNeeded().moved > 0, !recording.isRecording { storage.removeEmptyFolders() }
+            let report = await migrator.migrateIfNeeded()
+            storageHealth.setUnmigrated(report.failed)
+            if report.moved > 0, !recording.isRecording { storage.removeEmptyFolders() }
+        }
+        storageHealth.retryMigration = {
+            let report = await migrator.migrateIfNeeded()
+            if report.moved > 0, !recording.isRecording { storage.removeEmptyFolders() }
+            library.reload()
+            return report.failed
         }
         let subjects = subjects
         let schedule = schedule
@@ -265,9 +280,20 @@ final class AppDependencies {
             }
         )
         if let compressor {
-            // 지난 실행에서 압축하지 못한 CAF 녹음(꺼졌거나 실패한 것)을 이어서 압축한다.
-            Task { await compressor.compressPending() }
+            // 지난 실행에서 압축하지 못한 CAF 녹음(꺼졌거나 실패한 것)을 이어서 압축한다. 끝나면 남은 개수를 알린다.
+            storageHealth.countUncompressed = { compressor.uncompressedSummary() }
+            storageHealth.retryCompression = {
+                await compressor.compressPending()
+                library.reload()
+            }
+            recording.onCompressionFinished = { storageHealth.refreshUncompressed() }
+            Task {
+                await compressor.compressPending()
+                storageHealth.refreshUncompressed()
+                library.reload()
+            }
         }
+        recording.isUsingTemporaryStore = usesTemporaryStore
         let transcription = TranscriptionCenter(
             context: context,
             storage: storage,
@@ -306,17 +332,18 @@ final class AppDependencies {
         return StoreBackup(storeURL: LectureModelContainer.defaultStoreURL(), backupsRoot: backupsRoot)
     }
 
-    private static func makeContainer(problems: inout [String], backup: StoreBackup?) -> ModelContainer {
+    /// 저장소를 연다. 열지 못하면 메모리 저장소로 켜고 두 번째 값으로 true를 돌려준다.
+    private static func makeContainer(problems: inout [String], backup: StoreBackup?) -> (ModelContainer, Bool) {
         // 저장소를 열기 전에 하루 한 번 복사해 둔다. 실패해도 앱은 켠다.
         backup?.backupIfNeeded()
         do {
-            return try LectureModelContainer.make(inMemory: isUITesting)
+            return (try LectureModelContainer.make(inMemory: isUITesting), false)
         } catch {
             Log.data.fault("저장소 열기 실패: \(error.localizedDescription, privacy: .public)")
         }
         do {
             problems.append(LectureModelContainer.openFailureNotice)
-            return try LectureModelContainer.make(inMemory: true)
+            return (try LectureModelContainer.make(inMemory: true), true)
         } catch {
             // 메모리 저장소조차 만들 수 없으면 앱을 계속할 방법이 없다.
             fatalError("메모리 저장소를 만들 수 없음: \(error)")

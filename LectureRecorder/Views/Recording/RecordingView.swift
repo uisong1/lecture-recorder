@@ -39,6 +39,16 @@ struct RecordingView: View {
         } message: {
             Text("\(Int(RecordingController.shortRecordingSeconds))초가 안 되는 녹음입니다. 저장할까요?")
         }
+        .alert(
+            "그래도 녹음할까요?",
+            isPresented: Binding(get: { recording.temporaryStorePrompt }, set: { if !$0 { recording.cancelTemporaryStorePrompt() } })
+        ) {
+            Button("취소", role: .cancel) { recording.cancelTemporaryStorePrompt() }
+            Button("녹음 시작") { Task { await recording.confirmTemporaryStoreAndStart() } }
+                .accessibilityIdentifier("confirmTemporaryStoreRecording")
+        } message: {
+            Text("소리 파일은 저장돼요. 제목·과목·북마크는 앱을 끄면 사라지니, 끝난 뒤 백업에서 되살리기를 해 주세요.")
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             recording.refreshPermission()
         }
@@ -58,6 +68,17 @@ struct RecordingView: View {
                     .buttonStyle(.pillSecondaryCompact)
                 }
                 .accessibilityIdentifier("saveFailureNotice")
+            }
+            if recording.isUsingTemporaryStore {
+                // 시안 safety-alerts 5번: 녹음은 막지 않되, 앱을 끄면 기록이 사라진다는 것을 녹음 전에 알린다.
+                WarningNote(
+                    title: "지금은 녹음 정보를 오래 보관하지 못해요",
+                    detail: "앱 자료를 열지 못해 임시로 켰어요. 녹음 소리 파일은 남지만, 제목·과목·북마크·메모는 앱을 끄면 사라져요.",
+                    isStrong: true
+                ) {
+                    OpenRecordingFilesSettingsButton(title: "백업에서 되살리기", isPrimary: true)
+                }
+                .accessibilityIdentifier("temporaryStoreNotice")
             }
             header
                 .designCard(padding: Design.Spacing.xl)
@@ -184,7 +205,7 @@ struct RecordButton: View {
 
     var body: some View {
         Button {
-            Task { await recording.toggle() }
+            Task { await recording.toggleFromRecordingScreen() }
         } label: {
             Label(recording.isRecording ? "녹음 정지" : "녹음 시작", systemImage: recording.isRecording ? "stop.fill" : "mic.fill")
                 .frame(maxWidth: isWide ? .infinity : nil)

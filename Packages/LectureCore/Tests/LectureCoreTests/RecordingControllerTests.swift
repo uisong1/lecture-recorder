@@ -186,6 +186,60 @@ final class TestClock {
         #expect(abs(saved.duration - 300) < 1)
     }
 
+    @Test func 임시_저장소면_녹음_화면에서_처음_시작할_때_한_번만_묻는다() async throws {
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        controller.isUsingTemporaryStore = true
+
+        await controller.toggleFromRecordingScreen()
+        #expect(controller.temporaryStorePrompt)
+        #expect(!controller.isRecording)
+
+        await controller.confirmTemporaryStoreAndStart()
+        #expect(!controller.temporaryStorePrompt)
+        #expect(controller.isRecording)
+
+        clock.advance(by: 600)
+        await controller.toggleFromRecordingScreen()
+        #expect(!controller.isRecording)
+        clock.advance(by: 60)
+        await controller.toggleFromRecordingScreen()
+        #expect(!controller.temporaryStorePrompt)
+        #expect(controller.isRecording)
+    }
+
+    @Test func 임시_저장소_확인을_닫으면_녹음하지_않고_다음에_다시_묻는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        controller.isUsingTemporaryStore = true
+
+        await controller.toggleFromRecordingScreen()
+        controller.cancelTemporaryStorePrompt()
+        #expect(!controller.temporaryStorePrompt)
+        #expect(!controller.isRecording)
+
+        await controller.toggleFromRecordingScreen()
+        #expect(controller.temporaryStorePrompt)
+    }
+
+    @Test func 임시_저장소여도_메뉴_막대_시작은_묻지_않고_녹음한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        controller.isUsingTemporaryStore = true
+
+        await controller.toggle()
+
+        #expect(controller.isRecording)
+        #expect(!controller.temporaryStorePrompt)
+    }
+
+    @Test func 평소에는_녹음_화면_시작도_묻지_않는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+
+        await controller.toggleFromRecordingScreen()
+
+        #expect(controller.isRecording)
+        #expect(!controller.temporaryStorePrompt)
+    }
+
     @Test func 권한_답을_기다리는_동안_또_시작하면_거부하고_녹음은_하나만_한다() async throws {
         let gate = GatedMicrophonePermission()
         let controller = makeController(at: date(2026, 3, 2, 10, 0), permission: gate)

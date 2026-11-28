@@ -88,6 +88,13 @@ public final class RecordingController {
     public private(set) var recoveryJournalFailed = false
     /// 녹음 중 잠자기 방지를 켜지 못했는지.
     public private(set) var sleepPreventionFailed = false
+    /// DB를 열지 못해 메모리 저장소로 켜졌는지. 이때는 앱을 끄면 제목·과목·북마크·메모가 사라진다(소리 파일은 남는다). 앱이 정한다.
+    public var isUsingTemporaryStore = false
+    /// 임시 저장소 상태에서 녹음 화면의 시작 버튼을 처음 눌렀을 때 띄우는 확인. 확인하면 녹음한다.
+    public private(set) var temporaryStorePrompt = false
+    private var temporaryStoreAcknowledged = false
+    /// 정지 뒤 압축이 한 건 끝날 때마다 불린다(성공·실패 모두). 저장 상태 알림을 다시 세는 데 쓴다.
+    public var onCompressionFinished: (@MainActor () -> Void)?
     public var errorMessage: String?
     /// 잠자기나 종료 때문에 녹음이 중단되어 저장됐을 때 보여줄 안내.
     public var interruptionNotice: String?
@@ -740,6 +747,7 @@ public final class RecordingController {
         compressionTask = Task {
             await previous?.value
             await compressor.compress(recording)
+            self.onCompressionFinished?()
         }
     }
 
@@ -850,6 +858,28 @@ public final class RecordingController {
         } catch {
             errorMessage = error.errorDescription
         }
+    }
+
+    /// 녹음 화면의 시작·정지 버튼. 임시 저장소로 켜진 상태에서 처음 시작할 때만 한 번 확인을 받는다.
+    /// 녹음을 막지는 않는다: 확인하면 바로 녹음하고, 메뉴 막대·알림의 시작은 묻지 않는다.
+    public func toggleFromRecordingScreen() async {
+        if !isRecording, !isStarting, isUsingTemporaryStore, !temporaryStoreAcknowledged {
+            temporaryStorePrompt = true
+            return
+        }
+        await toggle()
+    }
+
+    /// 임시 저장소 확인에서 "녹음 시작"을 눌렀다. 다시 묻지 않고 녹음한다.
+    public func confirmTemporaryStoreAndStart() async {
+        temporaryStorePrompt = false
+        temporaryStoreAcknowledged = true
+        await toggle()
+    }
+
+    /// 임시 저장소 확인을 닫는다. 다음에 누르면 다시 묻는다.
+    public func cancelTemporaryStorePrompt() {
+        temporaryStorePrompt = false
     }
 
     /// 방금 저장한 녹음과 같은 과목으로 새 파일에 바로 이어서 녹음한다 (실수로 멈췄거나, 수업 시간표 밖이라 자동 분류가 틀릴 때).

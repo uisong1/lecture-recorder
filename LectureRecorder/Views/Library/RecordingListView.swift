@@ -8,6 +8,7 @@ struct RecordingListView: View {
     let library: RecordingLibrary
     let playback: PlaybackController
     let manager: RecordingManager
+    let storageHealth: StorageHealth
 
     @State private var renaming: Recording?
     @State private var renameText = ""
@@ -33,6 +34,16 @@ struct RecordingListView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: Design.Spacing.md) {
             listHeader
+            if let line = storageHealth.libraryLine {
+                // 시안 safety-alerts 4번: 압축하지 못한 CAF는 용량을 계속 차지하므로 매일 보는 화면에서도 알린다.
+                WarningNote(title: line.title, detail: line.detail) {
+                    Button("다시 시도") { Task { await storageHealth.retryCompressionNow() } }
+                        .buttonStyle(.pillCompact)
+                        .disabled(storageHealth.isRetrying)
+                    OpenRecordingFilesSettingsButton(title: "자세히")
+                }
+                .accessibilityIdentifier("libraryUncompressedNotice")
+            }
             listControls
             Group {
                 if showsBookmarks {
