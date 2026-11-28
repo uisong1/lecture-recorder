@@ -230,7 +230,7 @@ struct RecordingListView: View {
     @ViewBuilder
     private func expandedTranscript(for recording: Recording) -> some View {
         if let transcript = recording.transcript {
-            InlineTranscriptView(recording: recording, transcript: transcript, playback: playback) {
+            InlineTranscriptView(recording: recording, transcript: transcript, playback: playback, canPlay: { manager.canPlay($0) }) {
                 transcriptRecording = recording
             }
         } else {

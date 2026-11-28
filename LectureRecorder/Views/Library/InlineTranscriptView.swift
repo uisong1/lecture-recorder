@@ -8,18 +8,20 @@ struct InlineTranscriptView: View {
     let recording: Recording
     let transcript: Transcript
     let playback: PlaybackController
+    /// 재생 전에 파일이 있는지 확인한다(없으면 목록 아래에 이유를 보인다).
+    let canPlay: (Recording) -> Bool
     /// "크게 보기": 지금의 전사 화면(텍스트로 저장 등)을 연다.
     let onOpenFull: () -> Void
 
     @State private var query = ""
-    @State private var copied = false
+    @State private var notice: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Design.Spacing.xs) {
             toolbar
             segmentList
             HStack {
-                Text(copied ? "전사 내용을 복사했어요." : "문장을 누르면 그 부분부터 재생돼요 · \(transcript.segments.count)문장")
+                Text(notice ?? "문장을 누르면 그 부분부터 재생돼요 · \(transcript.segments.count)문장")
                     .designText(.finePrint)
                     .foregroundStyle(Design.Palette.inkMuted)
                 Spacer()
@@ -63,8 +65,12 @@ struct InlineTranscriptView: View {
             .overlay(Capsule().strokeBorder(Design.Palette.border, lineWidth: 1))
             Button("복사") {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(transcript.plainText, forType: .string)
-                copied = true
+                if NSPasteboard.general.setString(transcript.plainText, forType: .string) {
+                    notice = "전사 내용을 복사했어요."
+                } else {
+                    Log.storage.error("전사 내용 복사 실패: \(recording.relativePath, privacy: .public)")
+                    notice = "복사하지 못했어요. 다시 시도해 주세요."
+                }
             }
             .buttonStyle(.pillSecondaryCompact)
             .accessibilityIdentifier("inlineTranscriptCopy")
@@ -107,6 +113,7 @@ struct InlineTranscriptView: View {
     private func segmentRow(_ index: Int, isCurrent: Bool) -> some View {
         let segment = transcript.segments[index]
         return Button {
+            guard canPlay(recording) else { return }
             if playback.current !== recording { playback.select(recording) }
             playback.seek(to: segment.start)
             if !playback.isPlaying { playback.play() }
