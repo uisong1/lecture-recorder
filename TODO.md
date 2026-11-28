@@ -318,7 +318,7 @@
 
 시안은 프로젝트 공유 폴더 `design-reference/d1-full/` 01~05. 기존 `accessibilityIdentifier`는 바꾸지 않는다(UI 테스트 유지). 동작은 바꾸지 않고 모양만 바꾼다. 위에서부터 순서대로.
 
-- [ ] **4-1. DESIGN.md를 D1으로 다시 쓰기** (문서)
+- [x] **4-1. DESIGN.md를 D1으로 다시 쓰기** (문서)
   - 완료 기준: 색(ink #1d1d1f, 회색 단계, 바탕 #f5f5f7, 흰 카드, 녹음 중 빨강 하나), 글꼴(Pretendard 400/600/700), 모서리, 버튼(검정 pill·흰 테두리 pill), 선택 상태(검정 바탕), 그림자 없음을 macOS 앱 기준으로 적는다. Apple 웹 분석 내용은 뺀다.
 - [ ] **4-2. 디자인 토큰을 흑백으로, Pretendard 넣기**
   - 완료 기준: `DesignSystem.swift`의 `primary`를 검정으로 바꾸고 파랑 토큰을 없앤다. Pretendard OTF(Regular·SemiBold·Bold)와 OFL 라이선스 파일을 앱 번들에 넣고(`ATSApplicationFontsPath`) 글자 토큰이 Pretendard를 쓴다. 글꼴을 못 읽으면 시스템 글꼴로 돌아간다. 녹음 중 빨강 토큰은 그대로. 버튼 스타일(주 버튼 검정 pill, 보조 흰 테두리 pill)을 토큰으로 둔다.
