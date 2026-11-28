@@ -134,9 +134,18 @@ extension View {
         font(style.font).tracking(style.tracking)
     }
 
-    /// 화면 바탕. 흰색과 파치먼트를 번갈아 써서 구역을 나눈다.
+    /// 화면 바탕. 창 바탕은 옅은 회색(parchment), 카드는 흰색(canvas).
     func designCanvas(_ color: Color = Design.Palette.canvas) -> some View {
         background(color)
+    }
+
+    /// 흰 카드: 1px 테두리, 모서리 18, 그림자 없음 (DESIGN.md "카드").
+    func designCard(padding: CGFloat = Design.Spacing.lg, radius: CGFloat = Design.Radius.lg) -> some View {
+        self
+            .padding(padding)
+            .frame(maxWidth: .infinity)
+            .background(Design.Palette.canvas, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Design.Palette.hairline, lineWidth: 1))
     }
 }
 

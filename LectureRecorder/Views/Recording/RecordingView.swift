@@ -21,6 +21,7 @@ struct RecordingView: View {
         VStack(spacing: 0) {
             ScrollView {
                 content
+                    .frame(maxWidth: 460)
                     .padding(Design.Spacing.xl)
                     .frame(maxWidth: .infinity)
             }
@@ -29,6 +30,7 @@ struct RecordingView: View {
                 RecordButton(recording: recording)
                     .padding(.vertical, Design.Spacing.md)
                     .frame(maxWidth: .infinity)
+                    .background(Design.Palette.parchment)
             }
             if playback.current != nil && !playback.isPanelHidden { PlaybackPanel(playback: playback, manager: manager, library: library) }
         }
@@ -52,8 +54,9 @@ struct RecordingView: View {
     }
 
     private var content: some View {
-        VStack(spacing: Design.Spacing.lg) {
+        VStack(spacing: Design.Spacing.md) {
             header
+                .designCard(padding: Design.Spacing.xl)
 
             if let device = recording.inputDeviceName {
                 Label("마이크: \(device)", systemImage: "mic")
@@ -90,11 +93,14 @@ struct RecordingView: View {
                 }
             }
 
-            if recording.isRecording {
-                RecordingActiveSection(recording: recording)
-            } else {
-                RecordingIdleSection(recording: recording, playback: playback, manager: manager, library: library, showsFirstRunGuide: showsFirstRunGuide)
+            VStack(spacing: Design.Spacing.sm) {
+                if recording.isRecording {
+                    RecordingActiveSection(recording: recording)
+                } else {
+                    RecordingIdleSection(recording: recording, playback: playback, manager: manager, library: library, showsFirstRunGuide: showsFirstRunGuide)
+                }
             }
+            .designCard(padding: Design.Spacing.md, radius: Design.Radius.group)
 
             if let message = recording.errorMessage {
                 Label(message, systemImage: "exclamationmark.triangle")
@@ -106,6 +112,7 @@ struct RecordingView: View {
             if let saved = recording.lastSaved, !recording.isRecording {
                 SavedRecordingSection(recording: recording, playback: playback, manager: manager, library: library, saved: saved)
                     .id(saved.persistentModelID)
+                    .designCard(padding: Design.Spacing.md, radius: Design.Radius.group)
             }
         }
     }
@@ -114,7 +121,7 @@ struct RecordingView: View {
         TimelineView(.periodic(from: .now, by: 0.5)) { _ in
             VStack(spacing: Design.Spacing.xs) {
                 Text(recording.isRecording ? recording.currentSubjectName + (recording.isPaused ? " (일시정지)" : "") : "녹음 대기")
-                    .designText(.tagline)
+                    .designText(.displayLg)
                     .foregroundStyle(Design.Palette.ink)
                     .accessibilityIdentifier("recordingSubject")
                 if recording.isRecording {
@@ -210,7 +217,7 @@ struct InputLevelBar: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(Design.Palette.inkMuted.opacity(0.2))
+                Capsule().fill(Design.Palette.fill)
                 Capsule()
                     .fill(Design.Palette.primary)
                     .frame(width: proxy.size.width * CGFloat(min(max(level, 0), 1)))
