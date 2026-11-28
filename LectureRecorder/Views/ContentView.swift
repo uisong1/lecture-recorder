@@ -61,6 +61,8 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 760, minHeight: 440)
+        // 시안처럼 창 위 막대에는 제목 없이 아이콘만 둔다. 화면 제목은 각 화면 안에 크게 보인다.
+        .navigationTitle("")
         .onChange(of: sidebar) { _, item in
             dependencies.library.reload()
             if case .library(let selection) = item {

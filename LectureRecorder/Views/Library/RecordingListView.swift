@@ -29,28 +29,62 @@ struct RecordingListView: View {
         withOverlays(withDialogs(withToolbar(content)))
     }
 
+    /// 시안 02: 위에 제목·요약, 그 아래 녹음/북마크·안 들은 것만·더 보기, 그 아래 흰 카드 목록.
     private var content: some View {
-        Group {
-            if showsBookmarks {
-                BookmarkOverviewView(library: library, playback: playback)
-            } else if library.recordings.isEmpty && library.filter.isActive {
-                ContentUnavailableView("조건에 맞는 녹음이 없습니다", systemImage: "magnifyingglass", description: Text("검색어나 기간을 바꿔 보세요."))
-                    .accessibilityIdentifier("noMatchingRecordings")
-            } else if library.recordings.isEmpty {
-                ContentUnavailableView("녹음이 없습니다", systemImage: "waveform", description: Text(emptyDescription))
-                    .accessibilityIdentifier("emptyRecordings")
-            } else {
-                VStack(alignment: .leading, spacing: Design.Spacing.md) {
-                    listHeader
+        VStack(alignment: .leading, spacing: Design.Spacing.md) {
+            listHeader
+            listControls
+            Group {
+                if showsBookmarks {
+                    BookmarkOverviewView(library: library, playback: playback)
+                } else if library.recordings.isEmpty && library.filter.isActive {
+                    ContentUnavailableView("조건에 맞는 녹음이 없어요", systemImage: "magnifyingglass", description: Text("검색어나 기간을 바꿔 보세요."))
+                        .accessibilityIdentifier("noMatchingRecordings")
+                } else if library.recordings.isEmpty {
+                    ContentUnavailableView("녹음이 없어요", systemImage: "waveform", description: Text(emptyDescription))
+                        .accessibilityIdentifier("emptyRecordings")
+                } else {
                     recordingList
                         .background(Design.Palette.canvas, in: RoundedRectangle(cornerRadius: Design.Radius.lg))
                         .overlay(RoundedRectangle(cornerRadius: Design.Radius.lg).strokeBorder(Design.Palette.hairline, lineWidth: 1))
                 }
-                .padding(.horizontal, 28)
-                .padding(.vertical, Design.Spacing.lg)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 28)
+        .padding(.vertical, Design.Spacing.lg)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var emptyDescription: String {
+        switch library.selection {
+        case .unclassified: "시간표에 없는 시간에 녹음하면 여기에 모여요."
+        case .all, nil: "녹음한 수업이 여기에 모여요."
+        case .subject: "이 과목으로 녹음한 수업이 여기에 모여요."
+        }
+    }
+
+    private var listControls: some View {
+        HStack(spacing: Design.Spacing.xs) {
+            Picker("보기", selection: $showsBookmarks) {
+                Text("녹음").tag(false)
+                Text("북마크").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityIdentifier("listModePicker")
+            Button("안 들은 것만") { library.filter.unplayedOnly.toggle() }
+                .buttonStyle(library.filter.unplayedOnly ? PillButtonStyle(kind: .primary, isCompact: true) : PillButtonStyle(kind: .secondary, isCompact: true))
+                .disabled(showsBookmarks)
+                .accessibilityAddTraits(library.filter.unplayedOnly ? .isSelected : [])
+                .accessibilityIdentifier("unplayedOnly")
+            Spacer()
+            moreMenu
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+        }
     }
 
     /// 시안 02: 과목 이름과 "녹음 12개 · 안 들은 녹음 2개".
@@ -72,10 +106,6 @@ struct RecordingListView: View {
         case .unclassified: RecordingStorage.unclassifiedFolder
         case .all, nil: "모든 녹음"
         }
-    }
-
-    private var emptyDescription: String {
-        library.selection == .all ? "녹음한 수업이 여기에 나타납니다." : "이 과목으로 녹음한 수업이 여기에 나타납니다."
     }
 
     private var recordingList: some View {
@@ -256,10 +286,6 @@ struct RecordingListView: View {
         Binding(get: { library.filter.query }, set: { library.filter.query = $0 })
     }
 
-    private var unplayedBinding: Binding<Bool> {
-        Binding(get: { library.filter.unplayedOnly }, set: { library.filter.unplayedOnly = $0 })
-    }
-
     private func presence<T>(_ value: Binding<T?>) -> Binding<Bool> {
         Binding(get: { value.wrappedValue != nil }, set: { if !$0 { value.wrappedValue = nil } })
     }
@@ -267,30 +293,8 @@ struct RecordingListView: View {
     private func withToolbar<V: View>(_ view: V) -> some View {
         view
             .searchable(text: queryBinding, prompt: "제목·북마크 메모 검색")
-            .toolbar { toolbarContent }
             .scrollContentBackground(.hidden)
             .designCanvas(Design.Palette.parchment)
-    }
-
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem {
-            Picker("보기", selection: $showsBookmarks) {
-                Text("녹음").tag(false)
-                Text("북마크").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("listModePicker")
-        }
-        ToolbarItem {
-            Toggle("안 들은 것만", isOn: unplayedBinding)
-                .toggleStyle(.button)
-                .disabled(showsBookmarks)
-                .accessibilityIdentifier("unplayedOnly")
-        }
-        ToolbarItem {
-            moreMenu
-        }
     }
 
     private func withDialogs<V: View>(_ view: V) -> some View {
