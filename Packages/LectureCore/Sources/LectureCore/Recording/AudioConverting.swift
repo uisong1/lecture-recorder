@@ -4,6 +4,8 @@ import Foundation
 public protocol AudioConverting: Sendable {
     /// `source`를 읽어 `destination`에 AAC m4a로 쓰고, 변환된 길이(초)를 돌려준다.
     func compress(from source: URL, to destination: URL) async throws -> TimeInterval
+    /// 오디오 파일(CAF·m4a)의 실제 길이(초)를 잰다. 이미 있는 압축본이 끝까지 쓰였는지 가릴 때 쓴다.
+    func duration(of url: URL) async throws -> TimeInterval
 }
 
 /// 압축본이 원본 길이를 제대로 담았는지 가린다. 압축본이 확인되기 전에는 CAF를 지우지 않는다.
@@ -42,6 +44,13 @@ public struct SystemAudioConverter: AudioConverting {
         // 오래 걸리는 변환이 메인 스레드를 막지 않게 한다.
         try await Task.detached(priority: .utility) {
             try Self.convert(from: source, to: destination)
+        }.value
+    }
+
+    public func duration(of url: URL) async throws -> TimeInterval {
+        try await Task.detached(priority: .utility) {
+            let file = try AVAudioFile(forReading: url)
+            return Double(file.length) / file.processingFormat.sampleRate
         }.value
     }
 

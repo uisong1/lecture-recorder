@@ -305,7 +305,7 @@ public final class RecordingController {
     public func startPreview() async {
         guard let levelPreview, !isRecording, !isPreviewing else { return }
         permissionStatus = await permission.requestIfNeeded()
-        guard permissionStatus == .granted, !isRecording, !isPreviewing else { return }
+        guard permissionStatus == .granted, !isRecording, !isStarting, !isPreviewing else { return }
         do {
             try levelPreview.start()
         } catch {
@@ -504,6 +504,8 @@ public final class RecordingController {
 
     /// 일시정지 중에도 true다 (녹음 세션이 열려 있다).
     public var isRecording: Bool { state != .idle }
+    /// 녹음 시작을 처리하는 중인지 (마이크 권한 답을 기다리는 동안 등). 이때 들어온 시작 요청은 거부한다.
+    public private(set) var isStarting = false
 
     public var isPaused: Bool {
         if case .paused = state { true } else { false }
@@ -534,8 +536,13 @@ public final class RecordingController {
     }
 
     public func start() async throws(RecordingError) {
-        guard !isRecording else { throw .alreadyRecording }
+        // 권한 창을 기다리는 사이 메뉴 막대·알림·메인 버튼이 또 눌리면 두 번 시작될 수 있다.
+        // 시작 중 표시로 두 번째 시작을 막고, 기다린 뒤에도 다시 확인한다.
+        guard !isRecording, !isStarting else { throw .alreadyRecording }
+        isStarting = true
+        defer { isStarting = false }
         permissionStatus = await permission.requestIfNeeded()
+        guard !isRecording else { throw .alreadyRecording }
         guard permissionStatus == .granted else {
             Log.recording.notice("마이크 권한 없음")
             throw .permissionDenied
@@ -770,6 +777,8 @@ public final class RecordingController {
 
     /// 버튼 하나로 시작·정지한다. 실패하면 `errorMessage`에 남긴다.
     public func toggle() async {
+        // 시작하는 중에 또 누른 것은 무시한다. 앞 요청이 고른 과목·결과를 덮지 않게 한다.
+        guard !isStarting else { return }
         do {
             if isRecording {
                 let saved = try stop()
@@ -788,7 +797,7 @@ public final class RecordingController {
     /// 방금 저장한 녹음과 같은 과목으로 새 파일에 바로 이어서 녹음한다 (실수로 멈췄거나, 수업 시간표 밖이라 자동 분류가 틀릴 때).
     /// 지금 녹음 중이거나 방금 저장한 녹음이 없으면 아무것도 하지 않는다. 시작하지 못하면 이유를 `errorMessage`에 남기고 과목 선택은 자동으로 되돌린다.
     public func continueAfterStop() async {
-        guard !isRecording, let saved = lastSaved else { return }
+        guard !isRecording, !isStarting, let saved = lastSaved else { return }
         subjectChoice = saved.subject.map { SubjectChoice.subject($0.persistentModelID) } ?? .unclassified
         do {
             try await start()
@@ -905,7 +914,7 @@ extension RecordingController: ReminderRecordingStarting {
     /// 이름이 `subjectName`인 과목을 녹음 화면의 과목으로 골라 둔다. 녹음은 시작하지 않는다. 녹음 중이거나 과목이 없으면 아무것도 하지 않는다.
     @discardableResult
     public func selectSubject(named subjectName: String) -> Bool {
-        guard !isRecording, let subject = availableSubjects().first(where: { $0.name == subjectName }) else { return false }
+        guard !isRecording, !isStarting, let subject = availableSubjects().first(where: { $0.name == subjectName }) else { return false }
         subjectChoice = .subject(subject.persistentModelID)
         return true
     }
@@ -913,8 +922,8 @@ extension RecordingController: ReminderRecordingStarting {
     /// 수업 시작 알림의 "녹음 시작" 버튼. 알림에 적힌 과목으로 녹음을 시작한다.
     /// 이미 녹음 중이면 건드리지 않는다. 시작하지 못하면 이유를 `errorMessage`에 남겨 녹음 화면에서 보이게 한다.
     public func startRecording(forSubjectNamed subjectName: String) async -> ReminderStartOutcome {
-        guard !isRecording else {
-            Log.recording.notice("이미 녹음 중이라 알림의 녹음 시작을 무시")
+        guard !isRecording, !isStarting else {
+            Log.recording.notice("이미 녹음 중(또는 시작 중)이라 알림의 녹음 시작을 무시")
             return .alreadyRecording
         }
         guard let subject = availableSubjects().first(where: { $0.name == subjectName }) else {
