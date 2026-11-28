@@ -9,12 +9,29 @@ import Testing
         storage: String? = nil,
         battery: String? = nil,
         device: String? = nil,
-        silent: Bool = false
+        silent: Bool = false,
+        journalFailed: Bool = false,
+        sleepFailed: Bool = false
     ) -> RecordingScreenNotices {
         RecordingScreenNotices(
             isRecording: isRecording, isPaused: isPaused, stallResumeNotice: stall,
-            storageWarning: storage, batteryWarning: battery, inputDeviceWarning: device, isInputSilent: silent
+            storageWarning: storage, batteryWarning: battery, inputDeviceWarning: device, isInputSilent: silent,
+            recoveryJournalFailed: journalFailed, sleepPreventionFailed: sleepFailed
         )
+    }
+
+    @Test func 복구_기록과_잠자기_방지_실패는_설명과_함께_멈춤_다음에_보인다() {
+        let notices = make(stall: "멈춰서 이어 녹음", battery: "배터리 15%", journalFailed: true, sleepFailed: true)
+        #expect(notices.warnings.map(\.kind) == [.stallResume, .recoveryJournal, .sleepPrevention, .battery])
+        #expect(notices.warnings[1].message == "앱이 꺼지면 이 녹음을 되살리지 못할 수 있어요")
+        #expect(notices.warnings[2].message == "맥이 잠들 수 있어요")
+        #expect(notices.warnings[2].detail?.contains("덮개") == true)
+        #expect(notices.standingNotice == nil)
+    }
+
+    @Test func 녹음_중이_아니면_복구_기록·잠자기_경고를_내지_않는다() {
+        let notices = make(isRecording: false, journalFailed: true, sleepFailed: true)
+        #expect(notices.warnings.isEmpty)
     }
 
     @Test func 경고가_없으면_합친_고정_안내_한_줄만_보인다() {

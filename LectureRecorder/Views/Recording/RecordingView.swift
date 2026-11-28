@@ -47,6 +47,18 @@ struct RecordingView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: Design.Spacing.md) {
             ScreenHeader("녹음", subtitle: screenSubtitle)
+            if let failure = recording.saveFailure {
+                WarningNote(title: UnsavedRecordingNotice.title, detail: UnsavedRecordingNotice.detail, isStrong: true) {
+                    Button("다시 저장") { recording.retrySave() }
+                        .buttonStyle(.pillCompact)
+                        .accessibilityIdentifier("retrySaveRecording")
+                    Button("파일 위치 보기") {
+                        NSWorkspace.shared.activateFileViewerSelecting([manager.fileURL(for: failure.recording)])
+                    }
+                    .buttonStyle(.pillSecondaryCompact)
+                }
+                .accessibilityIdentifier("saveFailureNotice")
+            }
             header
                 .designCard(padding: Design.Spacing.xl)
 
@@ -94,7 +106,15 @@ struct RecordingView: View {
             }
             .designCard(padding: Design.Spacing.md, radius: Design.Radius.group)
 
-            if let message = recording.errorMessage {
+            if recording.isRecording {
+                ForEach(detailedWarnings, id: \.kind) { warning in
+                    WarningNote(title: warning.message, detail: warning.detail)
+                        .accessibilityIdentifier(warning.kind == .recoveryJournal ? "recoveryJournalWarning" : "sleepPreventionWarning")
+                }
+            }
+
+            // 저장 실패는 위의 사라지지 않는 알림이 보여 주므로 같은 문구를 두 번 보이지 않는다.
+            if let message = recording.errorMessage, recording.saveFailure == nil || !message.hasPrefix("녹음을 저장하지 못했습니다") {
                 Label(message, systemImage: "exclamationmark.triangle")
                     .designText(.caption)
                     .foregroundStyle(Design.Palette.danger)
@@ -107,6 +127,11 @@ struct RecordingView: View {
                     .designCard(padding: Design.Spacing.md, radius: Design.Radius.group)
             }
         }
+    }
+
+    /// 설명이 붙는 경고(복구 기록·잠자기 방지 실패)는 녹음 카드 아래 따로 둔다 (시안 safety-alerts 1번).
+    private var detailedWarnings: [RecordingScreenNotices.Warning] {
+        RecordingScreenNotices.forRecording(recording).warnings.filter { $0.detail != nil }
     }
 
     private var screenSubtitle: String {
@@ -177,8 +202,11 @@ struct RecordingNoticeLines: View {
     let notices: RecordingScreenNotices
 
     var body: some View {
-        ForEach(notices.warnings, id: \.kind) { warning in
+        ForEach(notices.warnings.filter { $0.detail == nil }, id: \.kind) { warning in
             switch warning.kind {
+            case .recoveryJournal, .sleepPrevention:
+                // 설명이 붙는 경고는 `RecordingView`가 카드 아래에 따로 보인다.
+                EmptyView()
             case .stallResume:
                 Label(warning.message, systemImage: "exclamationmark.triangle.fill")
                     .designText(.bodyStrong)

@@ -27,6 +27,17 @@ public enum RecordingError: Error, Equatable, LocalizedError {
     }
 }
 
+/// 정지했지만 DB에 저장하지 못한 녹음을 알리는 내용. 지워지지 않고 "다시 저장"이 성공할 때까지 남는다.
+public struct UnsavedRecordingNotice {
+    public static let title = "녹음 정보를 저장하지 못했어요"
+    public static let detail = "소리 파일은 안전하게 남아 있어요. 다시 저장하거나, 다음에 앱을 켤 때 자동으로 되살려요."
+
+    public let recording: Recording
+    public let reason: String
+
+    public var relativePath: String { recording.relativePath }
+}
+
 /// 녹음을 시작하기 전에 고른 과목. 고르지 않으면 시간표로 자동 분류한다.
 public enum SubjectChoice: Hashable {
     case automatic
@@ -71,6 +82,12 @@ public final class RecordingController {
     public private(set) var currentRelativePath: String?
     /// 마지막으로 저장된 녹음.
     public private(set) var lastSaved: Recording?
+    /// 정지했지만 DB에 저장하지 못한 녹음. "다시 저장"이 성공할 때까지 화면에 남는다. 파일은 디스크에 있다.
+    public private(set) var saveFailure: UnsavedRecordingNotice?
+    /// 녹음 중 복구 기록(저널)을 쓰지 못했는지. 이때 앱이 꺼지면 이 녹음을 목록에 되살리지 못할 수 있다.
+    public private(set) var recoveryJournalFailed = false
+    /// 녹음 중 잠자기 방지를 켜지 못했는지.
+    public private(set) var sleepPreventionFailed = false
     public var errorMessage: String?
     /// 잠자기나 종료 때문에 녹음이 중단되어 저장됐을 때 보여줄 안내.
     public var interruptionNotice: String?
@@ -157,6 +174,8 @@ public final class RecordingController {
     private var isStallContinuation = false
     private let calendar: Calendar
     private let now: @MainActor () -> Date
+    /// 녹음 기록을 DB에 저장한다. 테스트에서 저장 실패를 흉내 낼 때 바꾼다.
+    private let saveContext: @MainActor (ModelContext) throws -> Void
 
     public init(
         context: ModelContext,
@@ -175,8 +194,10 @@ public final class RecordingController {
         storageCheckInterval: Duration? = .seconds(10),
         levelCheckInterval: Duration? = .milliseconds(100),
         calendar: Calendar = .current,
-        now: @escaping @MainActor () -> Date = { Date() }
+        now: @escaping @MainActor () -> Date = { Date() },
+        saveContext: (@MainActor (ModelContext) throws -> Void)? = nil
     ) {
+        self.saveContext = saveContext ?? { try $0.save() }
         self.context = context
         self.recorder = recorder
         self.storage = storage
@@ -596,20 +617,25 @@ public final class RecordingController {
             nextClassNotifiedID = nil
         }
         loadNextClassSnapshot()
-        sleepPreventer?.begin(reason: "수업 녹음 중")
+        if let sleepPreventer {
+            sleepPreventionFailed = !sleepPreventer.begin(reason: "수업 녹음 중")
+        }
         onStarted?()
         keepUnsavedLeftover()
         do {
             try journal?.save(pendingRecording(bookmarkTimes: []))
+            recoveryJournalFailed = false
         } catch {
-            // 녹음은 계속한다. 복구만 안 될 뿐이다.
+            // 녹음은 계속한다. 복구만 안 될 뿐이니 화면에 계속 알린다.
             Log.recording.error("녹음 저널 기록 실패: \(error.localizedDescription, privacy: .public)")
+            recoveryJournalFailed = true
         }
     }
 
     @discardableResult
     public func stop() throws(RecordingError) -> Recording {
-        try finishRecording(recorderStalled: false)
+        // 녹음기가 인코딩 오류 등으로 스스로 끝났다면(멈춤 감지 전이라도) 경과 시간을 믿지 말고 파일 크기로 길이를 본다.
+        try finishRecording(recorderStalled: recorder.hasEnded)
     }
 
     /// 멈춘 녹음을 이어 녹음한 파일의 제목 끝에 붙는다. 같은 수업의 앞 파일과 같은 과목 목록에서 이어져 보인다.
@@ -627,6 +653,8 @@ public final class RecordingController {
             duration = max(duration, Double(bytes) * 8 / RecordingRecovery.workingBitsPerSecond)
         }
         sleepPreventer?.end()
+        sleepPreventionFailed = false
+        recoveryJournalFailed = false
         storageMonitor?.cancel()
         storageMonitor = nil
         storageWarning = nil
@@ -662,18 +690,46 @@ public final class RecordingController {
         }
         bookmarkTimes = []
         bookmarkNotes = []
-        onStopped?()
         do {
-            try context.save()
+            try saveContext(context)
         } catch {
-            // 파일은 이미 디스크에 있다. 다음 실행 때 복구할 수 있도록 로그를 남긴다.
+            // 파일은 이미 디스크에 있고 저널도 남아 있어 다음 실행 때 복구된다. "다시 저장"할 때까지 화면에 남긴다.
             Log.recording.fault("녹음 메타데이터 저장 실패 \(relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            saveFailure = UnsavedRecordingNotice(recording: recording, reason: error.localizedDescription)
             throw .saveFailed(error.localizedDescription)
         }
+        saveFailure = nil
         journal?.clear()
         lastSaved = recording
+        onStopped?()
         startCompression(of: recording)
         return recording
+    }
+
+    /// 정지 때 저장하지 못한 녹음을 다시 저장한다. 성공하면 알림을 지우고 압축을 시작한다.
+    /// 실패하면 알림을 그대로 두고 이유를 `errorMessage`에 남긴다.
+    public func retrySave() {
+        guard let failure = saveFailure else { return }
+        let recording = failure.recording
+        guard !(recording.isDeleted || recording.modelContext == nil) else {
+            saveFailure = nil
+            return
+        }
+        do {
+            try saveContext(context)
+        } catch {
+            Log.recording.fault("녹음 메타데이터 다시 저장 실패 \(recording.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            errorMessage = RecordingError.saveFailed(error.localizedDescription).errorDescription
+            return
+        }
+        saveFailure = nil
+        errorMessage = nil
+        // 저널에는 이 녹음 기록이 그대로 있거나(새 녹음 전), 새 녹음이 시작되며 따로 보관됐다. 지금 녹음의 저널은 건드리지 않는다.
+        if journal?.load()?.relativePath == recording.relativePath { journal?.clear() }
+        journal?.clearUnsaved(relativePath: recording.relativePath)
+        if !isRecording { lastSaved = recording }
+        onStopped?()
+        startCompression(of: recording)
     }
 
     /// 정지한 녹음을 백그라운드에서 m4a로 압축한다. 끝나기 전에도 녹음은 CAF로 재생된다.
@@ -712,8 +768,10 @@ public final class RecordingController {
     private func saveBookmarksToJournal() {
         do {
             try journal?.save(pendingRecording(bookmarkTimes: bookmarkTimes))
+            recoveryJournalFailed = false
         } catch {
             Log.recording.error("북마크 저널 기록 실패: \(error.localizedDescription, privacy: .public)")
+            recoveryJournalFailed = true
         }
     }
 
