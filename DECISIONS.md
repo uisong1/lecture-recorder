@@ -498,6 +498,27 @@
 - 멈춤 규칙 변경: 영상이 아닌 항목을 5개 열어도 PDF가 없을 때만 과목을 멈춘다(영상 항목은 세지 않고, 한 과목 최대 80개). 앞 3개만 보고 멈추던 규칙은 영상 항목이 앞에 있으면 슬라이드를 놓쳤다.
 - 한계: 내려받기 주소가 PDF가 아닌 형식이면 받지 못하고 결과에 종류만 남는다(실제 응답은 Mac에서 확인).
 
+## 2026-11-28. Everything Claude Code(ECC) 중 Swift에 쓸 것만 .claude/에 넣는다
+- 결정: 공식 저장소 affaan-m/everything-claude-code(v2.2.3, MIT)를 받아 읽고 다음만 가져왔다. skills: swift-actor-persistence, swift-concurrency-6-2, swift-protocol-di-testing, swiftui-patterns. agents: swift-reviewer, swift-build-resolver, silent-failure-hunter. rules: Swift 코딩·패턴·테스트. 출처와 라이선스는 `.claude/ECC-NOTICE.md`, CLAUDE.md에 사용 안내를 추가했다.
+- 뺀 것과 이유: 328개 skill 중 TS/Python/웹/백엔드/마케팅 등 이 앱과 무관한 것, npm 기준인 tdd-guide·verification-loop·tdd-workflow, 훅(자동 실행 스크립트)과 설치 스크립트 전부(실행하지 않음, 외부 연동 위험), `liquid-glass-design`(DESIGN.md의 흑백·그림자 없음과 충돌), `foundation-models-on-device`·AI 관련(받아쓰기·요약 금지), rules의 security(환경변수 API 키·`fatalError` 예시가 Keychain 규칙과 맞지 않음)와 hooks(전역 설정용).
+- 이유: 우리 규칙(CLAUDE.md, DESIGN.md, 녹음 안정성)이 항상 우선이므로 충돌 소지가 있는 것은 넣지 않고, 도움이 되는 Swift 참고 자료만 얇게 넣었다. 모든 스레드가 저장소를 클론하므로 `.claude/`에 두면 자동으로 쓰인다.
+
+## 2026-11-28. ECC 마케팅 도구도 일단 보관해 둔다
+- 결정: 사용자가 "마케팅은 일단 넣어두자"고 해서 skills(marketing-campaign, brand-voice, brand-discovery, content-engine, seo), agents(marketing-agent, seo-specialist), command(marketing-campaign)를 `.claude/`에 추가했다. 글을 외부에 올리는 social-publisher, crosspost, x-api 등은 넣지 않았다.
+- 이유: 지금 앱 개발에는 쓰지 않지만 나중에 소개글·홍보 문구가 필요할 때 쓸 수 있다. 유료 API와 외부 게시는 쓰지 않는다는 규칙은 그대로다.
+
+## 2026-11-28. ECC prompt-optimizer skill 추가
+- 결정: 사용자가 요청해 `prompt-optimizer`를 `.claude/skills/`에 넣었다. 말을 다듬어 붙여넣을 프롬프트로 바꿔 주는 조언 전용 skill이며 작업은 실행하지 않는다.
+- 한계: "프롬프트 다듬어줘"처럼 부를 때만 동작하고 모든 말에 자동 적용되지 않는다. 안에 나오는 ECC 명령(/tdd 등)은 우리 저장소에 없다.
+
+## 2026-11-28. 모든 요청에 prompt-optimizer 방식과 skill 선택을 자동 적용
+- 결정: CLAUDE.md에 규칙으로 넣었다. 훅(자동 실행 스크립트)이 아니라 지침이라 Claude가 따르는 방식이며 100% 보장은 아니다.
+- 이유: 훅은 사용자 컴퓨터·세션 설정에 의존하고 위험하다. CLAUDE.md는 모든 스레드가 클론해서 읽는다.
+
+## 2026-11-28. 애매한 요청은 항상 그때그때 되묻는다
+- 결정: 위 자동 적용 규칙을 고쳐, 애매하거나 빠진 맥락이 있으면 진행을 멈추지 않고(답이 필요 없는 부분만) 되묻는다. 질문은 선택지와 추천안을 함께 적는다.
+- 이유: 사용자가 "되물어줘, 항상 그때그때"라고 지시했다.
+
 ## 2026-11-28. 전사(받아쓰기)를 넣는다: 로컬 Qwen3-ASR, 녹음 뒤에만, 전사 탭
 - 결정: 사용자 요청으로 전사를 범위에 넣는다. 모델은 Qwen3-ASR을 맥 안에서 돌린다. 녹음 중에는 하지 않고, 사이드바 "전사" 탭에서 전체 전사 또는 골라서 전사하며, 여러 개를 동시에(기본 2개) 처리하고 진행률을 보인다. AI 요약·유료 API는 여전히 하지 않는다.
 - 실행 방식 후보: (1) 앱 안 Swift 패키지 `qwen3-asr-swift`(speech-swift, MLX Swift, macOS 14+·Apple Silicon, 단어 단위 시각은 강제 정렬 모델). (2) 안 되면 Python 패키지 `mlx-qwen3-asr`(Apache-2.0, 0.6B/1.7B, 긴 오디오를 조용한 지점에서 나눠 처리, 단어 단위 시각)를 앱이 띄우는 별도 프로세스로 실행. 한국어 품질, 1~3시간 녹음 처리, 문장 단위 시각, 라이선스는 구현 첫 항목(5-1)에서 확인하고 여기에 적는다.
