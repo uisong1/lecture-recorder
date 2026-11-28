@@ -9,7 +9,7 @@ enum SidebarItem: Hashable {
 }
 
 /// 시안 01·02의 사이드바. 시스템 목록은 고른 줄을 맥의 강조색(파랑)으로 칠해서,
-/// 직접 그려 고른 줄은 검정 바탕 흰 글자, 개수는 오른쪽 회색 숫자, 안 들은 개수는 "새 2"로 보인다 (DESIGN.md 사이드바).
+/// 직접 그려 고른 줄은 검정 바탕 흰 글자, 개수는 오른쪽 회색 숫자, 안 들은 녹음이 있으면 이름 옆에 작은 점이 보인다 (DESIGN.md 사이드바).
 struct SidebarView: View {
     @Binding var selection: SidebarItem?
     let library: RecordingLibrary
@@ -77,13 +77,13 @@ struct SidebarView: View {
             icon: "book.closed",
             item: .library(selection),
             count: library.count(for: selection),
-            badge: UnplayedBadge.text(count: unplayedCount),
+            showsUnplayedDot: UnplayedBadge.showsDot(count: unplayedCount),
             id: "sidebar-subject-\(subject.name)"
         )
         .accessibilityLabel(UnplayedBadge.accessibilityLabel(name: subject.name, count: unplayedCount))
     }
 
-    private func row(_ title: String, icon: String, item: SidebarItem, count: Int? = nil, badge: String? = nil, id: String) -> some View {
+    private func row(_ title: String, icon: String, item: SidebarItem, count: Int? = nil, showsUnplayedDot: Bool = false, id: String) -> some View {
         let isSelected = selection == item
         return Button {
             selection = item
@@ -98,11 +98,13 @@ struct SidebarView: View {
                     .foregroundStyle(isSelected ? Design.Palette.onPrimary : Design.Palette.ink)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                if let badge {
-                    Text(badge)
-                        .font(Design.font(size: 11, weight: .bold))
-                        .foregroundStyle(isSelected ? Design.Palette.onPrimary : Design.Palette.ink)
-                        .fixedSize()
+                if showsUnplayedDot {
+                    // 녹음 목록의 안 들음 점과 같은 크기·색(검정, 고른 줄에서는 흰색).
+                    Circle()
+                        .fill(isSelected ? Design.Palette.onPrimary : Design.Palette.ink)
+                        .frame(width: 6, height: 6)
+                        .accessibilityHidden(true)
+                        .accessibilityIdentifier("sidebar-unplayed-dot")
                 }
                 Spacer(minLength: Design.Spacing.xxs)
                 if let count, count > 0 {
