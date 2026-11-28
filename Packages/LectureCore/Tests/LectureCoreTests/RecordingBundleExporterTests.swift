@@ -224,3 +224,27 @@ import Testing
         #expect(text.contains("- 전사: 읽지 못함"))
     }
 }
+
+@Suite struct BundleExportChoicesTests {
+    @Test func 시안_문구대로_보인다() {
+        let choices = BundleExportChoices(recordingCount: 12, transcriptCount: 9)
+        #expect(choices.detail(for: .both) == "소리 파일 12개와 전사본 9개")
+        #expect(choices.detail(for: .audioOnly) == "소리 파일 12개")
+        #expect(choices.detail(for: .transcriptOnly) == "전사본 9개 (전사 안 된 3개는 빠져요)")
+        #expect(choices.isAvailable(.transcriptOnly))
+    }
+
+    @Test func 전사한_녹음이_없으면_전사본만은_고를_수_없다() {
+        let choices = BundleExportChoices(recordingCount: 3, transcriptCount: 0)
+        #expect(!choices.isAvailable(.transcriptOnly))
+        #expect(choices.detail(for: .transcriptOnly) == "전사한 녹음이 없어요")
+        #expect(choices.detail(for: .both) == "소리 파일 3개 (전사본은 아직 없어요)")
+    }
+
+    @Test func 빠진_녹음이_있을_때만_알린다() {
+        let folder = URL(filePath: "/tmp/out")
+        #expect(BundleExportChoices.notice(for: RecordingBundleResult(folder: folder, exportedCount: 2, skippedTitles: [])) == nil)
+        let notice = BundleExportChoices.notice(for: RecordingBundleResult(folder: folder, exportedCount: 1, skippedTitles: [], untranscribedTitles: ["2주차"]))
+        #expect(notice == "녹음 1개를 내보냈어요.\n전사하지 않아 빠진 녹음: 2주차")
+    }
+}

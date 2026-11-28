@@ -76,6 +76,48 @@ public enum BundleContents: String, CaseIterable, Sendable {
     var includesTranscript: Bool { self != .audioOnly }
 }
 
+/// 내보내기 작은 창(시안 export-options C)에 보일 문구. 녹음 수와 전사된 수로 정한다.
+public struct BundleExportChoices: Equatable, Sendable {
+    public let recordingCount: Int
+    public let transcriptCount: Int
+
+    public init(recordingCount: Int, transcriptCount: Int) {
+        self.recordingCount = recordingCount
+        self.transcriptCount = transcriptCount
+    }
+
+    /// 선택지 아래 회색 설명 (예: "소리 파일 12개와 전사본 9개").
+    public func detail(for contents: BundleContents) -> String {
+        let missing = recordingCount - transcriptCount
+        switch contents {
+        case .both:
+            return transcriptCount > 0 ? "소리 파일 \(recordingCount)개와 전사본 \(transcriptCount)개" : "소리 파일 \(recordingCount)개 (전사본은 아직 없어요)"
+        case .audioOnly:
+            return "소리 파일 \(recordingCount)개"
+        case .transcriptOnly:
+            if transcriptCount == 0 { return "전사한 녹음이 없어요" }
+            return missing > 0 ? "전사본 \(transcriptCount)개 (전사 안 된 \(missing)개는 빠져요)" : "전사본 \(transcriptCount)개"
+        }
+    }
+
+    public func isAvailable(_ contents: BundleContents) -> Bool {
+        contents != .transcriptOnly || transcriptCount > 0
+    }
+
+    /// 내보낸 뒤 알릴 것이 있으면 그 문구. 다 담겼으면 nil.
+    public static func notice(for result: RecordingBundleResult) -> String? {
+        var parts: [String] = []
+        if !result.skippedTitles.isEmpty {
+            parts.append("파일이 없어 빠진 녹음: " + result.skippedTitles.joined(separator: ", "))
+        }
+        if !result.untranscribedTitles.isEmpty {
+            parts.append("전사하지 않아 빠진 녹음: " + result.untranscribedTitles.joined(separator: ", "))
+        }
+        guard !parts.isEmpty else { return nil }
+        return (["녹음 \(result.exportedCount)개를 내보냈어요."] + parts).joined(separator: "\n")
+    }
+}
+
 /// 내보내기 결과.
 public struct RecordingBundleResult: Sendable, Equatable {
     /// 만들어진 묶음 폴더.

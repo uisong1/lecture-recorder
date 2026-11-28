@@ -154,6 +154,15 @@ public final class RecordingManager {
         !recording.isLMSVideo
     }
 
+    /// 내보내기 작은 창에 보일 녹음 수와 전사된 수. LMS 영상은 내보내지 않으니 세지 않는다.
+    public func exportChoices(for recordings: [Recording]) -> BundleExportChoices {
+        let shareable = recordings.filter(canShare)
+        return BundleExportChoices(
+            recordingCount: shareable.count,
+            transcriptCount: shareable.filter { !($0.transcript?.segments.isEmpty ?? true) }.count
+        )
+    }
+
     /// 녹음 파일의 실제 위치. Finder에서 보여 주거나 공유할 때 쓴다.
     public func fileURL(for recording: Recording) -> URL {
         storage.url(for: recording.relativePath)
