@@ -174,6 +174,25 @@ func waitUntil(_ condition: () -> Bool) async {
             return
         }
         #expect(message.contains("저장하지 못했어요"))
+        // 결과를 남겨 다시 시도가 처음부터 하지 않게 한다. 줄을 치우면 그때 지운다.
+        #expect(engine.discarded.isEmpty)
+        queue.clearFinished()
+        #expect(engine.discarded == ["a"])
+    }
+
+    @Test func retryAfterFailureKeepsTheSameWork() async {
+        let queue = TranscriptionQueue(engine: engine)
+        let first = job("a")
+        queue.enqueue([first])
+        await waitUntil { engine.running == ["a"] }
+        engine.fail("a")
+        await waitUntil { queue.state(for: "a") == .failed("모델 오류") }
+        queue.enqueue([job("a")])
+        await waitUntil { engine.running == ["a"] }
+        #expect(queue.entries.first?.job.workID == first.workID)
+        engine.finish("a")
+        await waitUntil { queue.state(for: "a") == .done }
+        #expect(engine.discarded == ["a"])
     }
 
     @Test func engineFailureShowsMessageAndRetryWorks() async {
@@ -293,7 +312,7 @@ func waitUntil(_ condition: () -> Bool) async {
         await waitUntil { queue.state(for: "b") == .done }
         #expect(queue.state(for: "a") == .paused(progress: 0.66))
         #expect(!queue.isActive)
-        #expect(engine.discarded.isEmpty)
+        #expect(!engine.discarded.contains("a"))
 
         queue.resume(id: "a")
         await waitUntil { engine.running == ["a"] }
@@ -325,7 +344,7 @@ func waitUntil(_ condition: () -> Bool) async {
 
         queue.remove(id: "b")
         #expect(queue.state(for: "b") == nil)
-        #expect(engine.discarded == ["b"])
+        #expect(engine.discarded == ["a", "b"])
     }
 
     @Test func removingRunningDiscardsWork() async {

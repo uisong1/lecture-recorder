@@ -34,7 +34,8 @@ enum TranscriptionHelperScript {
 
 /// 녹음 하나를 도우미로 전사한다. 진행 파일을 1초마다 읽어 진행률을 알리고, 취소되면 취소 파일을 만들어 도우미가 다음 조각 전에 멈추게 한다.
 /// 작업 폴더는 작업마다 고정(Caches/Transcribe/<workID>)이라, 멈춘 뒤 "이어서" 하면 끝낸 조각은 건너뛴다.
-/// 끝나거나 실패하면 폴더를 지우고, 멈추면 남긴다. 대기열에서 빼면 `discardWork`가 지운다.
+/// 폴더는 대기열이 결과를 저장했거나 줄을 뺐을 때 `discardWork`로 지운다. 저장이 실패하거나 도우미가 실패해도 남겨,
+/// "다시 시도"가 끝낸 조각을 건너뛰게 한다.
 struct HelperScriptTranscriber: Transcribing {
     static let cancelledStatus = 40
 
@@ -87,12 +88,11 @@ struct HelperScriptTranscriber: Transcribing {
                 }
             }
         } catch TranscriptionToolError.helperMissing {
-            Self.removeWork(at: folder)
             throw TranscriptionError(TranscriptionHelperScript.missingMessage)
         }
         // 결과가 다 나왔으면 그 사이 멈춤을 눌렀어도 결과를 돌려준다(버리지 않는다).
+        // 폴더는 대기열이 결과를 저장한 뒤 지운다(저장이 실패하면 다시 시도 때 다시 쓴다).
         if status == 0 {
-            defer { Self.removeWork(at: folder) }
             do {
                 return try Transcript.decode(Data(contentsOf: output))
             } catch {
@@ -100,10 +100,10 @@ struct HelperScriptTranscriber: Transcribing {
                 throw TranscriptionError("전사 결과를 읽지 못했어요. 다시 시도해 주세요.", detail: error.localizedDescription)
             }
         }
-        if Task.isCancelled || status == Self.cancelledStatus { throw CancellationError() }
-        let detail = Self.errorTail(at: errorLog)
-        Self.removeWork(at: folder)
-        throw TranscriptionError.helperExit(status).with(detail: detail)
+        // 취소로 멈춘 것만 멈춤으로 본다. 멈춤과 같은 때 난 진짜 실패(다른 코드)는 실패로 알린다.
+        if status == Self.cancelledStatus { throw CancellationError() }
+        Log.app.error("전사 도우미 실패 코드 \(status, privacy: .public)")
+        throw TranscriptionError.helperExit(status).with(detail: Self.errorTail(at: errorLog))
     }
 
     /// 앱을 켤 때 부른다. 대기열은 앱을 끄면 비므로, 지난번에 멈춰 둔 작업 폴더는 더 쓰지 않는다.

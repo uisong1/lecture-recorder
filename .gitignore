@@ -16,3 +16,5 @@ Package.resolved
 # 비밀값
 *.secret
 .env
+
+__pycache__/

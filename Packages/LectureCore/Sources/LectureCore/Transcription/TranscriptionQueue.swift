@@ -121,7 +121,8 @@ public final class TranscriptionQueue {
     /// 한 녹음의 전사가 끝나면 부른다. 저장에 실패하면 던진 오류가 그 줄의 실패 문구가 된다.
     @ObservationIgnored public var onFinished: @MainActor (TranscriptionJob, Transcript) throws -> Void = { _, _ in }
     /// 작업을 시작하기 직전에 부른다. 그 사이 녹음이 옮겨졌으면 새 경로로 바꾼 작업을, 지워졌으면 nil을 돌려준다.
-    @ObservationIgnored public var resolveJob: @MainActor (TranscriptionJob) -> TranscriptionJob? = { $0 }
+    /// 찾다가 오류가 나면 던지고, 그 이유가 줄의 실패 문구가 된다.
+    @ObservationIgnored public var resolveJob: @MainActor (TranscriptionJob) throws -> TranscriptionJob? = { $0 }
 
     @ObservationIgnored private let engine: Transcribing
     @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
@@ -205,7 +206,11 @@ public final class TranscriptionQueue {
         for job in jobs {
             if let index = entries.firstIndex(where: { $0.id == job.id }) {
                 switch entries[index].state {
-                case .failed, .done: entries[index] = Entry(job: job, state: .waiting)
+                case .done: entries[index] = Entry(job: job, state: .waiting)
+                // 실패한 작업은 남은 조각을 이어 쓰도록 작업을 그대로 두고 대기로 돌린다.
+                case .failed:
+                    entries[index].state = .waiting
+                    entries[index].failureDetail = nil
                 // 멈춰 둔 작업은 하던 데서 이어 하도록 작업(이어 하기 열쇠)을 그대로 두고 대기로 돌린다.
                 case .paused(let progress):
                     lastProgress[job.id] = progress
@@ -265,8 +270,9 @@ public final class TranscriptionQueue {
         pump()
     }
 
-    /// 끝난 줄과 실패한 줄을 치운다.
+    /// 끝난 줄과 실패한 줄을 치운다. 실패한 줄이 남겨 둔 것도 지운다.
     public func clearFinished() {
+        for entry in entries where entry.isFinished { engine.discardWork(for: entry.job) }
         entries.removeAll(where: \.isFinished)
     }
 
@@ -307,8 +313,16 @@ public final class TranscriptionQueue {
 
     private func start(_ queued: TranscriptionJob) {
         // 기다리는 사이 녹음을 옮겼거나 지웠을 수 있다. 시작 직전에 다시 찾는다.
-        guard let job = resolveJob(queued) else {
-            setState(.failed("녹음을 찾지 못했거나 지금은 전사할 수 없어요. 지웠는지 확인해 주세요."), for: queued.id)
+        let resolved: TranscriptionJob?
+        do {
+            resolved = try resolveJob(queued)
+        } catch {
+            // 녹음을 찾다가 난 오류(DB). 지운 것과 다르니 하던 것은 남기고 이유를 보인다.
+            setState(.failed("녹음을 찾지 못했어요: \(Self.message(for: error))"), for: queued.id)
+            return
+        }
+        guard let job = resolved else {
+            setState(.failed("녹음을 찾지 못했어요. 지웠을 수 있어요."), for: queued.id)
             engine.discardWork(for: queued)
             return
         }
@@ -372,8 +386,13 @@ public final class TranscriptionQueue {
                 do {
                     try onFinished(job, transcript)
                     setState(.done, for: job.id)
+                    engine.discardWork(for: job)
                 } catch {
-                    setState(.failed(Self.message(for: error)), for: job.id)
+                    // 결과는 엔진이 남겨 두어 "다시 시도"하면 처음부터 하지 않고 다시 저장한다.
+                    setState(.failed("저장하지 못했어요: \(Self.message(for: error))"), for: job.id)
+                    if let index = entries.firstIndex(where: { $0.id == job.id }) {
+                        entries[index].failureDetail = (error as? TranscriptionError)?.detail ?? error.localizedDescription
+                    }
                 }
             case .failure(let error):
                 if error is CancellationError {

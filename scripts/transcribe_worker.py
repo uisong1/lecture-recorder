@@ -16,6 +16,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import traceback
 import wave
 
 MODEL = "mlx-community/Qwen3-ASR-1.7B-8bit"
@@ -157,6 +158,11 @@ def main():
             log(f"조각 {start}/{total}부터 이어서 해요")
         write_atomic(progress, {"done": start, "total": total})
 
+        if start >= total:
+            # 지난번에 조각을 다 끝냈다(앱이 결과를 저장하지 못해 다시 시도). 모델 없이 결과만 다시 쓴다.
+            write_atomic(output, {"model": MODEL, "segments": segments})
+            return
+
         try:
             from mlx_audio.stt import load
 
@@ -189,4 +195,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:  # noqa: BLE001 - 예상 못 한 오류도 앱의 실패 줄에 보이게 남긴다
+        log(traceback.format_exc().strip())
+        sys.exit(EXIT_TRANSCRIBE)
