@@ -30,6 +30,9 @@ public protocol CanvasHTTPClient: Sendable {
 /// Canvas 개인 액세스 토큰 보관소. 토큰은 Keychain에만 둔다.
 public protocol CanvasTokenStoring: Sendable {
     func loadToken() throws -> String?
+    /// 토큰이 저장돼 있는지만 본다. 값(비밀)은 읽지 않으므로 Keychain이 암호를 묻지 않는다.
+    /// 앱을 켤 때·설정 화면을 열 때는 이것만 쓰고, 값은 실제로 LMS에 요청할 때만 읽는다(DECISIONS.md 2026-11-29).
+    func hasToken() throws -> Bool
     func saveToken(_ token: String) throws
     func deleteToken() throws
 }

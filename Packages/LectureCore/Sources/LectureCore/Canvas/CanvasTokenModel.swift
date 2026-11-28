@@ -19,9 +19,9 @@ public final class CanvasTokenModel {
 
     public func refresh() {
         do {
-            hasToken = try store.loadToken() != nil
+            hasToken = try store.hasToken()
         } catch {
-            hasToken = false
+            // 키체인이 잠겨 있는 등 잠깐 못 읽은 것일 수 있어, "저장됨" 표시는 그대로 두고 알리기만 한다.
             message = "토큰을 읽지 못했습니다: \(error.localizedDescription)"
             Log.app.error("Canvas 토큰 읽기 실패: \(error.localizedDescription, privacy: .public)")
         }
