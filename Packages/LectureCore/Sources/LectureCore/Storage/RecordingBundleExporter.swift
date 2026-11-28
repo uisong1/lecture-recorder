@@ -128,9 +128,9 @@ public struct RecordingBundleExporter: Sendable {
 
     // MARK: - 이름
 
-    /// "Claude용 묶음 자료구조 2026-10-25". 같은 이름이 있으면 `_2`, `_3` …을 붙인다.
+    /// "내보내기 자료구조 2026-10-25". 같은 이름이 있으면 `_2`, `_3` …을 붙인다.
     func availableFolder(label: String, in parent: URL, now: Date) -> URL {
-        let base = RecordingStorage.folderName(for: "Claude용 묶음 \(RecordingStorage.folderName(for: label)) \(dayText(now))")
+        let base = RecordingStorage.folderName(for: "내보내기 \(RecordingStorage.folderName(for: label)) \(dayText(now))")
         var name = base
         var suffix = 2
         while files.fileExists(at: parent.appending(path: name, directoryHint: .isDirectory)) || files.isDirectory(at: parent.appending(path: name, directoryHint: .isDirectory)) {

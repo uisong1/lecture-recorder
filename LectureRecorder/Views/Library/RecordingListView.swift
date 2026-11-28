@@ -21,7 +21,7 @@ struct RecordingListView: View {
     @State private var batchNotice: String?
     /// 녹음 목록 대신 북마크를 모아 본다.
     @State private var showsBookmarks = false
-    /// Claude용 묶음 내보내기 결과 안내.
+    /// 묶음 내보내기 결과 안내.
     @State private var bundleNotice: String?
     /// 전사 결과를 여는 녹음.
     @State private var transcriptRecording: Recording?
@@ -403,7 +403,7 @@ struct RecordingListView: View {
             .pickerStyle(.inline)
             .accessibilityIdentifier("periodFilter")
             Divider()
-            Button("Claude용 내보내기…") { exportBundle() }
+            Button("내보내기…") { exportBundle() }
                 .help("지금 목록의 녹음과 북마크·메모를 한 폴더로 묶어 내보냅니다.")
                 .disabled(showsBookmarks || library.recordings.isEmpty)
                 .accessibilityIdentifier("exportBundle")
@@ -436,7 +436,7 @@ struct RecordingListView: View {
     /// 선택한 녹음에 대한 동작. 막대와 우클릭 메뉴가 함께 쓴다.
     @ViewBuilder
     private var bulkActions: some View {
-        Button("Claude용 내보내기…") { exportBundle() }
+        Button("내보내기…") { exportBundle() }
             .accessibilityIdentifier("exportSelected")
         Menu("과목 옮기기") {
             ForEach(library.subjects) { subject in

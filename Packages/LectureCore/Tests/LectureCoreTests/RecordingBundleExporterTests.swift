@@ -37,7 +37,7 @@ import Testing
     @Test func 녹음_파일을_복사하고_원본은_그대로_둔다() throws {
         let r = recording()
         let result = try exporter.export([r], label: "자료구조", to: parent, now: now)
-        #expect(result.folder.lastPathComponent == "Claude용 묶음 자료구조 2026-10-25")
+        #expect(result.folder.lastPathComponent == "내보내기 자료구조 2026-10-25")
         #expect(result.exportedCount == 1)
         #expect(files.fileExists(at: result.folder.appending(path: "녹음/자료구조 2026-03-02 월 10-00.m4a")))
         #expect(files.fileExists(at: storage.url(for: r.relativePath)))
@@ -125,7 +125,7 @@ import Testing
         let first = try exporter.export([r], label: "자료구조", to: parent, now: now)
         let second = try exporter.export([r], label: "자료구조", to: parent, now: now)
         #expect(first.folder != second.folder)
-        #expect(second.folder.lastPathComponent == "Claude용 묶음 자료구조 2026-10-25_2")
+        #expect(second.folder.lastPathComponent == "내보내기 자료구조 2026-10-25_2")
     }
 
     @Test func 복사에_실패하면_만들던_폴더를_지우고_원본은_남는다() throws {
@@ -145,7 +145,7 @@ import Testing
 
     @Test func 폴더_이름의_위험한_글자는_바꾼다() throws {
         let result = try exporter.export([recording()], label: "컴구/운영:체제", to: parent, now: now)
-        #expect(result.folder.lastPathComponent == "Claude용 묶음 컴구-운영-체제 2026-10-25")
+        #expect(result.folder.lastPathComponent == "내보내기 컴구-운영-체제 2026-10-25")
         #expect(result.folder.deletingLastPathComponent().path == parent.path)
     }
 
