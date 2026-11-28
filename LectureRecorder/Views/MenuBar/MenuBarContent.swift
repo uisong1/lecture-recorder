@@ -23,7 +23,7 @@ private struct NoticeLine: Identifiable {
 
 /// 메뉴 막대 아이콘을 눌렀을 때 뜨는 창. macOS 제어 센터의 "지금 재생 중" 위젯처럼
 /// 왼쪽 둥근 칸, 굵은 과목명과 회색 부제, 오른쪽 아이콘 버튼으로 보여준다.
-/// 앱이 뒤에 있어도 시작·정지·일시정지·북마크를 누를 수 있다.
+/// 앱이 뒤에 있어도 시작·정지·일시정지를 누를 수 있다.
 struct MenuBarContent: View {
     let recording: RecordingController
     /// 전사 대기열. 전사 중이면 진행률 한 줄을 보여 준다.
@@ -106,17 +106,6 @@ struct MenuBarContent: View {
                 .accessibilityLabel(status.pauseTitle)
                 .disabled(!status.canPause)
                 .accessibilityIdentifier("menuBarPause")
-
-                Button {
-                    recording.addBookmark()
-                } label: {
-                    Image(systemName: "bookmark")
-                }
-                .buttonStyle(.iconPlain)
-                .help(status.bookmarkTitle)
-                .accessibilityLabel(status.bookmarkTitle)
-                .disabled(!status.canBookmark)
-                .accessibilityIdentifier("menuBarBookmark")
             }
 
             Button {

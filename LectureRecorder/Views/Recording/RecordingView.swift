@@ -47,7 +47,7 @@ struct RecordingView: View {
             Button("녹음 시작") { Task { await recording.confirmTemporaryStoreAndStart() } }
                 .accessibilityIdentifier("confirmTemporaryStoreRecording")
         } message: {
-            Text("소리 파일은 저장돼요. 제목·과목·북마크는 앱을 끄면 사라지니, 끝난 뒤 백업에서 되살리기를 해 주세요.")
+            Text("소리 파일은 저장돼요. 제목·과목은 앱을 끄면 사라지니, 끝난 뒤 백업에서 되살리기를 해 주세요.")
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             recording.refreshPermission()
@@ -73,7 +73,7 @@ struct RecordingView: View {
                 // 시안 safety-alerts 5번: 녹음은 막지 않되, 앱을 끄면 기록이 사라진다는 것을 녹음 전에 알린다.
                 WarningNote(
                     title: "지금은 녹음 정보를 오래 보관하지 못해요",
-                    detail: "앱 자료를 열지 못해 임시로 켰어요. 녹음 소리 파일은 남지만, 제목·과목·북마크·메모는 앱을 끄면 사라져요.",
+                    detail: "앱 자료를 열지 못해 임시로 켰어요. 녹음 소리 파일은 남지만, 제목·과목·메모는 앱을 끄면 사라져요.",
                     isStrong: true
                 ) {
                     OpenRecordingFilesSettingsButton(title: "백업에서 되살리기", isPrimary: true)

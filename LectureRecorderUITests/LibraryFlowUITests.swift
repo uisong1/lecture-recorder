@@ -32,19 +32,18 @@ final class LibraryFlowUITests: XCTestCase {
     }
 
     @MainActor
-    func test녹음_중_북마크를_추가하고_정지하면_목록_행에_북마크_1이_보인다() throws {
+    func test녹음_중에도_목록에도_북마크가_보이지_않는다() throws {
+        // 2026-11-29 사용자 결정으로 북마크 기능을 뺐다.
         let app = XCUIApplication.launchForTesting()
 
         record(in: app) {
-            let bookmark = app.buttons["bookmarkButton"]
-            XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
-            bookmark.click()
+            XCTAssertTrue(app.buttons["pauseButton"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["bookmarkButton"].exists)
         }
         openSidebar("sidebar-unclassified", in: app)
 
-        let status = app.staticTexts["recordingStatus"]
-        XCTAssertTrue(status.waitForExistence(timeout: 5))
-        XCTAssertTrue(text(of: status).contains("북마크 1"))
+        XCTAssertTrue(app.staticTexts["recordingRow"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.segmentedControls["listModePicker"].exists)
     }
 
     @MainActor

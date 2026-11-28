@@ -229,6 +229,7 @@ public final class RecordingManager {
                 duration: recording.duration,
                 relativePath: recording.relativePath,
                 memo: recording.memo,
+                // 북마크 기능은 뺐지만 예전에 찍은 북마크는 지우지 않았으므로, 내보낼 때는 잃지 않게 그대로 담는다.
                 bookmarks: recording.sortedBookmarks.map { BundleBookmark(time: $0.time, note: $0.note) },
                 isRecovered: recording.isRecovered,
                 transcript: transcript?.segments,

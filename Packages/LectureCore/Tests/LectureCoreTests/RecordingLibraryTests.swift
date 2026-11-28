@@ -218,28 +218,23 @@ import Testing
         #expect(library.bookmarkCount(for: .all) == 3)
     }
 
-    @Test func 녹음_검색은_제목뿐_아니라_북마크_메모도_찾고_맞은_메모를_알려_준다() throws {
+    @Test func 녹음_검색은_제목으로_찾고_북마크_메모는_보지_않는다() throws {
+        // 북마크 기능은 2026-11-29 앱에서 뺐다. 숨은 북마크 메모로 녹음이 걸리면 이유를 알 수 없다.
         let ds = try SubjectManager(context: context).add(name: "자료구조", color: .green)
         let monday = addRecording("월요일", subject: ds, at: date(2026, 3, 2, 10, 0))
-        let wednesday = addRecording("시험 정리", subject: ds, at: date(2026, 3, 4, 10, 0))
-        let friday = addRecording("금요일", subject: ds, at: date(2026, 3, 6, 10, 0))
-        let at = date(2026, 3, 7, 0, 0)
-        context.insert(Bookmark(time: 20, note: "시험에 나온다고 함", createdAt: at, recording: monday))
-        context.insert(Bookmark(time: 30, note: "다른 이야기", createdAt: at, recording: monday))
-        context.insert(Bookmark(time: 10, note: "", createdAt: at, recording: friday))
+        addRecording("시험 정리", subject: ds, at: date(2026, 3, 4, 10, 0))
+        addRecording("금요일", subject: ds, at: date(2026, 3, 6, 10, 0))
+        context.insert(Bookmark(time: 20, note: "시험에 나온다고 함", createdAt: date(2026, 3, 7, 0, 0), recording: monday))
         try context.save()
 
         let library = RecordingLibrary(context: context)
         library.select(.all)
         library.filter.query = "시험"
 
-        #expect(library.recordings.map(\.title) == ["시험 정리", "월요일"])
-        #expect(library.matchingNotes(of: monday) == ["시험에 나온다고 함"])
-        #expect(library.matchingNotes(of: wednesday).isEmpty)
+        #expect(library.recordings.map(\.title) == ["시험 정리"])
 
         library.filter.query = ""
         #expect(library.recordings.count == 3)
-        #expect(library.matchingNotes(of: monday).isEmpty)
 
         library.filter.query = "없는말"
         #expect(library.recordings.isEmpty)
