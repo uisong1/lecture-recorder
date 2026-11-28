@@ -22,6 +22,8 @@ enum Design {
         static let pearl = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
         /// 행 구분선, 옅은 칸, 고른 탭 바탕.
         static let fill = Color(light: 0xF0F0F2, dark: 0x2C2C2E)
+        /// 사이드바 바탕.
+        static let sidebar = Color(light: 0xECECEE, dark: 0x161618)
         /// 카드 테두리 1px.
         static let hairline = Color(light: 0xE5E5E7, dark: 0x38383A)
         /// 보조 버튼·입력칸 테두리.

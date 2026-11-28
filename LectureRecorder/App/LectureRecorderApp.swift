@@ -20,6 +20,7 @@ struct LectureRecorderApp: App {
     var body: some Scene {
         WindowGroup("수업 녹음", id: Self.mainWindowID) {
             ContentView(dependencies: dependencies)
+                .tint(Design.Palette.ink)
                 .task {
                     // UI 테스트 중에는 권한 창이 화면을 가리지 않도록 묻지 않는다.
                     guard !AppDependencies.isUITesting else { return }
@@ -30,6 +31,7 @@ struct LectureRecorderApp: App {
 
         MenuBarExtra {
             MenuBarContent(recording: dependencies.recording, transcription: dependencies.transcription.queue)
+                .tint(Design.Palette.ink)
         } label: {
             MenuBarLabel(recording: dependencies.recording)
         }
@@ -37,23 +39,27 @@ struct LectureRecorderApp: App {
 
         Window("시간표 가져오기", id: TimetableImportView.windowID) {
             TimetableImportView(model: dependencies.timetableImport)
+                .tint(Design.Palette.ink)
         }
         .defaultSize(width: 860, height: 640)
 
         Window("LMS 영상 가져오기", id: LMSBrowserWindow.windowID) {
             LMSBrowserWindow(browser: dependencies.lmsBrowser, model: dependencies.lmsImport, subjects: dependencies.subjects)
+                .tint(Design.Palette.ink)
         }
         .defaultSize(width: 1100, height: 760)
         .modelContainer(dependencies.container)
 
         Window("녹음 없는 수업일", id: LMSBackfillWindow.windowID) {
             LMSBackfillWindow(model: dependencies.lmsBackfill, token: dependencies.canvasToken)
+                .tint(Design.Palette.ink)
         }
         .defaultSize(width: 820, height: 560)
         .modelContainer(dependencies.container)
 
         Settings {
             SettingsView(subjects: dependencies.subjects, schedule: dependencies.schedule, reminders: dependencies.reminders, rescan: dependencies.rescan, recording: dependencies.recording, launchAtLogin: dependencies.launchAtLogin, appUpdate: dependencies.appUpdate, playback: dependencies.playback, storeBackup: dependencies.storeBackup, storage: dependencies.storage, canvasToken: dependencies.canvasToken, lectureMaterials: dependencies.lectureMaterials, transcription: dependencies.transcription)
+                .tint(Design.Palette.ink)
         }
         .modelContainer(dependencies.container)
     }

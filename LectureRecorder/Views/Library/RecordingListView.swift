@@ -40,10 +40,38 @@ struct RecordingListView: View {
                 ContentUnavailableView("녹음이 없습니다", systemImage: "waveform", description: Text(emptyDescription))
                     .accessibilityIdentifier("emptyRecordings")
             } else {
-                recordingList
+                VStack(alignment: .leading, spacing: Design.Spacing.md) {
+                    listHeader
+                    recordingList
+                        .background(Design.Palette.canvas, in: RoundedRectangle(cornerRadius: Design.Radius.lg))
+                        .overlay(RoundedRectangle(cornerRadius: Design.Radius.lg).strokeBorder(Design.Palette.hairline, lineWidth: 1))
+                }
+                .padding(.horizontal, 28)
+                .padding(.vertical, Design.Spacing.lg)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// 시안 02: 과목 이름과 "녹음 12개 · 안 들은 녹음 2개".
+    private var listHeader: some View {
+        let unplayed = library.recordings.filter(\.isUnplayed).count
+        return VStack(alignment: .leading, spacing: Design.Spacing.xxs) {
+            Text(listTitle)
+                .designText(.displayLg)
+                .foregroundStyle(Design.Palette.ink)
+            Text("녹음 \(library.recordings.count)개" + (unplayed > 0 ? " · 안 들은 녹음 \(unplayed)개" : ""))
+                .designText(.caption)
+                .foregroundStyle(Design.Palette.inkMuted)
+        }
+    }
+
+    private var listTitle: String {
+        switch library.selection {
+        case .subject(let id): library.subjects.first { $0.persistentModelID == id }?.name ?? "과목"
+        case .unclassified: RecordingStorage.unclassifiedFolder
+        case .all, nil: "모든 녹음"
+        }
     }
 
     private var emptyDescription: String {
@@ -54,6 +82,8 @@ struct RecordingListView: View {
         List(library.recordings, selection: Bindable(library).selectedIDs) { recording in
             row(for: recording)
         }
+        .listStyle(.inset)
+        .scrollContentBackground(.hidden)
         // 행에 직접 제스처를 달지 않고 macOS 기본 방식으로 받는다: 한 번 클릭은 List가 선택하고,
         // 더블클릭(primaryAction)만 재생한다. 우클릭 메뉴도 같은 API라 눌린 행이 정확히 넘어온다.
         .contextMenu(forSelectionType: PersistentIdentifier.self) { ids in
@@ -87,39 +117,61 @@ struct RecordingListView: View {
         return labels
     }
 
-    private func row(for recording: Recording) -> some View {
-        HStack {
-            if recording.isUnplayed {
-                Circle()
-                    .fill(Design.Palette.primary)
-                    .frame(width: 8, height: 8)
-                    .accessibilityHidden(true)
-                    .accessibilityIdentifier("unplayedDot")
-            }
-            rowText(for: recording)
-            Spacer()
-            Button(isPlaying(recording) ? "일시정지" : "듣기") { play(recording) }
-                .buttonStyle(.textLink)
-                .accessibilityLabel((isPlaying(recording) ? "일시정지: " : "듣기: ") + recording.title)
-        }
+    private func isSelected(_ recording: Recording) -> Bool {
+        library.selectedIDs.contains(recording.persistentModelID)
     }
 
-    private func rowText(for recording: Recording) -> some View {
+    /// 시안 02: 왼쪽 동그란 재생 버튼, 제목과 회색 둘째 줄. 고른 행은 검정 바탕 흰 글자.
+    private func row(for recording: Recording) -> some View {
+        let selected = isSelected(recording)
+        return HStack(spacing: Design.Spacing.sm) {
+            Circle()
+                .fill(recording.isUnplayed ? (selected ? Design.Palette.onPrimary : Design.Palette.ink) : Color.clear)
+                .frame(width: 6, height: 6)
+                .accessibilityHidden(true)
+                .accessibilityIdentifier(recording.isUnplayed ? "unplayedDot" : "")
+            Button { play(recording) } label: {
+                Image(systemName: isPlaying(recording) ? "pause.fill" : "play.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(selected ? Design.Palette.onPrimary : Design.Palette.ink)
+                    .frame(width: 30, height: 30)
+                    .overlay(Circle().strokeBorder(selected ? Design.Palette.onPrimary.opacity(0.6) : Design.Palette.border, lineWidth: 1))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help(isPlaying(recording) ? "일시정지" : "듣기")
+            .accessibilityLabel((isPlaying(recording) ? "일시정지: " : "듣기: ") + recording.title)
+            rowText(for: recording, selected: selected)
+            Spacer()
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, Design.Spacing.xs)
+        .background(SystemSelectionHighlightRemover())
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(selected ? Design.Palette.ink : Color.clear)
+                .padding(.horizontal, Design.Spacing.xxs)
+        )
+    }
+
+    private func rowText(for recording: Recording, selected: Bool) -> some View {
+        let primary: Color = selected ? Design.Palette.onPrimary : Design.Palette.ink
+        let secondary: Color = selected ? Design.Palette.onPrimary.opacity(0.7) : Design.Palette.inkMuted
         let status: RecordingRowStatus = library.rowStatus(for: recording, using: manager)
         let matches = BookmarkMatchSummary(library.matchingBookmarks(of: recording)) { $0.note }
         let extras: [String] = extraLabels(for: recording, status: status)
         return VStack(alignment: .leading, spacing: 2) {
             Text(recording.title)
                 .designText(.bodyStrong)
-                .foregroundStyle(Design.Palette.ink)
+                .foregroundStyle(primary)
                 .accessibilityIdentifier("recordingRow")
             Text(detailLine(for: recording))
                 .designText(.caption)
-                .foregroundStyle(Design.Palette.inkMuted)
+                .foregroundStyle(secondary)
             if !recording.memo.isEmpty {
                 Text("수업 메모: \(recording.memo)")
                     .designText(.caption)
-                    .foregroundStyle(Design.Palette.ink)
+                    .foregroundStyle(primary)
                     .lineLimit(1)
                     .accessibilityIdentifier("recordingMemo")
             }
@@ -136,7 +188,7 @@ struct RecordingListView: View {
             if !extras.isEmpty {
                 Text(extras.joined(separator: " · "))
                     .designText(.caption)
-                    .foregroundStyle(status.isMissing ? Design.Palette.danger : Design.Palette.inkMuted)
+                    .foregroundStyle(status.isMissing ? primary : secondary)
                     .accessibilityIdentifier("recordingStatus")
             }
         }
@@ -217,7 +269,7 @@ struct RecordingListView: View {
             .searchable(text: queryBinding, prompt: "제목·북마크 메모 검색")
             .toolbar { toolbarContent }
             .scrollContentBackground(.hidden)
-            .designCanvas()
+            .designCanvas(Design.Palette.parchment)
     }
 
     @ToolbarContentBuilder

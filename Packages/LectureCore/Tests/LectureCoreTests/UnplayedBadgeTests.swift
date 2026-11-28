@@ -3,7 +3,7 @@ import Testing
 
 @Suite struct UnplayedBadgeTests {
     @Test func 개수가_있으면_글자를_보이고_0이면_숨긴다() {
-        #expect(UnplayedBadge.text(count: 3) == "안 들음 3")
+        #expect(UnplayedBadge.text(count: 3) == "새 3")
         #expect(UnplayedBadge.text(count: 0) == nil)
     }
 

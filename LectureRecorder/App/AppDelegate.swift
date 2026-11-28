@@ -6,6 +6,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 앱 시작 때 `LectureRecorderApp`이 채운다.
     @MainActor static var quitGuard: QuitGuard?
 
+    /// D1 시안은 밝은 흑백이라 맥이 다크 모드여도 앱은 항상 밝은 모드로 그린다 (2026-11-28 사용자: "디자인이 시안과 다르다").
+    @MainActor
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSApp.appearance = NSAppearance(named: .aqua)
+    }
+
     @MainActor
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let quitGuard = Self.quitGuard, quitGuard.requestQuit() == .askUser else { return .terminateNow }

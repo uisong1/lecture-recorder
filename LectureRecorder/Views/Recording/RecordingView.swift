@@ -25,13 +25,6 @@ struct RecordingView: View {
                     .padding(Design.Spacing.xl)
                     .frame(maxWidth: .infinity)
             }
-            if showsRecordButton {
-                // 창이 낮아도 시작·정지 버튼은 항상 보이게 스크롤 밖에 고정한다.
-                RecordButton(recording: recording)
-                    .padding(.vertical, Design.Spacing.md)
-                    .frame(maxWidth: .infinity)
-                    .background(Design.Palette.parchment)
-            }
             if playback.current != nil && !playback.isPanelHidden { PlaybackPanel(playback: playback, manager: manager, library: library) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -58,7 +51,7 @@ struct RecordingView: View {
             header
                 .designCard(padding: Design.Spacing.xl)
 
-            if let device = recording.inputDeviceName {
+            if recording.isRecording, let device = recording.inputDeviceName {
                 Label("마이크: \(device)", systemImage: "mic")
                     .designText(.caption)
                     .foregroundStyle(Design.Palette.inkMuted)
@@ -117,37 +110,38 @@ struct RecordingView: View {
         }
     }
 
+    /// 시안 01: 위 카드에 지금 과목, 타이머, 시작·정지 버튼을 함께 둔다.
     private var header: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { _ in
             VStack(spacing: Design.Spacing.xs) {
-                Text(recording.isRecording ? recording.currentSubjectName + (recording.isPaused ? " (일시정지)" : "") : "녹음 대기")
-                    .designText(.displayLg)
-                    .foregroundStyle(Design.Palette.ink)
-                    .accessibilityIdentifier("recordingSubject")
                 if recording.isRecording {
                     RecordingIndicator(isPaused: recording.isPaused)
                 } else {
-                    Text("지금 녹음하면: \(recording.expectedSubjectName)")
+                    Text("지금 녹음하면")
                         .designText(.caption)
                         .foregroundStyle(Design.Palette.inkMuted)
                         .accessibilityIdentifier("expectedSubject")
-                    // 메뉴 선택 칸은 폭을 고정해야 처음 그릴 때 "자…"처럼 잘리지 않는다 (fixedSize는 항목이 채워지기 전 폭으로 굳는다).
-                    Picker("과목", selection: Bindable(recording).subjectChoice) {
-                        Text("자동 (시간표)").tag(SubjectChoice.automatic)
-                        ForEach(recording.availableSubjects()) { subject in
-                            Text(subject.name).tag(SubjectChoice.subject(subject.persistentModelID))
-                        }
-                        Text("미분류").tag(SubjectChoice.unclassified)
-                    }
-                    .pickerStyle(.menu)
-                    .frame(width: 220)
-                    .accessibilityIdentifier("subjectChoice")
                 }
+                Text(recording.isRecording ? recording.currentSubjectName + (recording.isPaused ? " (일시정지)" : "") : recording.expectedSubjectName)
+                    .designText(.displayLg)
+                    .foregroundStyle(Design.Palette.ink)
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("recordingSubject")
                 Text(recording.elapsedText)
                     .designText(.hero)
                     .monospacedDigit()
                     .foregroundStyle(Design.Palette.ink)
+                    .padding(.vertical, Design.Spacing.xs)
                     .accessibilityIdentifier("elapsedTime")
+                if !recording.isRecording {
+                    Text(recording.isPermissionDenied ? "마이크 권한이 필요해요" : "준비됐어요")
+                        .designText(.caption)
+                        .foregroundStyle(Design.Palette.inkMuted)
+                }
+                if showsRecordButton {
+                    RecordButton(recording: recording, isWide: true)
+                        .padding(.top, Design.Spacing.sm)
+                }
             }
         }
     }
@@ -156,12 +150,15 @@ struct RecordingView: View {
 /// 녹음 시작·정지 버튼. 대기와 녹음 중 구역이 함께 쓴다.
 struct RecordButton: View {
     let recording: RecordingController
+    /// 카드 폭을 꽉 채우는 큰 버튼 (시안 01).
+    var isWide = false
 
     var body: some View {
         Button {
             Task { await recording.toggle() }
         } label: {
             Label(recording.isRecording ? "녹음 정지" : "녹음 시작", systemImage: recording.isRecording ? "stop.fill" : "mic.fill")
+                .frame(maxWidth: isWide ? .infinity : nil)
         }
         .buttonStyle(.pill)
         .keyboardShortcut("r", modifiers: .command)
