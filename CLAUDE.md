@@ -8,7 +8,8 @@
 
 ### 목표
 - **MVP**: 녹음 버튼 하나로 녹음 → 시간표 기준으로 과목 자동 분류 → 과목별 목록에서 재생
-- **나중에**: 음성→텍스트 변환(STT), AI 요약, 중요 구간 북마크
+- **전사**: 녹음이 끝난 뒤 맥 안에서 Qwen3-ASR로 녹음을 글로 바꾼다(사이드바 "전사" 탭, 여러 개 동시 처리). 녹음 중에는 전사하지 않는다.
+- **하지 않음**: AI 요약, 유료 API
 
 ### 하지 않는 것
 - 서버, 회원가입, 동기화, 다중 사용자 기능 (혼자 쓰는 로컬 앱)
@@ -26,8 +27,8 @@
 | 파일 저장 | `~/Library/Application Support/LectureRecorder/Recordings/<학기>/<과목>/<날짜 요일 시작시각>.m4a` | 앱 샌드박스 안의 표준 위치 |
 | 테스트 | Swift Testing (`@Test`), UI는 XCTest | Xcode 기본 도구 |
 | 구조 | 앱 타깃 + 로컬 Swift 패키지 `LectureCore` | 핵심 로직을 UI 없이 `swift test`로 빠르게 테스트 |
-| STT (나중) | Apple `Speech` 프레임워크 → 필요하면 WhisperKit | 한국어 지원, 기기 안에서 처리 |
-| AI 요약 (나중) | Claude API | 긴 강의 텍스트 요약에 적합. API 키는 Keychain에 저장 |
+| 전사 | Qwen3-ASR (맥 안 로컬 실행, MLX). 앱 안 Swift 패키지가 우선, 안 되면 별도 프로세스 | 한국어 지원, 인터넷·유료 API 불필요. 녹음이 끝난 뒤에만 실행 |
+| 글꼴 | Pretendard (SIL OFL 1.1, 앱에 포함) | 한글이 깔끔하고 모던함 |
 
 ## 폴더 구조
 
@@ -99,12 +100,12 @@ open "$(xcodebuild -scheme LectureRecorder -showBuildSettings | awk '/ BUILT_PRO
 - 실패 상황을 무시하지 않는다: 마이크 권한 거부, 저장 공간 부족, 녹음 중 앱 종료. 사용자에게 알리고 로그를 남긴다.
 - 강제 언래핑(`!`)과 `try!`는 테스트 코드 밖에서 쓰지 않는다.
 - UI 문구는 한국어로 쓴다.
-- 모든 화면 작업은 `DESIGN.md`를 따른다. 색·글자·모서리는 `LectureRecorder/Views/Design/DesignSystem.swift`의 토큰만 쓰고, 강조색은 Action Blue 하나, 그림자는 쓰지 않는다.
+- 모든 화면 작업은 `DESIGN.md`를 따른다. 색·글자·모서리는 `LectureRecorder/Views/Design/DesignSystem.swift`의 토큰만 쓰고, 흑백(검정·흰색·회색)만 쓴다. 색은 녹음 중 표시의 빨강 하나뿐이고, 그림자는 쓰지 않는다.
 - API 키 같은 비밀값은 코드나 저장소에 넣지 않고 Keychain에 저장한다.
 
 ## 기능 범위
 - 무엇을 만들지는 REQUIREMENTS.md를 따른다. 거기 없는 큰 기능은 TODO "확인 필요"에 제안만 한다.
-- 받아쓰기, 요약, 유료 API는 사용하지 않는다.
+- 전사(받아쓰기)는 로컬 Qwen3-ASR로 녹음이 끝난 뒤에만 한다. AI 요약과 유료 API는 사용하지 않는다.
 
 ## 품질 기준 (녹음 앱이므로 안정성이 최우선)
 - 녹음 중 앱이 꺼지거나 맥이 잠자기에 들어가도 그때까지의 녹음은 보존되어야 한다.
