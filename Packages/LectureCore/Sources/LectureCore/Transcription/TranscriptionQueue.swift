@@ -207,7 +207,9 @@ public final class TranscriptionQueue {
                 switch entries[index].state {
                 case .failed, .done: entries[index] = Entry(job: job, state: .waiting)
                 // 멈춰 둔 작업은 하던 데서 이어 하도록 작업(이어 하기 열쇠)을 그대로 두고 대기로 돌린다.
-                case .paused: entries[index].state = .waiting
+                case .paused(let progress):
+                    lastProgress[job.id] = progress
+                    entries[index].state = .waiting
                 case .waiting, .running, .stopping: continue
                 }
             } else {
@@ -219,6 +221,7 @@ public final class TranscriptionQueue {
 
     /// 대기열에서 뺀다. 진행 중이면 멈추고 뺀다. 이어 하려고 남겨 둔 것도 지운다.
     public func remove(id: String) {
+        lastProgress[id] = nil
         if let task = tasks[id] {
             removedWhileRunning.insert(id)
             pausingIDs.remove(id)
@@ -240,7 +243,7 @@ public final class TranscriptionQueue {
             entries[index].state = .stopping(progress: progress)
             tasks[id]?.cancel()
         case .waiting:
-            entries[index].state = .paused(progress: 0)
+            entries[index].state = .paused(progress: lastProgress[id] ?? 0)
         case .stopping, .paused, .failed, .done:
             return
         }
@@ -248,7 +251,8 @@ public final class TranscriptionQueue {
 
     /// 멈춘 작업을 대기로 돌려 다시 시작한다.
     public func resume(id: String) {
-        guard let index = entries.firstIndex(where: { $0.id == id }), case .paused = entries[index].state else { return }
+        guard let index = entries.firstIndex(where: { $0.id == id }), case .paused(let progress) = entries[index].state else { return }
+        lastProgress[id] = progress
         entries[index].state = .waiting
         pump()
     }
@@ -304,7 +308,7 @@ public final class TranscriptionQueue {
     private func start(_ queued: TranscriptionJob) {
         // 기다리는 사이 녹음을 옮겼거나 지웠을 수 있다. 시작 직전에 다시 찾는다.
         guard let job = resolveJob(queued) else {
-            setState(.failed("녹음을 찾지 못했어요. 지웠을 수 있어요."), for: queued.id)
+            setState(.failed("녹음을 찾지 못했거나 지금은 전사할 수 없어요. 지웠는지 확인해 주세요."), for: queued.id)
             engine.discardWork(for: queued)
             return
         }
@@ -422,7 +426,7 @@ public struct TranscriptionError: Error, Equatable, Sendable {
     }
 
     /// 도우미가 stderr에 남긴 글에서 마지막 `lines`줄(빈 줄 제외)을 고른다. 없으면 nil.
-    nonisolated public static func tail(of log: String, lines: Int = 3) -> String? {
+    public static func tail(of log: String, lines: Int = 3) -> String? {
         let kept = log.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         guard !kept.isEmpty else { return nil }
         return kept.suffix(lines).joined(separator: "\n")

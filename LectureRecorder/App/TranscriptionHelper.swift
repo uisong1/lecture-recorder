@@ -33,26 +33,38 @@ enum TranscriptionHelperScript {
 }
 
 /// 녹음 하나를 도우미로 전사한다. 진행 파일을 1초마다 읽어 진행률을 알리고, 취소되면 취소 파일을 만들어 도우미가 다음 조각 전에 멈추게 한다.
+/// 작업 폴더는 작업마다 고정(Caches/Transcribe/<workID>)이라, 멈춘 뒤 "이어서" 하면 끝낸 조각은 건너뛴다.
+/// 끝나거나 실패하면 폴더를 지우고, 멈추면 남긴다. 대기열에서 빼면 `discardWork`가 지운다.
 struct HelperScriptTranscriber: Transcribing {
     static let cancelledStatus = 40
 
+    static func workFolder(for job: TranscriptionJob) throws -> URL {
+        let caches = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        return caches.appending(path: "Transcribe/\(job.workID.uuidString)", directoryHint: .isDirectory)
+    }
+
     func transcribe(_ job: TranscriptionJob, progress: @escaping @Sendable (Double) -> Void) async throws -> Transcript {
         let files = FileManager.default
-        let folder = files.temporaryDirectory.appending(path: "Transcribe/\(UUID().uuidString)", directoryHint: .isDirectory)
+        let folder: URL
         do {
+            folder = try Self.workFolder(for: job)
             try files.createDirectory(at: folder, withIntermediateDirectories: true)
         } catch {
-            Log.app.error("전사 임시 폴더를 만들지 못함: \(error.localizedDescription, privacy: .public)")
-            throw TranscriptionError("임시 폴더를 만들지 못했어요. 저장 공간을 확인해 주세요.")
-        }
-        defer {
-            do { try files.removeItem(at: folder) } catch {
-                Log.app.error("전사 임시 폴더 정리 실패: \(error.localizedDescription, privacy: .public)")
-            }
+            Log.app.error("전사 작업 폴더를 만들지 못함: \(error.localizedDescription, privacy: .public)")
+            throw TranscriptionError("작업 폴더를 만들지 못했어요. 저장 공간을 확인해 주세요.", detail: error.localizedDescription)
         }
         let output = folder.appending(path: "result.json")
         let progressFile = folder.appending(path: "progress.json")
         let cancelFile = folder.appending(path: "progress.json.cancel")
+        let errorLog = folder.appending(path: "progress.json.log")
+        let resumeFile = folder.appending(path: "resume.json")
+        // 지난번 멈춤에서 남은 취소 표시와 오류 기록은 지우고 시작한다(이어하기 기록은 남긴다).
+        for leftover in [cancelFile, errorLog, output] where files.fileExists(atPath: leftover.path) {
+            do { try files.removeItem(at: leftover) } catch {
+                Log.app.error("전사 작업 폴더 정리 실패 \(leftover.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                throw TranscriptionError("지난 전사 기록을 정리하지 못했어요. 빼고 다시 넣어 주세요.", detail: error.localizedDescription)
+            }
+        }
 
         let poller = Task.detached {
             while !Task.isCancelled {
@@ -64,7 +76,7 @@ struct HelperScriptTranscriber: Transcribing {
         }
         defer { poller.cancel() }
 
-        let arguments = ["run", job.audioURL.path, output.path, progressFile.path, String(ProcessInfo.processInfo.processIdentifier)]
+        let arguments = ["run", job.audioURL.path, output.path, progressFile.path, String(ProcessInfo.processInfo.processIdentifier), resumeFile.path]
         let status: Int
         do {
             status = try await withTaskCancellationHandler {
@@ -75,23 +87,72 @@ struct HelperScriptTranscriber: Transcribing {
                 }
             }
         } catch TranscriptionToolError.helperMissing {
+            Self.removeWork(at: folder)
             throw TranscriptionError(TranscriptionHelperScript.missingMessage)
         }
+        // 결과가 다 나왔으면 그 사이 멈춤을 눌렀어도 결과를 돌려준다(버리지 않는다).
+        if status == 0 {
+            defer { Self.removeWork(at: folder) }
+            do {
+                return try Transcript.decode(Data(contentsOf: output))
+            } catch {
+                Log.app.error("전사 결과를 읽지 못함: \(error.localizedDescription, privacy: .public)")
+                throw TranscriptionError("전사 결과를 읽지 못했어요. 다시 시도해 주세요.", detail: error.localizedDescription)
+            }
+        }
         if Task.isCancelled || status == Self.cancelledStatus { throw CancellationError() }
-        guard status == 0 else { throw TranscriptionError.helperExit(status) }
+        let detail = Self.errorTail(at: errorLog)
+        Self.removeWork(at: folder)
+        throw TranscriptionError.helperExit(status).with(detail: detail)
+    }
+
+    /// 앱을 켤 때 부른다. 대기열은 앱을 끄면 비므로, 지난번에 멈춰 둔 작업 폴더는 더 쓰지 않는다.
+    static func removeAllWork() {
         do {
-            return try Transcript.decode(Data(contentsOf: output))
+            let caches = try FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: false)
+            removeWork(at: caches.appending(path: "Transcribe", directoryHint: .isDirectory))
         } catch {
-            Log.app.error("전사 결과를 읽지 못함: \(error.localizedDescription, privacy: .public)")
-            throw TranscriptionError("전사 결과를 읽지 못했어요. 다시 시도해 주세요.")
+            Log.app.error("전사 작업 폴더 위치를 찾지 못함: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    func discardWork(for job: TranscriptionJob) {
+        do {
+            Self.removeWork(at: try Self.workFolder(for: job))
+        } catch {
+            Log.app.error("전사 작업 폴더를 찾지 못함: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private static func errorTail(at url: URL) -> String? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        do {
+            return TranscriptionError.tail(of: try String(contentsOf: url, encoding: .utf8))
+        } catch {
+            Log.app.error("전사 오류 기록을 읽지 못함: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private static func removeWork(at folder: URL) {
+        guard FileManager.default.fileExists(atPath: folder.path) else { return }
+        do { try FileManager.default.removeItem(at: folder) } catch {
+            Log.app.error("전사 작업 폴더 정리 실패: \(error.localizedDescription, privacy: .public)")
         }
     }
 }
 
 /// 설정 > 전사의 "전사 도구 설치". 처음 한 번 Python 가상환경과 mlx-audio를 설치한다 (몇 분 걸림, 모델은 첫 전사 때 받음).
 struct HelperScriptTranscriptionTool: TranscriptionToolManaging {
+    /// 0이면 준비됨, 20이면 아직 설치 안 됨. 그 밖의 코드는 도우미를 실행하지 못한 것이라 "설치 안 됨"과 구별해 알린다.
     func isReady() async throws -> Bool {
-        try await TranscriptionHelperScript.run(["status"]) == 0
+        let status = try await TranscriptionHelperScript.run(["status"])
+        switch status {
+        case 0: return true
+        case 20: return false
+        default:
+            throw TranscriptionToolError.failed("전사 도우미를 실행하지 못했어요 (코드 \(status)). 터미널에서 ./scripts/install.sh 를 다시 실행해 주세요. 로그: \(TranscriptionHelperScript.logPath)")
+        }
     }
 
     func install() async throws {

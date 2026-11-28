@@ -10,8 +10,11 @@ final class FakeTranscriptionTool: TranscriptionToolManaging, @unchecked Sendabl
     var installError: TranscriptionToolError?
     private(set) var installCount = 0
 
+    var statusError: TranscriptionToolError?
+
     func isReady() async throws -> Bool {
         if missing { throw TranscriptionToolError.helperMissing }
+        if let statusError { throw statusError }
         return ready
     }
 
@@ -48,7 +51,14 @@ final class MemoryTranscriptionPreferences: TranscriptionPreferences {
     private func add(_ path: String, day: Int, duration: TimeInterval = 5294) -> Recording {
         let recording = Recording(title: path, subject: subject, startedAt: date(2026, 11, day, 10, 30), duration: duration, relativePath: path)
         context.insert(recording)
+        // 앱에서 전사할 녹음은 늘 저장된 뒤라 고정 id가 정해져 있다.
+        do { try context.save() } catch { Issue.record("저장 실패: \(error)") }
         return recording
+    }
+
+    private func key(_ path: String) -> String {
+        let descriptor = FetchDescriptor<Recording>(predicate: #Predicate { $0.relativePath == path })
+        return (try? context.fetch(descriptor).first?.transcriptionKey) ?? path
     }
 
     private func makeCenter(active: Set<String> = []) -> TranscriptionCenter {
@@ -104,7 +114,7 @@ final class MemoryTranscriptionPreferences: TranscriptionPreferences {
         center.toggleSelection(center.candidates[2])
         #expect(center.selectedDuration == 5294 * 2)
         center.transcribeSelected()
-        #expect(Set(center.queue.entries.map(\.id)) == ["c.m4a", "a.m4a"])
+        #expect(Set(center.queue.entries.map(\.job.title)) == ["c.m4a", "a.m4a"])
         #expect(!center.isSelecting)
         #expect(center.selection.isEmpty)
     }
@@ -116,7 +126,7 @@ final class MemoryTranscriptionPreferences: TranscriptionPreferences {
         await center.checkTool()
         center.transcribe(center.candidates[0])
         center.selectAll()
-        #expect(center.selection == ["a.m4a"])
+        #expect(center.selection == [key("a.m4a")])
         #expect(center.idleCandidates.map(\.relativePath) == ["a.m4a"])
     }
 
@@ -156,7 +166,7 @@ final class MemoryTranscriptionPreferences: TranscriptionPreferences {
         await waitUntil { engine.running == ["a.m4a"] }
         center.recordingDidStart()
         #expect(center.queue.suspendReason == TranscriptionCenter.recordingPauseReason)
-        await waitUntil { center.queue.state(for: "a.m4a") == .waiting }
+        await waitUntil { center.queue.state(for: key("a.m4a")) == .waiting }
         center.recordingDidStop()
         await waitUntil { engine.running == ["a.m4a"] }
     }
@@ -202,6 +212,72 @@ final class MemoryTranscriptionPreferences: TranscriptionPreferences {
         center.removeTranscript(of: recording)
         #expect(center.candidates.map(\.relativePath) == ["a.m4a"])
         #expect(recording.transcribedAt == nil)
+    }
+
+    @Test func movingRecordingWhileWaitingTranscribesTheNewPathAndSavesResult() async throws {
+        let recording = add("자료구조/a.m4a", day: 20)
+        let center = makeCenter()
+        await center.checkTool()
+        center.queue.pauseAll()
+        center.transcribe(recording)
+        // 기다리는 사이 과목을 옮겨 경로가 바뀌었다.
+        recording.relativePath = "알고리즘/a.m4a"
+        try context.save()
+        center.queue.resumeAll()
+        await waitUntil { engine.running == ["자료구조/a.m4a"] }
+        #expect(engine.audioURL(of: "자료구조/a.m4a")?.path.hasSuffix("/Recordings/알고리즘/a.m4a") == true)
+
+        // 전사 중에 또 옮겨도 결과는 같은 녹음에 저장된다.
+        recording.relativePath = "운영체제/a.m4a"
+        try context.save()
+        engine.finish("자료구조/a.m4a", text: "옮긴 녹음")
+        await waitUntil { center.transcribed.count == 1 }
+        #expect(recording.transcript?.segments.first?.text == "옮긴 녹음")
+    }
+
+    @Test func deletedRecordingFailsItsRowInsteadOfTranscribing() async throws {
+        let recording = add("a.m4a", day: 20)
+        let center = makeCenter()
+        await center.checkTool()
+        center.queue.pauseAll()
+        center.transcribe(recording)
+        let id = key("a.m4a")
+        context.delete(recording)
+        try context.save()
+        center.queue.resumeAll()
+        guard case .failed = center.queue.state(for: id) else {
+            Issue.record("지운 녹음 줄은 실패여야 해요")
+            return
+        }
+        #expect(engine.started.isEmpty)
+    }
+
+    @Test func retranscribeKeepsOldResultUntilNewOneIsSaved() async throws {
+        let recording = add("a.m4a", day: 20)
+        recording.transcriptData = try Transcript(segments: [TranscriptSegment(start: 0, end: 1, text: "예전")], model: "m").encoded()
+        try context.save()
+        let center = makeCenter()
+        await center.checkTool()
+        center.retranscribe(recording)
+        await waitUntil { engine.running == ["a.m4a"] }
+        #expect(recording.transcript?.segments.first?.text == "예전")
+
+        center.queue.pause(id: key("a.m4a"))
+        await waitUntil { center.queue.state(for: key("a.m4a")) == .paused(progress: 0) }
+        #expect(recording.transcript?.segments.first?.text == "예전")
+
+        center.queue.resume(id: key("a.m4a"))
+        await waitUntil { engine.running == ["a.m4a"] }
+        engine.finish("a.m4a", text: "새로")
+        await waitUntil { center.queue.state(for: key("a.m4a")) == .done }
+        #expect(recording.transcript?.segments.first?.text == "새로")
+    }
+
+    @Test func helperThatCannotRunIsNotReportedAsNotInstalled() async {
+        tool.statusError = .failed("전사 도우미를 실행하지 못했어요 (코드 -1)")
+        let center = makeCenter()
+        await center.checkTool()
+        #expect(center.toolStatus == .failed("전사 도우미를 실행하지 못했어요 (코드 -1)"))
     }
 }
 #endif

@@ -71,7 +71,7 @@ public final class TranscriptionCenter {
     public var isSelecting = false {
         didSet { if !isSelecting { selection = [] } }
     }
-    /// 고른 녹음의 상대 경로.
+    /// 고른 녹음의 고정 id(`Recording.transcriptionKey`).
     public var selection: Set<String> = []
     public var errorMessage: String?
 
@@ -122,7 +122,11 @@ public final class TranscriptionCenter {
         powerOnly = preferences.powerOnly
         queue = TranscriptionQueue(engine: engine, maxConcurrent: preferences.concurrency)
         queue.onFinished = { [weak self] job, transcript in
-            try self?.save(transcript, for: job)
+            guard let self else { throw TranscriptionError("전사 화면이 닫혀 결과를 저장하지 못했어요.") }
+            try self.save(transcript, for: job)
+        }
+        queue.resolveJob = { [weak self] job in
+            self?.refreshedJob(job)
         }
         reload()
         refreshConditions()
@@ -142,7 +146,7 @@ public final class TranscriptionCenter {
         let active = activePaths()
         transcribed = all.filter(\.hasTranscript)
         candidates = all.filter { !$0.hasTranscript && Self.canTranscribe($0, active: active) }
-        selection = selection.intersection(candidates.map(\.relativePath))
+        selection = selection.intersection(candidates.map(\.transcriptionKey))
     }
 
     /// 녹음 중인 파일, 아직 압축 전(.caf)인 파일은 전사하지 않는다. 압축이 끝나면 경로가 바뀌기 때문이다.
@@ -151,12 +155,12 @@ public final class TranscriptionCenter {
     }
 
     public func recording(for id: String) -> Recording? {
-        (candidates + transcribed).first { $0.relativePath == id }
+        (candidates + transcribed).first { $0.transcriptionKey == id }
     }
 
     /// 대기·진행 중이 아닌 전사 안 된 녹음.
     public var idleCandidates: [Recording] {
-        candidates.filter { queue.state(for: $0.relativePath) == nil }
+        candidates.filter { queue.state(for: $0.transcriptionKey) == nil }
     }
 
     public var candidatesDuration: TimeInterval {
@@ -164,7 +168,7 @@ public final class TranscriptionCenter {
     }
 
     public var selectedDuration: TimeInterval {
-        candidates.filter { selection.contains($0.relativePath) }.reduce(0) { $0 + $1.duration }
+        candidates.filter { selection.contains($0.transcriptionKey) }.reduce(0) { $0 + $1.duration }
     }
 
     /// "자료구조 · 11월 26일 · 1:28:14"
@@ -176,12 +180,44 @@ public final class TranscriptionCenter {
 
     public func job(for recording: Recording) -> TranscriptionJob {
         TranscriptionJob(
-            id: recording.relativePath,
+            id: recording.transcriptionKey,
+            title: recording.title,
+            subtitle: subtitle(for: recording),
+            audioURL: storage.url(for: recording.relativePath),
+            duration: recording.duration,
+            recordingID: recording.persistentModelID
+        )
+    }
+
+    /// 작업을 시작하기 직전에 녹음을 고정 id로 다시 찾아 지금 경로로 바꾼다. 그 사이 과목을 옮겼어도 맞는 파일을 전사한다.
+    /// 지웠거나 아직 전사할 수 없는 상태(압축 전·녹음 중)면 nil.
+    func refreshedJob(_ job: TranscriptionJob) -> TranscriptionJob? {
+        guard let recording = findRecording(for: job) else { return nil }
+        guard Self.canTranscribe(recording, active: activePaths()) else {
+            Log.data.notice("전사할 수 없는 상태라 건너뜀: \(recording.relativePath, privacy: .public)")
+            return nil
+        }
+        return job.refreshed(
             title: recording.title,
             subtitle: subtitle(for: recording),
             audioURL: storage.url(for: recording.relativePath),
             duration: recording.duration
         )
+    }
+
+    private func findRecording(for job: TranscriptionJob) -> Recording? {
+        guard let id = job.recordingID else {
+            Log.data.error("전사 작업에 녹음 id가 없음: \(job.id, privacy: .public)")
+            return nil
+        }
+        var descriptor = FetchDescriptor<Recording>(predicate: #Predicate { $0.persistentModelID == id })
+        descriptor.fetchLimit = 1
+        do {
+            return try context.fetch(descriptor).first
+        } catch {
+            Log.data.error("전사할 녹음을 찾지 못함: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
     // MARK: 전사 시작
@@ -191,7 +227,7 @@ public final class TranscriptionCenter {
     }
 
     public func transcribeSelected() {
-        enqueue(candidates.filter { selection.contains($0.relativePath) })
+        enqueue(candidates.filter { selection.contains($0.transcriptionKey) })
         isSelecting = false
     }
 
@@ -199,16 +235,22 @@ public final class TranscriptionCenter {
         enqueue([recording])
     }
 
+    /// 이미 전사한 녹음을 다시 전사한다. 지금 결과는 새 결과가 저장될 때 바뀌고, 그 전에 멈추거나 실패해도 남는다.
+    public func retranscribe(_ recording: Recording) {
+        enqueue([recording])
+    }
+
     public func toggleSelection(_ recording: Recording) {
-        if selection.contains(recording.relativePath) {
-            selection.remove(recording.relativePath)
+        let key = recording.transcriptionKey
+        if selection.contains(key) {
+            selection.remove(key)
         } else {
-            selection.insert(recording.relativePath)
+            selection.insert(key)
         }
     }
 
     public func selectAll() {
-        selection = Set(idleCandidates.map(\.relativePath))
+        selection = Set(idleCandidates.map(\.transcriptionKey))
     }
 
     private func enqueue(_ recordings: [Recording]) {
@@ -225,11 +267,9 @@ public final class TranscriptionCenter {
     }
 
     private func save(_ transcript: Transcript, for job: TranscriptionJob) throws {
-        let id = job.id
-        var descriptor = FetchDescriptor<Recording>(predicate: #Predicate { $0.relativePath == id })
-        descriptor.fetchLimit = 1
-        guard let recording = try context.fetch(descriptor).first else {
-            throw TranscriptionError("녹음을 찾지 못했어요. 옮겼거나 지웠을 수 있어요.")
+        // 경로가 아니라 고정 id로 찾는다. 전사 중 과목을 옮겨 경로가 바뀌어도 결과를 잃지 않는다.
+        guard let recording = findRecording(for: job) else {
+            throw TranscriptionError("녹음을 찾지 못했어요. 지웠을 수 있어요.")
         }
         recording.transcriptData = try transcript.encoded()
         recording.transcribedAt = now()
@@ -264,6 +304,10 @@ public final class TranscriptionCenter {
             toolStatus = try await tool.isReady() ? .ready : .notInstalled
         } catch TranscriptionToolError.helperMissing {
             toolStatus = .helperMissing
+        } catch TranscriptionToolError.failed(let message) {
+            // 도우미는 있지만 실행하지 못했다. "설치 안 됨"과 다르게 이유를 보인다.
+            Log.app.error("전사 도구 확인 실패: \(message, privacy: .public)")
+            toolStatus = .failed(message)
         } catch {
             Log.app.error("전사 도구 확인 실패: \(error.localizedDescription, privacy: .public)")
             toolStatus = .failed("전사 도구를 확인하지 못했어요: \(error.localizedDescription)")
@@ -310,6 +354,12 @@ public final class TranscriptionCenter {
         } else {
             queue.setSuspended(nil)
         }
+    }
+}
+extension Recording {
+    /// 전사 대기열과 고르기에서 녹음을 구분하는 고정 id. 경로와 달리 과목을 옮기거나 압축해도 바뀌지 않는다.
+    public var transcriptionKey: String {
+        String(describing: persistentModelID)
     }
 }
 #endif
