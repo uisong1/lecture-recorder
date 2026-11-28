@@ -21,8 +21,12 @@ struct RecordingListView: View {
     @State private var batchNotice: String?
     /// 녹음 목록 대신 북마크를 모아 본다.
     @State private var showsBookmarks = false
-    /// Claude용 묶음 내보내기 결과 안내.
+    /// 묶음 내보내기 결과 안내.
     @State private var bundleNotice: String?
+    /// 내보내기 작은 창(녹음과 전사본 / 녹음만 / 전사본만). 열 때 그 순간의 녹음 수를 담는다.
+    @State private var exportChoices: BundleExportChoices?
+    /// 작은 창에서 고른 것. 창이 닫힌 뒤(onDismiss) 폴더를 고르고 내보낸다.
+    @State private var pendingExport: BundleContents?
     /// 전사 결과를 여는 녹음.
     @State private var transcriptRecording: Recording?
 
@@ -340,6 +344,22 @@ struct RecordingListView: View {
             } message: {
                 Text(batchNotice ?? "")
             }
+            .sheet(isPresented: presence($exportChoices), onDismiss: {
+                // 작은 창이 다 닫힌 뒤에 폴더 고르는 창을 띄운다. 취소했으면 아무것도 하지 않는다.
+                guard let contents = pendingExport else { return }
+                pendingExport = nil
+                exportBundle(contents: contents)
+            }) {
+                if let choices = exportChoices {
+                    ExportBundleSheet(label: library.exportLabel, choices: choices) {
+                        pendingExport = nil
+                        exportChoices = nil
+                    } onChoose: { contents in
+                        pendingExport = contents
+                        exportChoices = nil
+                    }
+                }
+            }
             .alert("내보내기", isPresented: presence($bundleNotice)) {
                 Button("확인") {}
             } message: {
@@ -403,8 +423,8 @@ struct RecordingListView: View {
             .pickerStyle(.inline)
             .accessibilityIdentifier("periodFilter")
             Divider()
-            Button("Claude용 내보내기…") { exportBundle() }
-                .help("지금 목록의 녹음과 북마크·메모를 한 폴더로 묶어 내보냅니다.")
+            Button("내보내기…") { openExportSheet() }
+                .help("지금 목록의 녹음·전사본과 북마크·메모를 한 폴더로 묶어 내보내요.")
                 .disabled(showsBookmarks || library.recordings.isEmpty)
                 .accessibilityIdentifier("exportBundle")
         } label: {
@@ -436,7 +456,7 @@ struct RecordingListView: View {
     /// 선택한 녹음에 대한 동작. 막대와 우클릭 메뉴가 함께 쓴다.
     @ViewBuilder
     private var bulkActions: some View {
-        Button("Claude용 내보내기…") { exportBundle() }
+        Button("내보내기…") { openExportSheet() }
             .accessibilityIdentifier("exportSelected")
         Menu("과목 옮기기") {
             ForEach(library.subjects) { subject in
@@ -524,10 +544,23 @@ struct RecordingListView: View {
         perform { try manager.export(recording, to: destination) }
     }
 
+    /// 내보내기 작은 창을 연다. 내보낼 수 있는 녹음이 없으면 이유를 알린다.
+    private func openExportSheet() {
+        let choices = manager.exportChoices(for: library.exportRecordings)
+        guard choices.recordingCount > 0 else {
+            bundleNotice = "내보낼 수 있는 녹음이 없어요. LMS에서 가져온 영상은 내보내지 않아요."
+            return
+        }
+        exportChoices = choices
+    }
+
     /// 지금 목록(고른 과목과 기간)의 녹음을 폴더를 골라 묶어 내보내고 Finder에서 보여 준다.
-    private func exportBundle() {
+    private func exportBundle(contents: BundleContents) {
         let recordings = library.exportRecordings
-        guard !recordings.isEmpty else { return }
+        guard !recordings.isEmpty else {
+            bundleNotice = "내보낼 녹음이 없어요. 목록이 바뀌었는지 확인해 주세요."
+            return
+        }
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -537,11 +570,9 @@ struct RecordingListView: View {
         panel.prompt = "여기에 내보내기"
         guard panel.runModal() == .OK, let parent = panel.url else { return }
         do {
-            let result = try manager.exportBundle(recordings, label: library.exportLabel, to: parent, now: Date())
+            let result = try manager.exportBundle(recordings, label: library.exportLabel, to: parent, now: Date(), contents: contents)
             NSWorkspace.shared.activateFileViewerSelecting([result.folder])
-            if !result.skippedTitles.isEmpty {
-                bundleNotice = "녹음 \(result.exportedCount)개를 내보냈습니다. 파일이 없어 빠진 녹음: " + result.skippedTitles.joined(separator: ", ")
-            }
+            bundleNotice = BundleExportChoices.notice(for: result)
         } catch {
             bundleNotice = manager.errorMessage ?? error.localizedDescription
         }

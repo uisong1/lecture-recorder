@@ -22,11 +22,24 @@ import Testing
         duration: TimeInterval = 3000,
         path: String = "2026년 1학기/자료구조/03-02 월 10-00.m4a",
         bookmarks: [BundleBookmark] = [],
+        transcript: [TranscriptSegment]? = nil,
         exists: Bool = true
     ) -> BundleRecording {
         if exists { files.add(storage.url(for: path)) }
-        return BundleRecording(title: title, subjectName: subject, semester: "2026년 1학기", startedAt: start, duration: duration, relativePath: path, bookmarks: bookmarks)
+        return BundleRecording(
+            title: title, subjectName: subject, semester: "2026년 1학기", startedAt: start, duration: duration,
+            relativePath: path, bookmarks: bookmarks, transcript: transcript
+        )
     }
+
+    func written(_ url: URL) -> String? {
+        files.written[url.standardizedFileURL.path].map { String(decoding: $0, as: UTF8.self) }
+    }
+
+    let segments = [
+        TranscriptSegment(start: 3723, end: 3730, text: "시험에 나와요"),
+        TranscriptSegment(start: 5, end: 9, text: "오늘은\n해시 테이블"),
+    ]
 
     func summary(_ result: RecordingBundleResult) throws -> String {
         let url = result.folder.appending(path: RecordingBundleExporter.summaryFileName)
@@ -37,7 +50,7 @@ import Testing
     @Test func 녹음_파일을_복사하고_원본은_그대로_둔다() throws {
         let r = recording()
         let result = try exporter.export([r], label: "자료구조", to: parent, now: now)
-        #expect(result.folder.lastPathComponent == "Claude용 묶음 자료구조 2026-10-25")
+        #expect(result.folder.lastPathComponent == "내보내기 자료구조 2026-10-25")
         #expect(result.exportedCount == 1)
         #expect(files.fileExists(at: result.folder.appending(path: "녹음/자료구조 2026-03-02 월 10-00.m4a")))
         #expect(files.fileExists(at: storage.url(for: r.relativePath)))
@@ -125,7 +138,7 @@ import Testing
         let first = try exporter.export([r], label: "자료구조", to: parent, now: now)
         let second = try exporter.export([r], label: "자료구조", to: parent, now: now)
         #expect(first.folder != second.folder)
-        #expect(second.folder.lastPathComponent == "Claude용 묶음 자료구조 2026-10-25_2")
+        #expect(second.folder.lastPathComponent == "내보내기 자료구조 2026-10-25_2")
     }
 
     @Test func 복사에_실패하면_만들던_폴더를_지우고_원본은_남는다() throws {
@@ -145,7 +158,7 @@ import Testing
 
     @Test func 폴더_이름의_위험한_글자는_바꾼다() throws {
         let result = try exporter.export([recording()], label: "컴구/운영:체제", to: parent, now: now)
-        #expect(result.folder.lastPathComponent == "Claude용 묶음 컴구-운영-체제 2026-10-25")
+        #expect(result.folder.lastPathComponent == "내보내기 컴구-운영-체제 2026-10-25")
         #expect(result.folder.deletingLastPathComponent().path == parent.path)
     }
 
@@ -157,5 +170,114 @@ import Testing
         #expect(RecordingBundleExporter.durationText(3000) == "50분")
         #expect(RecordingBundleExporter.durationText(3900) == "1시간 5분")
         #expect(RecordingBundleExporter.durationText(7200) == "2시간")
+    }
+
+    // MARK: 전사본
+
+    @Test func 둘_다_내보내면_전사본을_시각과_함께_따로_둔다() throws {
+        let done = recording(transcript: segments)
+        let notYet = recording("2주차", at: date(2026, 3, 9, 10, 0), path: "2026년 1학기/자료구조/03-09 월 10-00.m4a")
+        let result = try exporter.export([done, notYet], label: "자료구조", to: parent, now: now)
+
+        let transcript = try #require(written(result.folder.appending(path: "전사/자료구조 2026-03-02 월 10-00.md")))
+        #expect(transcript.contains("# 전사: 1주차"))
+        // 시각 순서로 적고 줄바꿈은 한 줄로 합친다.
+        #expect(transcript.contains("[00:05] 오늘은 해시 테이블\n[1:02:03] 시험에 나와요"))
+        let text = try summary(result)
+        #expect(text.contains("- 전사: `전사/자료구조 2026-03-02 월 10-00.md` (문장 2개)"))
+        #expect(text.contains("- 전사: 없음"))
+        #expect(files.fileExists(at: result.folder.appending(path: "녹음/자료구조 2026-03-09 월 10-00.m4a")))
+    }
+
+    @Test func 녹음만_내보내면_전사본은_넣지_않는다() throws {
+        let result = try exporter.export([recording(transcript: segments)], label: "자료구조", to: parent, now: now, contents: .audioOnly)
+        #expect(written(result.folder.appending(path: "전사/자료구조 2026-03-02 월 10-00.md")) == nil)
+        #expect(files.fileExists(at: result.folder.appending(path: "녹음/자료구조 2026-03-02 월 10-00.m4a")))
+        #expect(!(try summary(result)).contains("전사"))
+    }
+
+    @Test func 전사본만_내보내면_소리는_빼고_전사_안_된_녹음은_알린다() throws {
+        // 전사본만이면 소리 파일이 없어도 된다.
+        let done = recording(transcript: segments, exists: false)
+        let notYet = recording("2주차", at: date(2026, 3, 9, 10, 0), path: "2026년 1학기/자료구조/03-09 월 10-00.m4a")
+        let result = try exporter.export([done, notYet], label: "자료구조", to: parent, now: now, contents: .transcriptOnly)
+
+        #expect(result.exportedCount == 1)
+        #expect(result.untranscribedTitles == ["2주차"])
+        #expect(written(result.folder.appending(path: "전사/자료구조 2026-03-02 월 10-00.md")) != nil)
+        #expect(!files.fileExists(at: result.folder.appending(path: "녹음/자료구조 2026-03-02 월 10-00.m4a")))
+        let text = try summary(result)
+        #expect(!text.contains("- 파일:"))
+        #expect(text.contains("(문장 2개)"))
+    }
+
+    @Test func 전사한_녹음이_없으면_전사본만은_이유를_알린다() {
+        #expect(throws: RecordingBundleError.nothingTranscribed) {
+            try exporter.export([recording()], label: "자료구조", to: parent, now: now, contents: .transcriptOnly)
+        }
+    }
+
+    @Test func 전사_결과를_읽지_못하면_글에_적는다() throws {
+        var r = recording()
+        r.transcriptUnreadable = true
+        let text = try summary(try exporter.export([r], label: "자료구조", to: parent, now: now))
+        #expect(text.contains("- 전사: 읽지 못함"))
+    }
+}
+
+@Suite struct BundleExportChoicesTests {
+    @Test func 시안_문구대로_보인다() {
+        let choices = BundleExportChoices(recordingCount: 12, transcriptCount: 9)
+        #expect(choices.detail(for: .both) == "소리 파일 12개와 전사본 9개")
+        #expect(choices.detail(for: .audioOnly) == "소리 파일 12개")
+        #expect(choices.detail(for: .transcriptOnly) == "전사본 9개 (전사 안 된 3개는 빠져요)")
+        #expect(choices.isAvailable(.transcriptOnly))
+    }
+
+    @Test func 전사한_녹음이_없으면_전사본만은_고를_수_없다() {
+        let choices = BundleExportChoices(recordingCount: 3, transcriptCount: 0)
+        #expect(!choices.isAvailable(.transcriptOnly))
+        #expect(choices.detail(for: .transcriptOnly) == "전사한 녹음이 없어요")
+        #expect(choices.detail(for: .both) == "소리 파일 3개 (전사본은 아직 없어요)")
+    }
+
+    @Test func 빠진_녹음이_있을_때만_알린다() {
+        let folder = URL(filePath: "/tmp/out")
+        #expect(BundleExportChoices.notice(for: RecordingBundleResult(folder: folder, exportedCount: 2, skippedTitles: [])) == nil)
+        let notice = BundleExportChoices.notice(for: RecordingBundleResult(folder: folder, exportedCount: 1, skippedTitles: [], untranscribedTitles: ["2주차"]))
+        #expect(notice == "녹음 1개를 내보냈어요.\n전사하지 않아 빠진 녹음: 2주차")
+    }
+}
+
+@Suite struct BundleExportUnreadableTests {
+    let files = FakeFileStore()
+    let root = URL(filePath: "/tmp/LectureRecorderTests/Recordings", directoryHint: .isDirectory)
+    let parent = URL(filePath: "/tmp/LectureRecorderTests/Out", directoryHint: .isDirectory)
+
+    @Test func 읽지_못한_전사는_전사_안_됨과_따로_알린다() throws {
+        let storage = RecordingStorage(root: root, files: files)
+        let exporter = RecordingBundleExporter(storage: storage, files: files, calendar: seoulCalendar)
+        let path = "2026년 1학기/자료구조/03-02 월 10-00.m4a"
+        files.add(storage.url(for: path))
+        let broken = BundleRecording(title: "1주차", subjectName: "자료구조", startedAt: date(2026, 3, 2, 10, 0), duration: 60, relativePath: path, transcriptUnreadable: true)
+        let blank = BundleRecording(
+            title: "2주차", subjectName: "자료구조", startedAt: date(2026, 3, 9, 10, 0), duration: 60, relativePath: path,
+            transcript: [TranscriptSegment(start: 0, end: 1, text: "  ")]
+        )
+
+        let result = try exporter.export([broken, blank], label: "자료구조", to: parent, now: date(2026, 10, 25, 20, 0))
+
+        #expect(result.unreadableTitles == ["1주차"])
+        #expect(BundleExportChoices.notice(for: result)?.contains("전사 결과를 읽지 못한 녹음") == true)
+        // 빈 문장만 있는 전사는 전사본이 없는 것으로 본다.
+        #expect(!RecordingBundleExporter.hasTranscript(blank))
+        #expect(throws: RecordingBundleError.self) {
+            try exporter.export([broken], label: "자료구조", to: parent, now: date(2026, 10, 25, 20, 0), contents: .transcriptOnly)
+        }
+    }
+
+    @Test func 전사를_읽지_못했으면_전사본만에_그_이유를_보인다() {
+        let choices = BundleExportChoices(recordingCount: 2, transcriptCount: 0, unreadableCount: 2)
+        #expect(choices.detail(for: .transcriptOnly).contains("읽지 못했어요"))
     }
 }

@@ -317,8 +317,9 @@ enum ScreenLayout {
     /// 화면 안 좌우 여백.
     static let horizontalPadding: CGFloat = 28
     static let topPadding: CGFloat = 24
-    /// 내용 최대 폭. 넓은 창에서도 줄이 너무 길어지지 않게 하고, 왼쪽 정렬로 둔다.
-    static let maxContentWidth: CGFloat = 760
+    /// 내용 최대 폭. 창을 넓히면 내용도 함께 넓어지고(오른쪽이 비어 보이지 않게, 2026-11-28 사용자 피드백),
+    /// 아주 넓은 창에서만 줄이 너무 길어지지 않게 여기서 멈춘다. 왼쪽 정렬.
+    static let maxContentWidth: CGFloat = 1200
 }
 
 /// 화면 맨 위 머리: 큰 제목, 회색 요약 한 줄, 오른쪽 버튼들.

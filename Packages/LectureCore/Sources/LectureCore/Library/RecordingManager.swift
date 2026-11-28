@@ -154,6 +154,23 @@ public final class RecordingManager {
         !recording.isLMSVideo
     }
 
+    /// 내보내기 작은 창에 보일 녹음 수와 전사된 수. LMS 영상은 내보내지 않으니 세지 않는다.
+    public func exportChoices(for recordings: [Recording]) -> BundleExportChoices {
+        var transcribed = 0
+        var unreadable = 0
+        let shareable = recordings.filter(canShare)
+        for recording in shareable {
+            guard recording.transcriptData != nil else { continue }
+            if let transcript = recording.transcript {
+                if transcript.segments.contains(where: { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) { transcribed += 1 }
+            } else {
+                Log.storage.error("전사 결과를 읽지 못함: \(recording.relativePath, privacy: .public)")
+                unreadable += 1
+            }
+        }
+        return BundleExportChoices(recordingCount: shareable.count, transcriptCount: transcribed, unreadableCount: unreadable)
+    }
+
     /// 녹음 파일의 실제 위치. Finder에서 보여 주거나 공유할 때 쓴다.
     public func fileURL(for recording: Recording) -> URL {
         storage.url(for: recording.relativePath)
@@ -190,10 +207,21 @@ public final class RecordingManager {
 
     /// 녹음들을 파일과 북마크·메모 글이 든 한 폴더로 묶어 `parent` 안에 만든다. 원본은 그대로 둔다.
     /// 사용자가 이 폴더를 직접 Claude 같은 곳에 올려 쓴다. 앱이 어디로 보내지는 않는다.
-    public func exportBundle(_ recordings: [Recording], label: String, to parent: URL, now: Date, calendar: Calendar = .current) throws -> RecordingBundleResult {
-        // LMS 영상은 묶음(사용자가 다른 곳에 올릴 폴더)에 넣지 않는다.
-        let items = recordings.filter(canShare).map { recording in
-            BundleRecording(
+    public func exportBundle(
+        _ recordings: [Recording],
+        label: String,
+        to parent: URL,
+        now: Date,
+        contents: BundleContents = .both,
+        calendar: Calendar = .current
+    ) throws -> RecordingBundleResult {
+        // LMS 영상은 묶음(사용자가 다른 곳에 올릴 폴더)에 넣지 않는다. 그 전사본도 마찬가지다.
+        let items = recordings.filter(canShare).map { recording -> BundleRecording in
+            let transcript = recording.transcript
+            if recording.transcriptData != nil, transcript == nil {
+                Log.storage.error("내보낼 전사 결과를 읽지 못함: \(recording.relativePath, privacy: .public)")
+            }
+            return BundleRecording(
                 title: recording.title,
                 subjectName: recording.subject?.name,
                 semester: recording.subject?.semester,
@@ -202,11 +230,13 @@ public final class RecordingManager {
                 relativePath: recording.relativePath,
                 memo: recording.memo,
                 bookmarks: recording.sortedBookmarks.map { BundleBookmark(time: $0.time, note: $0.note) },
-                isRecovered: recording.isRecovered
+                isRecovered: recording.isRecovered,
+                transcript: transcript?.segments,
+                transcriptUnreadable: recording.transcriptData != nil && transcript == nil
             )
         }
         do {
-            let result = try storage.bundleExporter(calendar: calendar).export(items, label: label, to: parent, now: now)
+            let result = try storage.bundleExporter(calendar: calendar).export(items, label: label, to: parent, now: now, contents: contents)
             errorMessage = nil
             return result
         } catch {
