@@ -118,3 +118,8 @@ open "$(xcodebuild -scheme LectureRecorder -showBuildSettings | awk '/ BUILT_PRO
 
 ## 결정 기록
 - 기술적 결정(라이브러리 선택, 저장 방식, 구조 변경)을 하면 DECISIONS.md에 날짜, 결정, 이유를 남긴다.
+
+## ECC 도구 (.claude/)
+- `.claude/skills`(Swift 동시성·SwiftUI·프로토콜 DI 테스트·actor 저장), `.claude/agents`(swift-reviewer, swift-build-resolver, silent-failure-hunter), `.claude/rules`(Swift 코딩·패턴·테스트)는 Everything Claude Code(MIT)에서 가져온 참고 도구다. 출처는 `.claude/ECC-NOTICE.md`.
+- 이 파일, DESIGN.md, REQUIREMENTS.md와 충돌하면 항상 이 저장소 규칙이 우선이다. 예: 강조색·그림자는 DESIGN.md, 비밀값은 Keychain, 받아쓰기·요약·유료 API 금지.
+- 코드 리뷰 때 swift-reviewer와 silent-failure-hunter(삼켜진 오류 찾기)를 쓰면 좋다. 녹음 앱이라 조용히 실패하는 코드가 가장 위험하다.
