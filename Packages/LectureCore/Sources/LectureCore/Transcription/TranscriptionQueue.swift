@@ -272,7 +272,10 @@ public final class TranscriptionQueue {
 
     /// 끝난 줄과 실패한 줄을 치운다. 실패한 줄이 남겨 둔 것도 지운다.
     public func clearFinished() {
-        for entry in entries where entry.isFinished { engine.discardWork(for: entry.job) }
+        for entry in entries where entry.isFinished {
+            engine.discardWork(for: entry.job)
+            lastProgress[entry.id] = nil
+        }
         entries.removeAll(where: \.isFinished)
     }
 
@@ -322,6 +325,7 @@ public final class TranscriptionQueue {
             return
         }
         guard let job = resolved else {
+            lastProgress[queued.id] = nil
             setState(.failed("녹음을 찾지 못했어요. 지웠을 수 있어요."), for: queued.id)
             engine.discardWork(for: queued)
             return
@@ -396,13 +400,13 @@ public final class TranscriptionQueue {
                 }
             case .failure(let error):
                 if error is CancellationError {
-                    let progress = progress(of: job.id)
+                    let reached = progress(of: job.id)
                     if wasPausing {
                         // 사용자가 멈춘 것: 하던 데까지 기억하고 "이어서"를 기다린다.
-                        setState(.paused(progress: progress), for: job.id)
+                        setState(.paused(progress: reached), for: job.id)
                     } else {
                         // 모두 멈춤·녹음 시작으로 끊긴 것: 대기로 돌려 조건이 맞으면 이어서 한다.
-                        lastProgress[job.id] = progress
+                        lastProgress[job.id] = reached
                         setState(.waiting, for: job.id)
                     }
                 } else {

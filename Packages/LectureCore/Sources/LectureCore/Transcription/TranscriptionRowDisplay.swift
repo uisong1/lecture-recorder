@@ -3,7 +3,7 @@ import Foundation
 
 /// 전사 대기열 한 줄에 보일 상태와 버튼 (시안 transcribe-rows: 멈추는 중 → 멈춤·N%까지 함 + 이어서/빼기, 실패 이유 + 도우미 마지막 줄).
 public struct TranscriptionRowDisplay: Equatable, Sendable {
-    public enum Action: Equatable, Sendable {
+    public enum Action: Hashable, Sendable {
         case pause, resume, remove, retry, open
 
         public var title: String {
