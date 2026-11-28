@@ -222,18 +222,18 @@ struct InputLevelBar: View {
     }
 }
 
-/// 녹음 중임을 알리는 표시. 버튼은 파랑이고 이 표시만 빨강이다 (DECISIONS.md).
+/// 녹음 중임을 알리는 표시. 버튼은 검정이고 이 표시만 빨강이다 (DECISIONS.md 2026-11-28).
 private struct RecordingIndicator: View {
     let isPaused: Bool
 
     var body: some View {
         HStack(spacing: Design.Spacing.xs) {
             Circle()
-                .fill(isPaused ? Design.Palette.inkMuted : Design.Palette.danger)
+                .fill(isPaused ? Design.Palette.inkMuted : Design.Palette.recording)
                 .frame(width: 10, height: 10)
             Text(isPaused ? "일시정지 중" : "녹음 중")
                 .designText(.captionStrong)
-                .foregroundStyle(isPaused ? Design.Palette.inkMuted : Design.Palette.danger)
+                .foregroundStyle(isPaused ? Design.Palette.inkMuted : Design.Palette.ink)
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("recordingIndicator")

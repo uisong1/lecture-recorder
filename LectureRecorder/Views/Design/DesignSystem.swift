@@ -1,27 +1,53 @@
 import AppKit
+import CoreText
+import LectureCore
 import SwiftUI
 
-/// DESIGN.md의 토큰을 SwiftUI로 옮긴 것. 화면에서는 hex를 직접 쓰지 않고 여기 값만 쓴다.
-/// 어두운 모드에서는 DESIGN.md의 어두운 타일 색으로 바뀐다.
+/// DESIGN.md(D1: 흑백 + Pretendard)의 토큰을 SwiftUI로 옮긴 것. 화면에서는 hex를 직접 쓰지 않고 여기 값만 쓴다.
+/// 색은 흑백뿐이고, 빨강은 녹음 중 표시(`recording`)에만 쓴다. 어두운 모드에서는 흑백이 뒤집힌다.
 enum Design {
     enum Palette {
-        /// Action Blue. 눌러야 하는 모든 것에 쓰는 유일한 강조색.
-        static let primary = Color(light: 0x0066CC, dark: 0x2997FF)
-        static let primaryFocus = Color(hex: 0x0071E3)
+        /// 주 버튼·선택·스위치·진행 막대에 쓰는 검정(어두운 모드에서는 흰색). 따로 강조색은 없다.
+        static let primary = Color(light: 0x1D1D1F, dark: 0xFFFFFF)
+        /// 키보드 포커스 링. 주 색과 같다.
+        static let primaryFocus = primary
         static let ink = Color(light: 0x1D1D1F, dark: 0xFFFFFF)
-        static let inkMuted = Color(light: 0x7A7A7A, dark: 0xCCCCCC)
-        static let canvas = Color(light: 0xFFFFFF, dark: 0x272729)
-        static let parchment = Color(light: 0xF5F5F7, dark: 0x252527)
-        static let pearl = Color(light: 0xFAFAFC, dark: 0x2A2A2C)
-        static let hairline = Color(light: 0xE0E0E0, dark: 0x3A3A3C)
-        static let onPrimary = Color.white
-        /// 오류와 "녹음 중" 표시에만 쓰는 빨강. DESIGN.md에는 오류 색이 없어 따로 정했다 (DECISIONS.md 참고).
-        /// 버튼과 눌러야 하는 것에는 쓰지 않는다.
-        static let danger = Color(light: 0xD70015, dark: 0xFF453A)
+        static let inkMuted = Color(light: 0x7A7A7A, dark: 0xA1A1A6)
+        /// 비활성, 입력칸 안내 글자.
+        static let inkFaint = Color(light: 0xA1A1A6, dark: 0x6E6E73)
+        /// 카드·입력칸·목록 묶음 바탕.
+        static let canvas = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
+        /// 창 바탕.
+        static let parchment = Color(light: 0xF5F5F7, dark: 0x000000)
+        static let pearl = Color(light: 0xFFFFFF, dark: 0x1C1C1E)
+        /// 행 구분선, 옅은 칸, 고른 탭 바탕.
+        static let fill = Color(light: 0xF0F0F2, dark: 0x2C2C2E)
+        /// 카드 테두리 1px.
+        static let hairline = Color(light: 0xE5E5E7, dark: 0x38383A)
+        /// 보조 버튼·입력칸 테두리.
+        static let border = Color(light: 0xD2D2D7, dark: 0x48484A)
+        /// `primary` 위의 글자·아이콘.
+        static let onPrimary = Color(light: 0xFFFFFF, dark: 0x1D1D1F)
+        /// 녹음 중 표시에만 쓰는 빨강(빨간 점, 노치 막대, 메뉴 막대 녹음 아이콘). 버튼·삭제·오류에는 쓰지 않는다.
+        static let recording = Color(light: 0xFF3B30, dark: 0xFF453A)
+        /// 경고·오류 문구. D1에서는 빨강을 쓰지 않고 글자색과 같다. 경고 아이콘과 굵기로 구분한다.
+        static let danger = ink
+        /// 노치처럼 모드와 상관없이 늘 검정·흰색인 곳.
+        static let alwaysBlack = Color.black
+        static let alwaysWhite = Color.white
+        /// 노치 안의 마이크 칸(검정 위의 짙은 회색).
+        static let notchTile = Color(hex: 0x2A2A2C)
+        /// 노치 일시정지 막대(멈춘 회색).
+        static let notchIdleBar = Color(hex: 0x8E8E93)
     }
 
     enum Radius {
         static let sm: CGFloat = 8
+        /// 안내 줄·입력칸.
+        static let md: CGFloat = 11
+        /// 목록 묶음·설정 묶음.
+        static let group: CGFloat = 14
+        /// 카드.
         static let lg: CGFloat = 18
     }
 
@@ -35,33 +61,71 @@ enum Design {
         static let xxl: CGFloat = 48
     }
 
-    /// 글자 크기·굵기·자간. 굵기는 300 / 400 / 600만 쓴다(500 금지).
+    /// 글자 크기·굵기. 글꼴은 Pretendard(400/600/700)이고, 불러오지 못하면 시스템 글꼴로 돌아간다.
     enum Text {
         case hero, displayLg, tagline, body, bodyStrong, caption, captionStrong, finePrint
 
         var font: Font {
             switch self {
-            case .hero: .system(size: 56, weight: .semibold)
-            case .displayLg: .system(size: 40, weight: .semibold)
-            case .tagline: .system(size: 21, weight: .semibold)
-            case .body: .system(size: 17, weight: .regular)
-            case .bodyStrong: .system(size: 17, weight: .semibold)
-            case .caption: .system(size: 14, weight: .regular)
-            case .captionStrong: .system(size: 14, weight: .semibold)
-            case .finePrint: .system(size: 12, weight: .regular)
+            case .hero: Design.font(size: 64, weight: .semibold).monospacedDigit()
+            case .displayLg: Design.font(size: 26, weight: .bold)
+            case .tagline: Design.font(size: 19, weight: .semibold)
+            case .body: Design.font(size: 15, weight: .regular)
+            case .bodyStrong: Design.font(size: 15, weight: .semibold)
+            case .caption: Design.font(size: 13, weight: .regular)
+            case .captionStrong: Design.font(size: 13, weight: .semibold)
+            case .finePrint: Design.font(size: 12, weight: .regular)
             }
         }
 
         var tracking: CGFloat {
             switch self {
-            case .hero: -0.28
-            case .displayLg: 0
-            case .tagline: 0.231
-            case .body, .bodyStrong: -0.374
-            case .caption, .captionStrong: -0.224
-            case .finePrint: -0.12
+            case .hero: -1.6
+            case .displayLg: -0.6
+            case .tagline: -0.3
+            case .body, .bodyStrong, .caption, .captionStrong, .finePrint: 0
             }
         }
+    }
+
+    /// Pretendard 글꼴. 굵기는 regular/semibold/bold만 쓴다. 앱이 글꼴을 등록하지 못했으면 시스템 글꼴이다.
+    static func font(size: CGFloat, weight: Font.Weight) -> Font {
+        guard DesignFonts.isRegistered else { return .system(size: size, weight: weight) }
+        let name: String
+        switch weight {
+        case .bold, .heavy, .black: name = "Pretendard-Bold"
+        case .semibold, .medium: name = "Pretendard-SemiBold"
+        default: name = "Pretendard-Regular"
+        }
+        return .custom(name, size: size)
+    }
+}
+
+/// 앱 번들에 넣은 Pretendard를 앱 시작 때 한 번 등록한다.
+enum DesignFonts {
+    nonisolated(unsafe) private(set) static var isRegistered = false
+    static let fileNames = ["Pretendard-Regular", "Pretendard-SemiBold", "Pretendard-Bold"]
+
+    /// 등록하지 못한 글꼴이 하나라도 있으면 시스템 글꼴을 쓴다(로그를 남긴다).
+    static func register(bundle: Bundle = .main) {
+        var allRegistered = true
+        for name in fileNames {
+            guard let url = bundle.url(forResource: name, withExtension: "otf") else {
+                Log.app.error("글꼴 파일을 찾지 못했습니다: \(name, privacy: .public)")
+                allRegistered = false
+                continue
+            }
+            var error: Unmanaged<CFError>?
+            if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
+                // 이미 등록된 경우도 실패로 오지만, 글꼴은 쓸 수 있다.
+                let description = error?.takeRetainedValue().localizedDescription ?? "알 수 없음"
+                if NSFont(name: name, size: 12) == nil {
+                    Log.app.error("글꼴 등록 실패: \(name, privacy: .public) \(description, privacy: .public)")
+                    allRegistered = false
+                }
+            }
+        }
+        isRegistered = allRegistered
     }
 }
 
@@ -100,13 +164,13 @@ struct PillButtonStyle: ButtonStyle {
 
         var body: some View {
             label
-                .designText(isCompact ? .caption : .body)
+                .designText(isCompact ? .captionStrong : .bodyStrong)
                 .foregroundStyle(foreground)
                 .padding(.vertical, isCompact ? 6 : 11)
                 .padding(.horizontal, isCompact ? 12 : 22)
                 .background(background, in: Capsule())
                 .overlay {
-                    if kind == .secondary { Capsule().strokeBorder(Design.Palette.primary, lineWidth: 1) }
+                    if kind == .secondary { Capsule().strokeBorder(Design.Palette.border, lineWidth: 1) }
                 }
                 .overlay {
                     // 포커스 링: 2px primaryFocus (DESIGN.md)
@@ -121,24 +185,25 @@ struct PillButtonStyle: ButtonStyle {
     private var foreground: Color {
         switch kind {
         case .primary, .dark: Design.Palette.onPrimary
-        case .secondary: Design.Palette.primary
+        case .secondary: Design.Palette.ink
         }
     }
 
     private var background: Color {
         switch kind {
         case .primary: Design.Palette.primary
-        case .secondary: .clear
-        case .dark: Design.Palette.ink.opacity(0.9)
+        case .secondary: Design.Palette.canvas
+        case .dark: Design.Palette.ink
         }
     }
 }
 
-/// 목록 행 안의 작은 글자 링크(`text-link`).
+/// 목록 행 안의 작은 글자 링크. 검정 굵은 글자에 밑줄.
 struct TextLinkButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .designText(.caption)
+            .designText(.captionStrong)
+            .underline()
             .foregroundStyle(Design.Palette.primary)
             .scaleEffect(configuration.isPressed ? 0.95 : 1)
     }
@@ -167,7 +232,7 @@ struct IconPlainButtonStyle: ButtonStyle {
     }
 }
 
-/// 위젯 줄의 주 동작(정지·시작) 버튼. 파란 동그라미 안에 흰 아이콘.
+/// 위젯 줄의 주 동작(정지·시작) 버튼. 검정 동그라미 안에 흰 아이콘.
 struct IconFilledButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         IconLabel(label: configuration.label, isPressed: configuration.isPressed)

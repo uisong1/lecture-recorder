@@ -11,7 +11,7 @@ enum NotchLayout {
     }
 }
 
-/// 수업이 시작됐는데 녹음 전일 때 노치 아래에 뜨는 파란 배너. 흰 "녹음 열기" 버튼이 있고 배너 전체를 눌러도 같다.
+/// 수업이 시작됐는데 녹음 전일 때 노치 아래에 뜨는 검정 배너. 흰 "녹음 열기" 버튼이 있고 배너 전체를 눌러도 같다.
 /// 소리는 내지 않는다. 누르면 녹음 창을 열고, 우클릭으로 이번 수업은 끈다.
 struct NotchBannerView: View {
     let info: NotchAlertInfo
@@ -24,24 +24,24 @@ struct NotchBannerView: View {
             HStack(spacing: Design.Spacing.sm) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(info.subjectName) 수업이 시작됐어요")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(Design.font(size: 14, weight: .semibold))
                         .lineLimit(1)
                     Text("녹음 전이에요")
-                        .font(.system(size: 12))
-                        .opacity(0.9)
+                        .font(Design.font(size: 12, weight: .regular))
+                        .opacity(0.7)
                 }
                 Spacer(minLength: 0)
                 Text("녹음 열기")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Design.Palette.primary)
+                    .font(Design.font(size: 13, weight: .semibold))
+                    .foregroundStyle(Design.Palette.alwaysBlack)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
-                    .background(Capsule().fill(Color.white))
+                    .background(Capsule().fill(Design.Palette.alwaysWhite))
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(Design.Palette.alwaysWhite)
             .padding(.horizontal, Design.Spacing.md)
             .padding(.vertical, Design.Spacing.sm)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Design.Palette.primary))
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Design.Palette.alwaysBlack))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -69,18 +69,18 @@ struct NotchRecordingView: View {
         let size = NotchLayout.recordingSize(notchWidth: notchWidth, notchHeight: notchHeight)
         Button(action: onOpen) {
             HStack(spacing: 0) {
-                Image(systemName: "mic.fill")
+                Image(systemName: isPaused ? "pause.fill" : "mic.fill")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Design.Palette.alwaysWhite)
                     .frame(width: 22, height: 22)
-                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Design.Palette.danger))
+                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Design.Palette.notchTile))
                     .frame(width: NotchLayout.wingWidth)
                 Spacer(minLength: notchWidth)
                 bars.frame(width: NotchLayout.wingWidth)
             }
             .frame(width: size.width, height: size.height)
             .background(
-                UnevenRoundedRectangle(bottomLeadingRadius: 14, bottomTrailingRadius: 14, style: .continuous).fill(Color.black)
+                UnevenRoundedRectangle(bottomLeadingRadius: 14, bottomTrailingRadius: 14, style: .continuous).fill(Design.Palette.alwaysBlack)
             )
             .contentShape(Rectangle())
         }
@@ -96,7 +96,7 @@ struct NotchRecordingView: View {
             HStack(alignment: .center, spacing: 2) {
                 ForEach(0..<5, id: \.self) { index in
                     Capsule()
-                        .fill(Design.Palette.danger)
+                        .fill(isPaused ? Design.Palette.notchIdleBar : Design.Palette.recording)
                         .frame(width: 3, height: Self.barHeight(index: index, time: t, still: isPaused || reduceMotion))
                 }
             }
