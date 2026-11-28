@@ -19,7 +19,7 @@ public final class CanvasTokenModel {
 
     public func refresh() {
         do {
-            hasToken = try store.loadToken() != nil
+            hasToken = try store.hasToken()
         } catch {
             hasToken = false
             message = "토큰을 읽지 못했습니다: \(error.localizedDescription)"

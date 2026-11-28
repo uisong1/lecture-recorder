@@ -58,6 +58,19 @@ public final class KeychainCanvasTokenStore: CanvasTokenStoring, @unchecked Send
         return String(data: data, encoding: .utf8)
     }
 
+    /// 속성만 찾는다(kSecReturnData 없음). 로그인 키체인은 값을 꺼낼 때만 앱 허용 목록을 검사하므로,
+    /// 업데이트로 서명이 바뀐 직후에도 이 호출은 암호 창을 띄우지 않는다.
+    public func hasToken() throws -> Bool {
+        var query = baseQuery
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound { return false }
+        guard status == errSecSuccess else { throw KeychainError(status: status) }
+        return true
+    }
+
     public func saveToken(_ token: String) throws {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         try deleteToken()
