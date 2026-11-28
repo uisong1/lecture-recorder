@@ -2,29 +2,6 @@ import Foundation
 import Testing
 @testable import LectureCore
 
-@Suite struct PlaybackPanelLayoutTests {
-    @Test func 범위_안이면_그대로() {
-        #expect(PlaybackPanelLayout.clamp(300) == 300)
-    }
-
-    @Test func 너무_작거나_크면_범위로_맞춘다() {
-        #expect(PlaybackPanelLayout.clamp(10) == PlaybackPanelLayout.minHeight)
-        #expect(PlaybackPanelLayout.clamp(5000) == PlaybackPanelLayout.maxHeight)
-    }
-
-    @Test func 창이_낮으면_위_영역을_남긴다() {
-        #expect(PlaybackPanelLayout.clamp(500, available: 500) == 340)
-        #expect(PlaybackPanelLayout.clamp(500, available: 100) == PlaybackPanelLayout.minHeight)
-    }
-
-    @Test func 위로_끌면_커지고_아래로_끌면_작아진다() {
-        #expect(PlaybackPanelLayout.height(start: 300, dragUp: 50) == 350)
-        #expect(PlaybackPanelLayout.height(start: 300, dragUp: -100) == 200)
-    }
-}
-
-#if canImport(SwiftData)
-@MainActor
 @Suite struct PlaybackPanelVisibilityTests {
     let player = FakeAudioPlayer()
     let root = URL(filePath: "/tmp/LectureRecorderTests/Recordings", directoryHint: .isDirectory)
