@@ -2,11 +2,6 @@
 import Foundation
 import SwiftData
 
-/// 정지한 녹음(CAF)을 m4a로 압축해 `Recording`의 경로를 바꾼다.
-///
-/// 압축하는 동안에도 `Recording`은 CAF를 가리키고 있어 재생할 수 있다. 압축이 끝나 m4a가 자리 잡은 뒤에야
-/// 경로를 바꾸고 CAF를 지우므로, 어느 시점에 앱이 꺼져도 녹음이 사라지지 않는다.
-/// 실패하거나 꺼진 압축은 다음 실행 때 `compressPending()`이 이어서 한다.
 /// 같은 녹음을 두 곳에서 동시에 압축하지 않도록 압축 중인 녹음을 기억한다.
 @MainActor
 final class CompressionTracker {
@@ -22,6 +17,11 @@ final class CompressionTracker {
     }
 }
 
+/// 정지한 녹음(CAF)을 m4a로 압축해 `Recording`의 경로를 바꾼다.
+///
+/// 압축하는 동안에도 `Recording`은 CAF를 가리키고 있어 재생할 수 있다. 압축이 끝나 m4a가 자리 잡은 뒤에야
+/// 경로를 바꾸고 CAF를 지우므로, 어느 시점에 앱이 꺼져도 녹음이 사라지지 않는다.
+/// 실패하거나 꺼진 압축은 다음 실행 때 `compressPending()`이 이어서 한다.
 @MainActor
 public struct RecordingCompressor {
     private let context: ModelContext
@@ -65,6 +65,11 @@ public struct RecordingCompressor {
         do {
             let sourceSeconds = try await converter.duration(of: source)
             let compressedSeconds = try await converter.duration(of: compressed)
+            // 원본 길이를 0으로 읽으면 무엇과도 맞는 것으로 나오므로 믿지 않고 다시 압축한다.
+            guard sourceSeconds > 0 else {
+                Log.recording.error("원본 길이를 0으로 읽어 이미 있는 압축본을 믿지 않고 다시 압축")
+                return nil
+            }
             guard ConversionCheck.isComplete(sourceSeconds: sourceSeconds, convertedSeconds: compressedSeconds) else {
                 Log.recording.error("이미 있는 압축본이 짧아 다시 압축: 원본 \(sourceSeconds, privacy: .public)초, 압축본 \(compressedSeconds, privacy: .public)초")
                 return nil
