@@ -190,10 +190,21 @@ public final class RecordingManager {
 
     /// 녹음들을 파일과 북마크·메모 글이 든 한 폴더로 묶어 `parent` 안에 만든다. 원본은 그대로 둔다.
     /// 사용자가 이 폴더를 직접 Claude 같은 곳에 올려 쓴다. 앱이 어디로 보내지는 않는다.
-    public func exportBundle(_ recordings: [Recording], label: String, to parent: URL, now: Date, calendar: Calendar = .current) throws -> RecordingBundleResult {
-        // LMS 영상은 묶음(사용자가 다른 곳에 올릴 폴더)에 넣지 않는다.
-        let items = recordings.filter(canShare).map { recording in
-            BundleRecording(
+    public func exportBundle(
+        _ recordings: [Recording],
+        label: String,
+        to parent: URL,
+        now: Date,
+        contents: BundleContents = .both,
+        calendar: Calendar = .current
+    ) throws -> RecordingBundleResult {
+        // LMS 영상은 묶음(사용자가 다른 곳에 올릴 폴더)에 넣지 않는다. 그 전사본도 마찬가지다.
+        let items = recordings.filter(canShare).map { recording -> BundleRecording in
+            let transcript = recording.transcript
+            if recording.transcriptData != nil, transcript == nil {
+                Log.storage.error("내보낼 전사 결과를 읽지 못함: \(recording.relativePath, privacy: .public)")
+            }
+            return BundleRecording(
                 title: recording.title,
                 subjectName: recording.subject?.name,
                 semester: recording.subject?.semester,
@@ -202,11 +213,13 @@ public final class RecordingManager {
                 relativePath: recording.relativePath,
                 memo: recording.memo,
                 bookmarks: recording.sortedBookmarks.map { BundleBookmark(time: $0.time, note: $0.note) },
-                isRecovered: recording.isRecovered
+                isRecovered: recording.isRecovered,
+                transcript: transcript?.segments,
+                transcriptUnreadable: recording.transcriptData != nil && transcript == nil
             )
         }
         do {
-            let result = try storage.bundleExporter(calendar: calendar).export(items, label: label, to: parent, now: now)
+            let result = try storage.bundleExporter(calendar: calendar).export(items, label: label, to: parent, now: now, contents: contents)
             errorMessage = nil
             return result
         } catch {
