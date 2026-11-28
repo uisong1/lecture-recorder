@@ -322,7 +322,9 @@ public struct RecordingBundleExporter: Sendable {
         if contents.includesAudio {
             lines.append("- 녹음 파일은 `\(Self.audioFolderName)/` 폴더에 있습니다. 아래 각 수업의 \"파일\"이 그 이름입니다.")
         }
-        lines.append("- 북마크 시각은 녹음 시작부터 잰 시간입니다. 메모는 학생이 수업 중에 직접 적은 것입니다.")
+        if entries.contains(where: { !$0.recording.bookmarks.isEmpty }) {
+            lines.append("- 북마크 시각은 녹음 시작부터 잰 시간입니다. 메모는 학생이 수업 중에 직접 적은 것입니다.")
+        }
         if contents.includesTranscript {
             lines.append("- 전사한 수업은 `\(Self.transcriptFolderName)/` 폴더에 전사본이 있습니다. 맥에서 자동으로 받아 적은 글이라 틀린 말이 있을 수 있습니다.")
         }
@@ -358,9 +360,8 @@ public struct RecordingBundleExporter: Sendable {
                         lines.append("- 전사: 없음")
                     }
                 }
-                if r.bookmarks.isEmpty {
-                    lines.append("- 북마크: 없음")
-                } else {
+                // 북마크 기능은 2026-11-29 앱에서 뺐다. 북마크가 있을 때만 적고, 없으면 줄을 쓰지 않는다.
+                if !r.bookmarks.isEmpty {
                     lines.append("- 북마크 \(r.bookmarks.count)개:")
                     for bookmark in r.bookmarks.sorted(by: { $0.time < $1.time }) {
                         let note = bookmark.note.split(whereSeparator: \.isNewline).joined(separator: " ")

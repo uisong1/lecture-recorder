@@ -19,8 +19,6 @@ struct RecordingListView: View {
     @State private var confirmsBulkTrash = false
     /// 여러 건 처리에서 실패한 건이 있을 때의 안내.
     @State private var batchNotice: String?
-    /// 녹음 목록 대신 북마크를 모아 본다.
-    @State private var showsBookmarks = false
     /// 묶음 내보내기 결과 안내.
     @State private var bundleNotice: String?
     /// 내보내기 작은 창(녹음과 전사본 / 녹음만 / 전사본만). 열 때 그 순간의 녹음 수를 담는다.
@@ -34,7 +32,7 @@ struct RecordingListView: View {
         withOverlays(withDialogs(withToolbar(content)))
     }
 
-    /// 시안 02: 위에 제목·요약, 그 아래 녹음/북마크·안 들은 것만·더 보기, 그 아래 흰 카드 목록.
+    /// 시안 02: 위에 제목·요약, 그 아래 안 들은 것만·내보내기·더 보기, 그 아래 흰 카드 목록.
     private var content: some View {
         VStack(alignment: .leading, spacing: Design.Spacing.md) {
             listHeader
@@ -50,9 +48,7 @@ struct RecordingListView: View {
             }
             listControls
             Group {
-                if showsBookmarks {
-                    BookmarkOverviewView(library: library, playback: playback)
-                } else if library.recordings.isEmpty && library.filter.isActive {
+                if library.recordings.isEmpty && library.filter.isActive {
                     ContentUnavailableView("조건에 맞는 녹음이 없어요", systemImage: "magnifyingglass", description: Text("검색어나 기간을 바꿔 보세요."))
                         .accessibilityIdentifier("noMatchingRecordings")
                 } else if library.recordings.isEmpty {
@@ -80,17 +76,8 @@ struct RecordingListView: View {
 
     private var listControls: some View {
         HStack(spacing: Design.Spacing.xs) {
-            Picker("보기", selection: $showsBookmarks) {
-                Text("녹음").tag(false)
-                Text("북마크").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .accessibilityIdentifier("listModePicker")
             Button("안 들은 것만") { library.filter.unplayedOnly.toggle() }
                 .buttonStyle(library.filter.unplayedOnly ? PillButtonStyle(kind: .primary, isCompact: true) : PillButtonStyle(kind: .secondary, isCompact: true))
-                .disabled(showsBookmarks)
                 .accessibilityAddTraits(library.filter.unplayedOnly ? .isSelected : [])
                 .accessibilityIdentifier("unplayedOnly")
             Spacer()
@@ -152,7 +139,6 @@ struct RecordingListView: View {
     private func extraLabels(for recording: Recording, status: RecordingRowStatus) -> [String] {
         var labels: [String] = []
         if recording.isUnplayed { labels.append("안 들음") }
-        if let bookmarks = RecordingRowStatus.bookmarkLabel(count: recording.bookmarks.count) { labels.append(bookmarks) }
         labels.append(contentsOf: status.labels)
         return labels
     }
@@ -198,7 +184,6 @@ struct RecordingListView: View {
         let primary: Color = selected ? Design.Palette.onPrimary : Design.Palette.ink
         let secondary: Color = selected ? Design.Palette.onPrimary.opacity(0.7) : Design.Palette.inkMuted
         let status: RecordingRowStatus = library.rowStatus(for: recording, using: manager)
-        let matches = BookmarkMatchSummary(library.matchingBookmarks(of: recording)) { $0.note }
         let extras: [String] = extraLabels(for: recording, status: status)
         return VStack(alignment: .leading, spacing: 2) {
             Text(recording.title)
@@ -215,16 +200,6 @@ struct RecordingListView: View {
                     .lineLimit(1)
                     .accessibilityIdentifier("recordingMemo")
             }
-            ForEach(matches.shown) { bookmark in
-                matchedBookmarkButton(bookmark, in: recording)
-            }
-            if let hidden = matches.hiddenText {
-                Button(hidden) { showsBookmarks = true }
-                    .buttonStyle(.textLink)
-                    .help("북마크 보기에서 맞은 메모를 모두 봅니다")
-                    .accessibilityLabel("맞은 북마크 메모 \(matches.hiddenCount)개 더 보기")
-                    .accessibilityIdentifier("hiddenBookmarkNotes")
-            }
             if !extras.isEmpty {
                 Text(extras.joined(separator: " · "))
                     .designText(.caption)
@@ -232,24 +207,6 @@ struct RecordingListView: View {
                     .accessibilityIdentifier("recordingStatus")
             }
         }
-    }
-
-    private func matchedBookmarkButton(_ bookmark: Bookmark, in recording: Recording) -> some View {
-        let time: String = RecordingController.format(bookmark.time)
-        return Button {
-            guard manager.canPlay(recording) else { return }
-            playback.select(recording)
-            playback.play(from: bookmark)
-        } label: {
-            Text("메모: \(bookmark.note)")
-                .designText(.caption)
-                .foregroundStyle(Design.Palette.primary)
-                .lineLimit(1)
-        }
-        .buttonStyle(.plain)
-        .help("\(time) 북마크 앞부분부터 듣기")
-        .accessibilityLabel("북마크 메모 \(bookmark.note), \(time)부터 듣기")
-        .accessibilityIdentifier("matchedBookmarkNote")
     }
 
     @ViewBuilder
@@ -302,7 +259,7 @@ struct RecordingListView: View {
 
     private func withToolbar<V: View>(_ view: V) -> some View {
         view
-            .searchable(text: queryBinding, prompt: "제목·북마크 메모 검색")
+            .searchable(text: queryBinding, prompt: "제목·메모 검색")
             .scrollContentBackground(.hidden)
             .designCanvas(Design.Palette.parchment)
     }
@@ -388,7 +345,7 @@ struct RecordingListView: View {
         view
             .safeAreaInset(edge: .top, spacing: 0) {
                 VStack(spacing: 0) {
-                    if library.isMultiSelecting && !showsBookmarks { selectionBar }
+                    if library.isMultiSelecting { selectionBar }
                     if library.filter.isActive { filterBar }
                 }
             }
@@ -415,7 +372,6 @@ struct RecordingListView: View {
                 ForEach(RecordingSortOrder.allCases, id: \.self) { Text($0.label).tag($0) }
             }
             .pickerStyle(.inline)
-            .disabled(showsBookmarks)
             .accessibilityIdentifier("sortOrder")
             Picker("기간", selection: Binding(get: { library.filter.period }, set: { selectPeriod($0) })) {
                 ForEach(RecordingPeriod.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -424,8 +380,8 @@ struct RecordingListView: View {
             .accessibilityIdentifier("periodFilter")
             Divider()
             Button("내보내기…") { openExportSheet() }
-                .help("지금 목록의 녹음·전사본과 북마크·메모를 한 폴더로 묶어 내보내요.")
-                .disabled(showsBookmarks || library.recordings.isEmpty)
+                .help("지금 목록의 녹음·전사본과 메모를 한 폴더로 묶어 내보내요.")
+                .disabled(library.recordings.isEmpty)
                 .accessibilityIdentifier("exportBundle")
         } label: {
             Label("더 보기", systemImage: "ellipsis.circle")

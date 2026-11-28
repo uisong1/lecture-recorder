@@ -85,9 +85,9 @@ import Testing
         #expect(text.components(separatedBy: "수업 메모").count == 2)
     }
 
-    @Test func 북마크가_없으면_없음이라고_적는다() throws {
+    @Test func 북마크가_없으면_북마크_줄을_쓰지_않는다() throws {
         let text = try summary(try exporter.export([recording()], label: "자료구조", to: parent, now: now))
-        #expect(text.contains("- 북마크: 없음"))
+        #expect(!text.contains("북마크"))
     }
 
     @Test func 과목별로_묶고_오래된_수업부터_적는다() throws {

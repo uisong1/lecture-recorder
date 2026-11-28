@@ -1,7 +1,7 @@
 import LectureCore
 import SwiftUI
 
-/// 녹음 중에 보이는 구역: 입력 크기, 정지·일시정지·북마크, 북마크 메모, 경고 또는 고정 안내.
+/// 녹음 중에 보이는 구역: 입력 크기, 일시정지, 경고 또는 고정 안내.
 struct RecordingActiveSection: View {
     let recording: RecordingController
 
@@ -17,18 +17,6 @@ struct RecordingActiveSection: View {
         .buttonStyle(.pillSecondary)
         .keyboardShortcut("p", modifiers: .command)
         .accessibilityIdentifier("pauseButton")
-
-        Button {
-            recording.addBookmark()
-        } label: {
-            Label("북마크 \(recording.bookmarkTimes.count)", systemImage: "bookmark")
-        }
-        .buttonStyle(.pillSecondary)
-        .keyboardShortcut("b", modifiers: .command)
-        .help("중요한 구간 표시 (⌘B)")
-        .accessibilityIdentifier("bookmarkButton")
-
-        BookmarkNoteField(recording: recording)
 
         RecordingNoticeLines(notices: .forRecording(recording))
     }

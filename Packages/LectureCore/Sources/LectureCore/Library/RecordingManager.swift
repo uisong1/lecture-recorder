@@ -229,7 +229,6 @@ public final class RecordingManager {
                 duration: recording.duration,
                 relativePath: recording.relativePath,
                 memo: recording.memo,
-                bookmarks: recording.sortedBookmarks.map { BundleBookmark(time: $0.time, note: $0.note) },
                 isRecovered: recording.isRecovered,
                 transcript: transcript?.segments,
                 transcriptUnreadable: recording.transcriptData != nil && transcript == nil

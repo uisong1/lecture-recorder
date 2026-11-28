@@ -10,9 +10,6 @@ struct PlaybackBar: View {
     @State private var editingMemo = false
     @State private var memoText = ""
     @State private var dragTime: TimeInterval?
-    @State private var editingNote: Bookmark?
-    @State private var noteText = ""
-    @State private var deleting: Bookmark?
     /// 수업 메모 저장에 실패했을 때의 문구.
     @State private var memoError: String?
 
@@ -59,7 +56,6 @@ struct PlaybackBar: View {
                     .tint(Design.Palette.primary)
                     .accessibilityLabel("재생 위치")
                     .accessibilityValue("\(RecordingController.format(shownTime)) / \(RecordingController.format(playback.duration))")
-                    .overlay { BookmarkMarkers(fractions: playback.bookmarkMarkers) }
                     .accessibilityIdentifier("playbackSlider")
                     Text(RecordingController.format(playback.duration))
                         .designText(.caption)
@@ -94,75 +90,6 @@ struct PlaybackBar: View {
                     .keyboardShortcut(.rightArrow, modifiers: [])
                     .help("\(playback.skipInterval.label) 앞으로 (→)")
                     .accessibilityIdentifier("skipForward")
-                }
-                HStack(spacing: Design.Spacing.sm) {
-                    Button {
-                        playback.addBookmarkAtCurrentTime()
-                    } label: {
-                        Label("지금 위치에 북마크", systemImage: "bookmark")
-                    }
-                    .buttonStyle(.pillSecondary)
-                    .keyboardShortcut("b", modifiers: [.command, .shift])
-                    .help("지금 위치에 북마크 추가 (⇧⌘B)")
-                    .accessibilityIdentifier("addPlaybackBookmark")
-                }
-                if let position = playback.tourPositionText {
-                    HStack(spacing: Design.Spacing.sm) {
-                        Button {
-                            playback.previousTourStop()
-                        } label: {
-                            Label("이전 북마크", systemImage: "backward.end")
-                        }
-                        .buttonStyle(.pillSecondary)
-                        .accessibilityIdentifier("previousTourStop")
-                        Text(position)
-                            .designText(.captionStrong)
-                            .foregroundStyle(Design.Palette.primary)
-                            .monospacedDigit()
-                            .accessibilityIdentifier("tourPosition")
-                        Button {
-                            playback.nextTourStop()
-                        } label: {
-                            Label("다음 북마크", systemImage: "forward.end")
-                        }
-                        .buttonStyle(.pillSecondary)
-                        .accessibilityIdentifier("nextTourStop")
-                        Button("이어 듣기 끝내기") { playback.stopBookmarkTour() }
-                            .buttonStyle(.textLink)
-                            .accessibilityIdentifier("stopBookmarkTour")
-                    }
-                } else if let current = playback.current, !current.bookmarks.isEmpty {
-                    Button {
-                        playback.startBookmarkTour(entries: current.sortedBookmarks.map { BookmarkEntry(bookmark: $0, recording: current) })
-                    } label: {
-                        Label("이 녹음 북마크만 이어 듣기", systemImage: "play.circle")
-                    }
-                    .buttonStyle(.pillSecondary)
-                    .accessibilityIdentifier("startRecordingBookmarkTour")
-                }
-                if !playback.bookmarks.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: Design.Spacing.xs) {
-                            ForEach(playback.bookmarks) { bookmark in
-                                Button {
-                                    playback.play(from: bookmark)
-                                } label: {
-                                    Label(label(for: bookmark), systemImage: "bookmark.fill")
-                                }
-                                .buttonStyle(.pillSecondary)
-                                .accessibilityHint("이 북마크 위치부터 재생합니다")
-                                .contextMenu {
-                                    Button("메모 수정…") {
-                                        noteText = bookmark.note
-                                        editingNote = bookmark
-                                    }
-                                    Button("삭제…", role: .destructive) { deleting = bookmark }
-                                }
-                                .accessibilityIdentifier("bookmarkChip")
-                            }
-                        }
-                    }
-                    .frame(maxWidth: 480)
                 }
                 Picker("배속", selection: Binding(get: { playback.rate }, set: { playback.setRate($0) })) {
                     ForEach(PlaybackRate.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -204,13 +131,6 @@ struct PlaybackBar: View {
                 }
             }
         }
-        .alert("북마크 메모", isPresented: Binding(get: { editingNote != nil }, set: { if !$0 { editingNote = nil } })) {
-            TextField("메모", text: $noteText)
-            Button("취소", role: .cancel) {}
-            Button("저장") {
-                if let bookmark = editingNote { playback.updateNote(of: bookmark, to: noteText) }
-            }
-        }
         .confirmationDialog(
             RecordingPlaybackGuard.confirmationTitle,
             isPresented: Binding(get: { playback.isConfirmingPlayback }, set: { if !$0 { playback.cancelPlaybackConfirmation() } }),
@@ -221,42 +141,9 @@ struct PlaybackBar: View {
         } message: {
             Text(RecordingPlaybackGuard.confirmationMessage)
         }
-        .confirmationDialog(
-            "이 북마크를 삭제할까요?",
-            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
-            titleVisibility: .visible
-        ) {
-            Button("삭제", role: .destructive) {
-                if let bookmark = deleting { playback.delete(bookmark) }
-            }
-            Button("취소", role: .cancel) {}
-        }
     }
 
     private var shownTime: TimeInterval { dragTime ?? playback.currentTime }
-
-    private func label(for bookmark: Bookmark) -> String {
-        let time = RecordingController.format(bookmark.time)
-        return bookmark.note.isEmpty ? time : "\(time) \(bookmark.note)"
-    }
-}
-
-/// 슬라이더 위에 북마크 위치를 가는 선으로 표시한다. 눌림은 받지 않는다.
-private struct BookmarkMarkers: View {
-    let fractions: [Double]
-
-    var body: some View {
-        GeometryReader { proxy in
-            ForEach(Array(fractions.enumerated()), id: \.offset) { _, fraction in
-                Rectangle()
-                    .fill(Design.Palette.primary)
-                    .frame(width: 2, height: 10)
-                    .position(x: proxy.size.width * fraction, y: proxy.size.height / 2)
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
 }
 
 /// 재생 바를 감싸는 아래 패널. 위쪽 손잡이를 끌어 높이를 바꾸고(더블클릭하면 자동 높이), 오른쪽 위 버튼으로 닫는다.
