@@ -501,3 +501,7 @@
 - 결정: 공식 저장소 affaan-m/everything-claude-code(v2.2.3, MIT)를 받아 읽고 다음만 가져왔다. skills: swift-actor-persistence, swift-concurrency-6-2, swift-protocol-di-testing, swiftui-patterns. agents: swift-reviewer, swift-build-resolver, silent-failure-hunter. rules: Swift 코딩·패턴·테스트. 출처와 라이선스는 `.claude/ECC-NOTICE.md`, CLAUDE.md에 사용 안내를 추가했다.
 - 뺀 것과 이유: 328개 skill 중 TS/Python/웹/백엔드/마케팅 등 이 앱과 무관한 것, npm 기준인 tdd-guide·verification-loop·tdd-workflow, 훅(자동 실행 스크립트)과 설치 스크립트 전부(실행하지 않음, 외부 연동 위험), `liquid-glass-design`(DESIGN.md의 흑백·그림자 없음과 충돌), `foundation-models-on-device`·AI 관련(받아쓰기·요약 금지), rules의 security(환경변수 API 키·`fatalError` 예시가 Keychain 규칙과 맞지 않음)와 hooks(전역 설정용).
 - 이유: 우리 규칙(CLAUDE.md, DESIGN.md, 녹음 안정성)이 항상 우선이므로 충돌 소지가 있는 것은 넣지 않고, 도움이 되는 Swift 참고 자료만 얇게 넣었다. 모든 스레드가 저장소를 클론하므로 `.claude/`에 두면 자동으로 쓰인다.
+
+## 2026-11-28. ECC 마케팅 도구도 일단 보관해 둔다
+- 결정: 사용자가 "마케팅은 일단 넣어두자"고 해서 skills(marketing-campaign, brand-voice, brand-discovery, content-engine, seo), agents(marketing-agent, seo-specialist), command(marketing-campaign)를 `.claude/`에 추가했다. 글을 외부에 올리는 social-publisher, crosspost, x-api 등은 넣지 않았다.
+- 이유: 지금 앱 개발에는 쓰지 않지만 나중에 소개글·홍보 문구가 필요할 때 쓸 수 있다. 유료 API와 외부 게시는 쓰지 않는다는 규칙은 그대로다.
