@@ -126,6 +126,13 @@ open "$(xcodebuild -scheme LectureRecorder -showBuildSettings | awk '/ BUILT_PRO
 - 이 파일, DESIGN.md, REQUIREMENTS.md와 충돌하면 항상 이 저장소 규칙이 우선이다. 예: 강조색·그림자는 DESIGN.md, 비밀값은 Keychain, 요약·유료 API 금지(전사는 로컬 Qwen3-ASR로 녹음 뒤에만).
 - 코드 리뷰 때 swift-reviewer와 silent-failure-hunter(삼켜진 오류 찾기)를 쓰면 좋다. 녹음 앱이라 조용히 실패하는 코드가 가장 위험하다.
 
+## ECC 활용 규칙 (2026-11-28 사용자 결정)
+1. **모든 PR은 머지 전에 `swift-reviewer` 에이전트로 리뷰한다.** 찾은 문제 중 진짜인 것은 고치고, 고치지 않은 것은 PR 설명에 이유를 적는다.
+2. **녹음·저장·전사·파일 이동을 건드리는 PR은 `silent-failure-hunter`도 돌린다.** 삼켜진 오류(`try?`, 빈 `catch`, 무시된 반환값)는 사용자에게 알리고 로그를 남기게 고친다.
+3. **macOS CI(빌드·테스트)가 깨지면 `swift-build-resolver`로 원인을 찾는다.** 고치는 범위는 최소로 하고, 테스트를 끄거나 건너뛰지 않는다.
+4. **기능 추가·버그 수정은 테스트를 먼저 쓴다.** `swift-protocol-di-testing`(가짜 구현), `swift-concurrency-6-2`·`swift-actor-persistence`(동시성·저장)를 참고한다. 버그는 먼저 실패하는 테스트로 재현한다.
+5. **공개 준비 문구(앱 이름, 한 줄 소개, 소개글)는 `brand-discovery`·`brand-voice`로 후보만 만들어 TODO "확인 필요"에 제안한다.** 정하는 건 사용자다.
+
 ## 모든 요청에 자동 적용 (2026-11-28 사용자 결정)
 작업 요청을 받으면 바로 시작하기 전에 항상 다음을 먼저 한다.
 1. `.claude/skills/prompt-optimizer`의 방식으로 요청을 속으로 다듬는다: 의도, 빠진 맥락(대상 파일·완료 기준), 이 저장소 규칙(CLAUDE.md, DESIGN.md, 새 기능은 시안 먼저)을 채운다. 요청이 애매하거나 빠진 맥락이 있으면 항상 그때그때 사용자에게 되묻는다(2026-11-28 사용자 지시). 되묻는 질문은 짧고 쉬운 말로, 선택지와 추천안을 같이 적는다. 되묻는 동안 답이 필요 없는 부분은 계속 진행한다.
