@@ -122,7 +122,7 @@ open "$(xcodebuild -scheme LectureRecorder -showBuildSettings | awk '/ BUILT_PRO
 
 ## ECC 도구 (.claude/)
 - `.claude/skills`(Swift 동시성·SwiftUI·프로토콜 DI 테스트·actor 저장), `.claude/agents`(swift-reviewer, swift-build-resolver, silent-failure-hunter), `.claude/rules`(Swift 코딩·패턴·테스트)는 Everything Claude Code(MIT)에서 가져온 참고 도구다. 출처는 `.claude/ECC-NOTICE.md`.
-- 이 파일, DESIGN.md, REQUIREMENTS.md와 충돌하면 항상 이 저장소 규칙이 우선이다. 예: 강조색·그림자는 DESIGN.md, 비밀값은 Keychain, 받아쓰기·요약·유료 API 금지.
+- 이 파일, DESIGN.md, REQUIREMENTS.md와 충돌하면 항상 이 저장소 규칙이 우선이다. 예: 강조색·그림자는 DESIGN.md, 비밀값은 Keychain, 요약·유료 API 금지(전사는 로컬 Qwen3-ASR로 녹음 뒤에만).
 - 코드 리뷰 때 swift-reviewer와 silent-failure-hunter(삼켜진 오류 찾기)를 쓰면 좋다. 녹음 앱이라 조용히 실패하는 코드가 가장 위험하다.
 
 ## 모든 요청에 자동 적용 (2026-11-28 사용자 결정)
