@@ -11,6 +11,7 @@ struct LectureRecorderApp: App {
     static let mainWindowID = "main"
 
     init() {
+        DesignFonts.register()
         let dependencies = AppDependencies()
         _dependencies = State(initialValue: dependencies)
         AppDelegate.quitGuard = QuitGuard(target: dependencies.recording)

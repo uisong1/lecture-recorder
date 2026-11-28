@@ -107,7 +107,7 @@ struct MenuBarContent: View {
         .padding(.vertical, Design.Spacing.sm)
     }
 
-    /// 왼쪽 둥근 칸. 녹음 중이면 파란 칸에 빨간 점, 아니면 회색 칸.
+    /// 왼쪽 둥근 칸. 녹음 중이면 검정 칸에 빨간 점, 아니면 회색 칸.
     private func tile(for status: MenuBarStatus) -> some View {
         ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: Design.Radius.sm + 3, style: .continuous)
@@ -120,7 +120,7 @@ struct MenuBarContent: View {
                 }
             if status.isRecording && !status.isPaused {
                 Circle()
-                    .fill(Design.Palette.danger)
+                    .fill(Design.Palette.recording)
                     .frame(width: 11, height: 11)
                     .overlay(Circle().strokeBorder(Design.Palette.canvas, lineWidth: 2))
                     .offset(x: 3, y: -3)
