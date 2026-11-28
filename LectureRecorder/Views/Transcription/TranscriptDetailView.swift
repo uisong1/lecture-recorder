@@ -30,9 +30,8 @@ struct TranscriptDetailView: View {
                 .designText(.finePrint)
                 .foregroundStyle(Design.Palette.inkMuted)
         }
-        .padding(28)
-        .frame(maxWidth: 900, maxHeight: .infinity, alignment: .topLeading)
-        .frame(maxWidth: .infinity)
+        .screenColumn()
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var header: some View {

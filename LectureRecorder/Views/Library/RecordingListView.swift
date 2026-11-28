@@ -51,9 +51,8 @@ struct RecordingListView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(.horizontal, 28)
-        .padding(.vertical, Design.Spacing.lg)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .screenColumn()
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     private var emptyDescription: String {
@@ -87,17 +86,13 @@ struct RecordingListView: View {
         }
     }
 
-    /// 시안 02: 과목 이름과 "녹음 12개 · 안 들은 녹음 2개".
+    /// 시안 02: 과목 이름과 "녹음 12개 · 안 들은 녹음 2개". 다른 화면과 같은 머리를 쓴다.
     private var listHeader: some View {
         let unplayed = library.recordings.filter(\.isUnplayed).count
-        return VStack(alignment: .leading, spacing: Design.Spacing.xxs) {
-            Text(listTitle)
-                .designText(.displayLg)
-                .foregroundStyle(Design.Palette.ink)
-            Text("녹음 \(library.recordings.count)개" + (unplayed > 0 ? " · 안 들은 녹음 \(unplayed)개" : ""))
-                .designText(.caption)
-                .foregroundStyle(Design.Palette.inkMuted)
-        }
+        return ScreenHeader(
+            listTitle,
+            subtitle: "녹음 \(library.recordings.count)개" + (unplayed > 0 ? " · 안 들은 녹음 \(unplayed)개" : "")
+        )
     }
 
     private var listTitle: String {

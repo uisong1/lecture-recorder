@@ -56,25 +56,17 @@ struct TranscriptionView: View {
                         .padding(.top, Design.Spacing.xxl)
                 }
             }
-            .padding(28)
-            .frame(maxWidth: 900, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .screenColumn()
         }
     }
 
     // MARK: 머리
 
     private var header: some View {
-        HStack(alignment: .top, spacing: Design.Spacing.sm) {
-            VStack(alignment: .leading, spacing: Design.Spacing.xxs) {
-                Text("전사")
-                    .designText(.displayLg)
-                    .foregroundStyle(Design.Palette.ink)
-                Text("전사 안 된 녹음 \(center.candidates.count)개 · \(Self.approx(center.candidatesDuration)) · 녹음이 끝난 뒤 맥에서 직접 글로 바꿔요 (인터넷 필요 없음)")
-                    .designText(.caption)
-                    .foregroundStyle(Design.Palette.inkMuted)
-            }
-            Spacer(minLength: Design.Spacing.sm)
+        ScreenHeader(
+            "전사",
+            subtitle: "전사 안 된 녹음 \(center.candidates.count)개 · \(Self.approx(center.candidatesDuration)) · 맥에서 직접 글로 바꿔요"
+        ) {
             if !center.idleCandidates.isEmpty {
                 Button {
                     center.isSelecting.toggle()

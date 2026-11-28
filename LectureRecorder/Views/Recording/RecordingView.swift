@@ -21,9 +21,7 @@ struct RecordingView: View {
         VStack(spacing: 0) {
             ScrollView {
                 content
-                    .frame(maxWidth: 460)
-                    .padding(Design.Spacing.xl)
-                    .frame(maxWidth: .infinity)
+                    .screenColumn()
             }
             if playback.current != nil && !playback.isPanelHidden { PlaybackPanel(playback: playback, manager: manager, library: library) }
         }
@@ -47,7 +45,8 @@ struct RecordingView: View {
     }
 
     private var content: some View {
-        VStack(spacing: Design.Spacing.md) {
+        VStack(alignment: .leading, spacing: Design.Spacing.md) {
+            ScreenHeader("녹음", subtitle: screenSubtitle)
             header
                 .designCard(padding: Design.Spacing.xl)
 
@@ -110,6 +109,11 @@ struct RecordingView: View {
         }
     }
 
+    private var screenSubtitle: String {
+        if recording.isRecording { return recording.isPaused ? "일시정지 중" : "녹음 중 · 녹음이 끝나면 전사할 수 있어요" }
+        return "시작하면 시간표 기준으로 과목이 정해져요"
+    }
+
     /// 시안 01: 위 카드에 지금 과목, 타이머, 시작·정지 버튼을 함께 둔다.
     private var header: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { _ in
@@ -123,7 +127,7 @@ struct RecordingView: View {
                         .accessibilityIdentifier("expectedSubject")
                 }
                 Text(recording.isRecording ? recording.currentSubjectName + (recording.isPaused ? " (일시정지)" : "") : recording.expectedSubjectName)
-                    .designText(.displayLg)
+                    .designText(.tagline)
                     .foregroundStyle(Design.Palette.ink)
                     .multilineTextAlignment(.center)
                     .accessibilityIdentifier("recordingSubject")
