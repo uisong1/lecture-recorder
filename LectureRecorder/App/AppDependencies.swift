@@ -324,6 +324,7 @@ final class AppDependencies {
         )
         self.transcription = transcription
         if !Self.isUITesting {
+            HelperScriptTranscriber.removeAllWork()
             Task { await transcription.checkTool() }
             // "전원 연결 때만 전사"가 켜져 있으면 충전기를 꽂고 뺀 것을 반영한다.
             Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in

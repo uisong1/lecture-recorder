@@ -4,7 +4,8 @@
 # transcribe_worker.py를 같은 폴더에 복사해 둔다.
 #   transcribe.sh status                                        준비됐으면 0, 아니면 20
 #   transcribe.sh setup                                         전사 도구(Python 가상환경 + mlx-audio)를 설치한다
-#   transcribe.sh run <녹음> <결과.json> <진행.json> <앱 pid>   녹음 하나를 전사한다
+#   transcribe.sh run <녹음> <결과.json> <진행.json> <앱 pid> [<이어하기.json>]
+#                                                               녹음 하나를 전사한다 (이어하기 파일이 있으면 끝낸 조각은 건너뛴다)
 # 녹음 파일은 읽기만 한다. 결과와 진행 파일은 앱이 알려 준 위치에만 쓴다.
 # 종료 코드: 2 잘못된 인자 / 20 도구 없음 / 21 녹음 변환 실패 / 22 모델 불러오기 실패 / 23 전사 실패
 #            30 쓸 수 있는 Python 없음 / 31 설치 실패 / 40 취소됨
@@ -67,12 +68,12 @@ do_setup() {
 }
 
 do_run() {
-  local input="${1:-}" output="${2:-}" progress="${3:-}" pid="${4:-}"
+  local input="${1:-}" output="${2:-}" progress="${3:-}" pid="${4:-}" resume="${5:-}"
   [[ -f "$input" && -n "$output" && -n "$progress" && "$pid" =~ ^[0-9]+$ ]] || { log "잘못된 인자"; exit 2; }
-  is_ready || { log "전사 도구가 설치되지 않음"; exit 20; }
+  is_ready || { log "전사 도구가 설치되지 않음"; echo "전사 도구가 설치되지 않음" >>"$progress.log"; exit 20; }
   log "전사 시작: $(basename "$input")"
   set +e
-  "$VENV/bin/python" -I "$HERE/transcribe_worker.py" "$input" "$output" "$progress" "$pid" 2>>"$LOG"
+  "$VENV/bin/python" -I "$HERE/transcribe_worker.py" "$input" "$output" "$progress" "$pid" "$resume" 2>>"$LOG"
   local status=$?
   set -e
   log "전사 끝: $(basename "$input") (코드 $status)"

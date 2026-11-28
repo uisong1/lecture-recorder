@@ -8,8 +8,10 @@ struct TranscriptionView: View {
     let manager: RecordingManager
     let library: RecordingLibrary
 
-    /// 결과를 여는 녹음의 상대 경로. 있으면 목록 대신 전사 결과를 보여 준다.
+    /// 결과를 여는 녹음의 고정 id(`transcriptionKey`). 있으면 목록 대신 전사 결과를 보여 준다.
     @State private var openedID: String?
+    /// 대기열 카드 폭. 넓으면 상태를 제목 아래 한 줄로(시안 B), 좁으면 세 칸 고정(시안 A)으로 보인다.
+    @State private var queueWidth: CGFloat = 0
 
     var body: some View {
         Group {
@@ -18,8 +20,8 @@ struct TranscriptionView: View {
                     openedID = nil
                 } onRetranscribe: {
                     openedID = nil
-                    center.removeTranscript(of: recording)
-                    center.transcribe(recording)
+                    // 지금 결과는 새 결과를 저장할 때 바뀐다. 멈추거나 실패해도 남는다.
+                    center.retranscribe(recording)
                 }
             } else {
                 overview
@@ -204,46 +206,23 @@ struct TranscriptionView: View {
 
     private var queueRows: some View {
         let waiting = center.queue.entries.filter { $0.state == .waiting }.map(\.id)
-        return ForEach(center.queue.entries) { entry in
-            rowFrame(title: entry.job.title, subtitle: entry.job.subtitle) {
-                switch entry.state {
-                case .running(let progress):
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("전사 중 \(Int((progress * 100).rounded()))%")
-                                .designText(.captionStrong)
-                            Spacer()
-                            Text("\(Self.approx(entry.job.duration * (1 - progress) * TranscriptionQueue.secondsPerAudioSecond)) 남음")
-                                .designText(.finePrint)
-                                .foregroundStyle(Design.Palette.inkMuted)
-                        }
-                        DesignProgressBar(value: progress, height: 4)
-                    }
-                    .frame(width: 220)
-                    Button("멈춤") { center.queue.remove(id: entry.id) }
-                        .buttonStyle(.pillSecondaryCompact)
-                        .help("이 녹음의 전사를 멈추고 대기열에서 빼요")
-                case .waiting:
-                    Text("대기 중 · \((waiting.firstIndex(of: entry.id) ?? 0) + 1)번째")
-                        .designText(.caption)
-                        .foregroundStyle(Design.Palette.inkMuted)
-                    Button("빼기") { center.queue.remove(id: entry.id) }
-                        .buttonStyle(.pillSecondaryCompact)
-                case .failed(let message):
-                    Label("실패: \(message)", systemImage: "exclamationmark.triangle")
-                        .designText(.captionStrong)
-                        .lineLimit(2)
-                        .frame(maxWidth: 320, alignment: .trailing)
-                        .help(message)
-                    Button("다시 시도") { center.queue.retry(id: entry.id) }
-                        .buttonStyle(.pillSecondaryCompact)
-                case .done:
-                    Label("전사 완료", systemImage: "checkmark.circle")
-                        .designText(.caption)
-                        .foregroundStyle(Design.Palette.inkMuted)
-                    Button("보기") { openedID = entry.id }
-                        .buttonStyle(.pillSecondaryCompact)
-                }
+        let isWide = queueWidth >= TranscriptionQueueRow.wideWidth
+        return VStack(spacing: 0) {
+            ForEach(center.queue.entries) { entry in
+                TranscriptionQueueRow(
+                    entry: entry,
+                    waitingPosition: (waiting.firstIndex(of: entry.id) ?? 0) + 1,
+                    isWide: isWide,
+                    queue: center.queue,
+                    onOpen: { openedID = entry.id }
+                )
+            }
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { queueWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in queueWidth = width }
             }
         }
     }
@@ -281,7 +260,7 @@ struct TranscriptionView: View {
                     center.toggleSelection(recording)
                 } label: {
                     HStack(spacing: Design.Spacing.sm) {
-                        Image(systemName: center.selection.contains(recording.relativePath) ? "checkmark.square.fill" : "square")
+                        Image(systemName: center.selection.contains(recording.transcriptionKey) ? "checkmark.square.fill" : "square")
                             .font(.system(size: 16))
                             .foregroundStyle(Design.Palette.ink)
                         rowFrame(title: recording.title, subtitle: center.subtitle(for: recording)) {
@@ -312,7 +291,7 @@ struct TranscriptionView: View {
                 Text("문장 \(recording.transcript?.segments.count ?? 0)개")
                     .designText(.caption)
                     .foregroundStyle(Design.Palette.inkMuted)
-                Button("보기") { openedID = recording.relativePath }
+                Button("보기") { openedID = recording.transcriptionKey }
                     .buttonStyle(.pillSecondaryCompact)
                     .accessibilityIdentifier("openTranscript-\(recording.title)")
             }
