@@ -126,7 +126,7 @@ open "$(xcodebuild -scheme LectureRecorder -showBuildSettings | awk '/ BUILT_PRO
 
 ## 모든 요청에 자동 적용 (2026-11-28 사용자 결정)
 작업 요청을 받으면 바로 시작하기 전에 항상 다음을 먼저 한다.
-1. `.claude/skills/prompt-optimizer`의 방식으로 요청을 속으로 다듬는다: 의도, 빠진 맥락(대상 파일·완료 기준), 이 저장소 규칙(CLAUDE.md, DESIGN.md, 새 기능은 시안 먼저)을 채운다. 사용자에게 되묻느라 멈추지 않고, 가장 그럴듯한 해석으로 진행한다.
+1. `.claude/skills/prompt-optimizer`의 방식으로 요청을 속으로 다듬는다: 의도, 빠진 맥락(대상 파일·완료 기준), 이 저장소 규칙(CLAUDE.md, DESIGN.md, 새 기능은 시안 먼저)을 채운다. 요청이 애매하거나 빠진 맥락이 있으면 항상 그때그때 사용자에게 되묻는다(2026-11-28 사용자 지시). 되묻는 질문은 짧고 쉬운 말로, 선택지와 추천안을 같이 적는다. 되묻는 동안 답이 필요 없는 부분은 계속 진행한다.
 2. `.claude/skills`, `.claude/agents`에서 맞는 것을 찾아 쓴다(예: Swift 코드 → swift-reviewer·swift-concurrency-6-2, 오류 삼킴 점검 → silent-failure-hunter).
-3. 해석이 애매했으면 답장에 "이렇게 이해하고 했어요"를 한 줄 적는다. 다듬은 프롬프트 전문은 보여주지 않는다.
+3. 되물을 게 없을 만큼 분명하면 "이렇게 이해했어요"를 한 줄만 적고 진행한다. 다듬은 프롬프트 전문은 보여주지 않는다.
 이 규칙도 CLAUDE.md의 다른 규칙(기능 범위, 디자인 먼저 확인, 녹음 안정성)을 넘지 못한다.
