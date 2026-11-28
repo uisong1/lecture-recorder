@@ -16,19 +16,17 @@ struct SidebarView: View {
     let transcriptionCount: Int
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 2) {
-                row("녹음", icon: "record.circle", item: .recorder, id: "sidebar-recorder")
-                row("전사", icon: "doc.text", item: .transcription, count: transcriptionCount, id: "sidebar-transcription")
-                row("모든 녹음", icon: "waveform", item: .library(.all), count: library.count(for: .all), id: "sidebar-all")
-                subjects
-                    .padding(.top, Design.Spacing.sm)
-            }
-            .padding(.horizontal, Design.Spacing.xs)
-            .padding(.vertical, Design.Spacing.xs)
+        // 시스템 사이드바 목록을 그대로 써서 창 위 막대 아래 위치·스크롤·클릭 영역을 맥 기본대로 맞춘다.
+        // selection을 주지 않아 맥이 파랗게 칠하지 않고, 고른 줄은 직접 검정으로 그린다.
+        List {
+            row("녹음", icon: "record.circle", item: .recorder, id: "sidebar-recorder")
+            row("전사", icon: "doc.text", item: .transcription, count: transcriptionCount, id: "sidebar-transcription")
+            row("모든 녹음", icon: "waveform", item: .library(.all), count: library.count(for: .all), id: "sidebar-all")
+            Color.clear.frame(height: Design.Spacing.xs).sidebarRowLayout()
+            subjects
         }
-        .scrollIndicators(.never)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
         .background(Design.Palette.sidebar.ignoresSafeArea())
     }
 
@@ -53,6 +51,7 @@ struct SidebarView: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .sidebarRowLayout()
                 .accessibilityIdentifier("sidebar-semester-\(section.title)")
                 if expanded {
                     ForEach(library.subjects(in: section)) { subjectRow($0, unplayed: unplayed) }
@@ -64,6 +63,7 @@ struct SidebarView: View {
                 .foregroundStyle(Design.Palette.inkMuted)
                 .padding(.horizontal, Design.Spacing.xs)
                 .padding(.vertical, 6)
+                .sidebarRowLayout()
             ForEach(library.subjects) { subjectRow($0, unplayed: unplayed) }
         }
         row("미분류", icon: "tray", item: .library(.unclassified), count: library.count(for: .unclassified), id: "sidebar-unclassified")
@@ -118,7 +118,17 @@ struct SidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .sidebarRowLayout()
         .accessibilityIdentifier(id)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+private extension View {
+    /// 사이드바 목록의 한 줄: 기본 여백·구분선·바탕을 없애고 줄 높이는 내용대로.
+    func sidebarRowLayout() -> some View {
+        listRowInsets(EdgeInsets(top: 1, leading: 0, bottom: 1, trailing: 0))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
     }
 }
