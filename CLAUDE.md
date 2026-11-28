@@ -50,6 +50,7 @@ lecture-recorder/
 │       │   ├── Schedule/         # 현재 시각 → 과목 판별
 │       │   ├── Recording/        # 녹음 서비스 (프로토콜 + AVFoundation 구현)
 │       │   ├── Playback/         # 재생 서비스
+│       │   ├── Transcription/    # 전사 결과·대기열 (엔진은 프로토콜, 앱은 도우미 스크립트로 실행)
 │       │   └── Storage/          # 파일 경로, 저장/이동/삭제
 │       └── Tests/LectureCoreTests/
 └── LectureRecorderUITests/       # 주요 흐름 UI 테스트

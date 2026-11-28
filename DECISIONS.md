@@ -529,3 +529,11 @@
 - 시안: `/mnt/project-files/design-reference/d1-full/` 01~06 (프로젝트 공유 폴더).
 - 이유: 사용자가 파란색을 싫어하고 흑백을 원했으며, 시안 D1을 골라 "이대로 전체 디자인을 바꾸자"고 했다. 이전 결정 "버튼 파랑, 녹음 중 표시만 빨강"(2026-10-25)은 "버튼 검정, 녹음 중 표시만 빨강"으로 바뀐다.
 - 미정: 과목 색(사용자가 과목마다 고르는 색)을 남길지. 사용자 답이 오기 전까지는 지금 코드를 그대로 둔다.
+
+## 2026-11-28. 전사 실행 방식: 샌드박스 밖 도우미 스크립트 + mlx-audio(Qwen3-ASR-1.7B-8bit) (5-1)
+- 결정: 사용자가 자기 Mac에서 시험한 조합을 그대로 쓴다. `mlx-audio` 0.6.8, 모델 `mlx-community/Qwen3-ASR-1.7B-8bit`, `language="Korean"`, `result.segments`(문장별 start·end·text). 앱(샌드박스)은 Python을 직접 돌릴 수 없어, install.sh가 `~/Library/Application Scripts/com.uisong.LectureRecorder/`에 둔 `transcribe.sh`(scripts/transcribe-helper.sh)와 `transcribe_worker.py`를 `NSUserUnixTask`로 실행한다(앱 업데이트 도우미와 같은 방식). 터미널 창은 띄우지 않는다.
+- 설치: 설정 > 전사의 "전사 도구 설치"가 `~/Library/Application Support/LectureRecorderTranscribe/venv`에 가상환경을 만들고 mlx-audio를 설치한다(Python 3.10 이상 필요, macOS 기본 3.9는 안 됨 → Homebrew python 안내). 모델(약 2GB)은 첫 전사 때 Hugging Face에서 한 번 받는다. 로그는 `~/Library/Logs/LectureRecorder-transcribe.log`.
+- 처리: 녹음을 macOS 기본 `afconvert`로 16kHz 모노 wav로 바꾸고(ffmpeg 불필요, 원본은 읽기만), 3분씩 잘라 전사한다. 조각마다 진행 파일을 쓰고, 앱이 취소 파일을 만들거나 앱이 꺼지면 다음 조각 전에 멈춘다. 1~3시간 녹음도 메모리를 적게 쓴다. 문장 시각은 조각 시작 시각을 더해 맞춘다.
+- 저장: 전사 결과는 녹음 옆 파일이 아니라 SwiftData `Recording.transcriptData`(`.externalStorage`, JSON)에 둔다. TODO 5-2는 "녹음 옆 파일"이었지만, 과목 이동·이름 변경·학기 폴더 이동 때 파일을 함께 옮겨야 하는 문제가 없고 녹음 폴더를 건드리지 않아 더 안전하다. 기본값 nil 속성 추가라 경량 마이그레이션.
+- 안 쓴 것: 앱 안 Swift 패키지 `qwen3-asr-swift`는 Xcode 프로젝트에 MLX Swift 의존성을 더하고 한국어 품질을 다시 확인해야 해서 뒤로 미뤘다. 사용자가 확인한 품질을 그대로 얻는 도우미 방식을 먼저 쓴다.
+- 압축 전(.caf) 녹음과 녹음 중인 파일은 전사 목록에서 뺀다(압축이 끝나면 경로가 바뀜).
