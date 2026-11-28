@@ -26,6 +26,8 @@ private struct NoticeLine: Identifiable {
 /// 앱이 뒤에 있어도 시작·정지·일시정지·북마크를 누를 수 있다.
 struct MenuBarContent: View {
     let recording: RecordingController
+    /// 전사 대기열. 전사 중이면 진행률 한 줄을 보여 준다.
+    var transcription: TranscriptionQueue?
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -39,6 +41,7 @@ struct MenuBarContent: View {
         VStack(spacing: 0) {
             widgetRow(for: status)
             notices(for: status)
+            if let transcription, transcription.isActive { transcriptionLine(transcription) }
             Divider().overlay(Design.Palette.hairline)
             Button("창 열기") {
                 openWindow(id: LectureRecorderApp.mainWindowID)
@@ -50,6 +53,30 @@ struct MenuBarContent: View {
             .padding(.vertical, Design.Spacing.xs)
             .accessibilityIdentifier("menuBarOpenWindow")
         }
+    }
+
+    /// "전사 중 2개 · 34%" + 막대 + 남은 시간 (시안 06-6).
+    private func transcriptionLine(_ queue: TranscriptionQueue) -> some View {
+        VStack(alignment: .leading, spacing: Design.Spacing.xxs) {
+            HStack {
+                Text(queue.suspendReason != nil || queue.isPaused ? "전사 멈춤 · \(queue.waitingCount + queue.runningCount)개 남음" : "전사 중 \(queue.runningCount)개")
+                    .designText(.captionStrong)
+                    .foregroundStyle(Design.Palette.ink)
+                Spacer()
+                Text("\(Int((queue.overallProgress * 100).rounded()))%")
+                    .designText(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(Design.Palette.inkMuted)
+            }
+            DesignProgressBar(value: queue.overallProgress, height: 4)
+            Text("\(TranscriptionView.approx(queue.estimatedRemainingSeconds)) 남음")
+                .designText(.finePrint)
+                .foregroundStyle(Design.Palette.inkMuted)
+        }
+        .padding(.horizontal, Design.Spacing.sm)
+        .padding(.vertical, Design.Spacing.xs)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("menuBarTranscription")
     }
 
     /// 위젯의 한 줄: 왼쪽 칸 + 제목/부제 + 오른쪽 아이콘 버튼.
