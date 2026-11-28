@@ -22,6 +22,8 @@ struct RecordingListView: View {
     @State private var showsBookmarks = false
     /// Claude용 묶음 내보내기 결과 안내.
     @State private var bundleNotice: String?
+    /// 전사 결과를 여는 녹음.
+    @State private var transcriptRecording: Recording?
 
     var body: some View {
         withOverlays(withDialogs(withToolbar(content)))
@@ -183,6 +185,9 @@ struct RecordingListView: View {
             }
             Button(RecordingStorage.unclassifiedFolder) { perform { try manager.move(recording, to: nil) } }
         }
+        if recording.hasTranscript {
+            Button("전사 보기") { transcriptRecording = recording }
+        }
         Divider()
         Button("Finder에서 보기") {
             NSWorkspace.shared.activateFileViewerSelecting([manager.fileURL(for: recording)])
@@ -253,6 +258,19 @@ struct RecordingListView: View {
                 Button("취소", role: .cancel) {}
                 Button("저장") {
                     if let recording = memoing { perform { try manager.setMemo(memoText, for: recording) } }
+                }
+            }
+            .sheet(item: $transcriptRecording) { recording in
+                if let transcript = recording.transcript {
+                    TranscriptDetailView(
+                        recording: recording,
+                        transcript: transcript,
+                        subtitle: recording.startedAt.formatted(date: .abbreviated, time: .shortened) + " · " + RecordingController.format(recording.duration),
+                        playback: playback,
+                        onClose: { transcriptRecording = nil },
+                        onRetranscribe: nil
+                    )
+                    .frame(minWidth: 640, minHeight: 560)
                 }
             }
             .alert("처리 결과", isPresented: presence($batchNotice)) {

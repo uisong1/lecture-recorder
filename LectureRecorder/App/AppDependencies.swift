@@ -42,6 +42,8 @@ final class AppDependencies {
     let storeBackup: StoreBackup?
     /// 녹음 폴더. 설정에서 위치를 보여 주고 열어 준다.
     let storage: RecordingStorage
+    /// 사이드바 "전사" 탭: 녹음이 끝난 뒤 Qwen3-ASR로 글로 바꾸는 대기열. 녹음 중에는 멈춘다.
+    let transcription: TranscriptionCenter
 
     /// 알림 버튼으로 녹음을 시작하지 못했을 때 창을 보여 준다. Dock 아이콘을 누른 것과 같아서, 창이 닫혀 있어도 다시 열린다.
     private static func bringAppToFront() {
@@ -266,15 +268,37 @@ final class AppDependencies {
             // 지난 실행에서 압축하지 못한 CAF 녹음(꺼졌거나 실패한 것)을 이어서 압축한다.
             Task { await compressor.compressPending() }
         }
+        let transcription = TranscriptionCenter(
+            context: context,
+            storage: storage,
+            engine: HelperScriptTranscriber(),
+            tool: HelperScriptTranscriptionTool(),
+            preferences: UserDefaultsTranscriptionPreferences(),
+            power: Self.isUITesting ? nil : SystemPowerStatus(),
+            activePaths: { recording.currentRelativePath.map { [$0] } ?? [] }
+        )
+        self.transcription = transcription
+        if !Self.isUITesting {
+            Task { await transcription.checkTool() }
+            // "전원 연결 때만 전사"가 켜져 있으면 충전기를 꽂고 뺀 것을 반영한다.
+            Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in
+                MainActor.assumeIsolated { transcription.refreshConditions() }
+            }
+        }
         startupError = problems.isEmpty ? nil : problems.joined(separator: "\n")
         // 녹음을 시작하면 재생 중인 소리를 멈춘다.
         let player = playback
         // 녹음을 시작하면 "녹음 중이 아닙니다" 알림을 취소하고, 끝나면 남은 수업 기준으로 다시 예약한다.
+        // 녹음이 항상 먼저다: 녹음을 시작하면 전사를 멈추고, 끝나면 이어서 한다.
         recording.onStarted = {
             player.recordingDidStart()
+            transcription.recordingDidStart()
             Task { await reminders.reschedule() }
         }
-        recording.onStopped = { Task { await reminders.reschedule() } }
+        recording.onStopped = {
+            transcription.recordingDidStop()
+            Task { await reminders.reschedule() }
+        }
     }
 
     private static func makeStoreBackup() -> StoreBackup? {

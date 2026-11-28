@@ -7,6 +7,7 @@ struct ContentView: View {
 
     private enum SidebarItem: Hashable {
         case recorder
+        case transcription
         case library(LibrarySelection)
     }
 
@@ -43,6 +44,10 @@ struct ContentView: View {
                 Label("녹음", systemImage: "record.circle")
                     .tag(SidebarItem.recorder)
                     .accessibilityIdentifier("sidebar-recorder")
+                Label("전사", systemImage: "doc.text")
+                    .badge(dependencies.transcription.candidates.count)
+                    .tag(SidebarItem.transcription)
+                    .accessibilityIdentifier("sidebar-transcription")
                 Label("모든 녹음", systemImage: "waveform")
                     .badge(dependencies.library.count(for: .all))
                     .tag(SidebarItem.library(.all))
@@ -108,6 +113,8 @@ struct ContentView: View {
                     .accessibilityIdentifier("updateNotice")
                 }
                 switch sidebar {
+                case .transcription:
+                    TranscriptionView(center: dependencies.transcription, playback: dependencies.playback, manager: dependencies.manager, library: dependencies.library)
                 case .library:
                     RecordingListView(library: dependencies.library, playback: dependencies.playback, manager: dependencies.manager)
                 default:
@@ -124,6 +131,7 @@ struct ContentView: View {
         }
         .onChange(of: dependencies.recording.lastSaved) {
             dependencies.library.reload()
+            dependencies.transcription.reload()
         }
         .dropDestination(for: URL.self) { urls, _ in
             dependencies.mediaImport.begin(urls: urls.filter(\.isFileURL))

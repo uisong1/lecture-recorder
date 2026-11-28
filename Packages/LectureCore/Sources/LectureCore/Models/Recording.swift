@@ -31,6 +31,11 @@ public final class Recording {
     public var isLMSVideo: Bool = false
     /// "영상도 보관"을 켜고 가져왔을 때 영상 파일의 상대 경로 (소리 파일 옆). 없으면 소리만 있다.
     public var videoRelativePath: String?
+    /// 전사 결과(`Transcript`의 JSON). 길어서 저장소 밖 파일로 둔다. nil이면 아직 전사하지 않았다.
+    /// 기본값이 nil인 속성 추가라 기존 저장소는 자동으로 옮겨진다.
+    @Attribute(.externalStorage) public var transcriptData: Data?
+    /// 전사를 마친 시각.
+    public var transcribedAt: Date?
 
     public init(title: String, subject: Subject?, startedAt: Date, duration: TimeInterval, relativePath: String) {
         self.title = title
@@ -56,6 +61,13 @@ extension Recording {
     public var isUnplayed: Bool {
         lastPlayedAt == nil && lastPlayedPosition <= 0
     }
+
+    /// 저장된 전사 결과. 없거나 읽을 수 없으면 nil.
+    public var transcript: Transcript? {
+        transcriptData.flatMap(Transcript.stored)
+    }
+
+    public var hasTranscript: Bool { transcriptData != nil }
 
     /// 시점 순서로 정렬한 북마크.
     public var sortedBookmarks: [Bookmark] {

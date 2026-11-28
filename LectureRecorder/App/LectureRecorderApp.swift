@@ -29,7 +29,7 @@ struct LectureRecorderApp: App {
         .modelContainer(dependencies.container)
 
         MenuBarExtra {
-            MenuBarContent(recording: dependencies.recording)
+            MenuBarContent(recording: dependencies.recording, transcription: dependencies.transcription.queue)
         } label: {
             MenuBarLabel(recording: dependencies.recording)
         }
@@ -53,7 +53,7 @@ struct LectureRecorderApp: App {
         .modelContainer(dependencies.container)
 
         Settings {
-            SettingsView(subjects: dependencies.subjects, schedule: dependencies.schedule, reminders: dependencies.reminders, rescan: dependencies.rescan, recording: dependencies.recording, launchAtLogin: dependencies.launchAtLogin, appUpdate: dependencies.appUpdate, playback: dependencies.playback, storeBackup: dependencies.storeBackup, storage: dependencies.storage, canvasToken: dependencies.canvasToken, lectureMaterials: dependencies.lectureMaterials)
+            SettingsView(subjects: dependencies.subjects, schedule: dependencies.schedule, reminders: dependencies.reminders, rescan: dependencies.rescan, recording: dependencies.recording, launchAtLogin: dependencies.launchAtLogin, appUpdate: dependencies.appUpdate, playback: dependencies.playback, storeBackup: dependencies.storeBackup, storage: dependencies.storage, canvasToken: dependencies.canvasToken, lectureMaterials: dependencies.lectureMaterials, transcription: dependencies.transcription)
         }
         .modelContainer(dependencies.container)
     }

@@ -93,6 +93,10 @@ HELPER_DIR="$HOME/Library/Application Scripts/com.uisong.LectureRecorder"
 mkdir -p "$HELPER_DIR"
 cp "$ROOT/scripts/update-helper.sh" "$HELPER_DIR/update.sh"
 chmod +x "$HELPER_DIR/update.sh"
+# "전사" 탭이 쓰는 도우미(Qwen3-ASR). 전사 도구 자체는 앱의 설정 > 전사에서 처음 한 번 설치한다.
+cp "$ROOT/scripts/transcribe-helper.sh" "$HELPER_DIR/transcribe.sh"
+cp "$ROOT/scripts/transcribe_worker.py" "$HELPER_DIR/transcribe_worker.py"
+chmod +x "$HELPER_DIR/transcribe.sh"
 
 echo "🎉 설치 완료! Launchpad나 응용 프로그램 폴더에서 $APP_NAME 을(를) 열 수 있어요."
 echo "   기존 녹음과 설정은 그대로 유지돼요."
