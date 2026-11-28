@@ -156,11 +156,19 @@ public final class RecordingManager {
 
     /// 내보내기 작은 창에 보일 녹음 수와 전사된 수. LMS 영상은 내보내지 않으니 세지 않는다.
     public func exportChoices(for recordings: [Recording]) -> BundleExportChoices {
+        var transcribed = 0
+        var unreadable = 0
         let shareable = recordings.filter(canShare)
-        return BundleExportChoices(
-            recordingCount: shareable.count,
-            transcriptCount: shareable.filter { !($0.transcript?.segments.isEmpty ?? true) }.count
-        )
+        for recording in shareable {
+            guard recording.transcriptData != nil else { continue }
+            if let transcript = recording.transcript {
+                if transcript.segments.contains(where: { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) { transcribed += 1 }
+            } else {
+                Log.storage.error("전사 결과를 읽지 못함: \(recording.relativePath, privacy: .public)")
+                unreadable += 1
+            }
+        }
+        return BundleExportChoices(recordingCount: shareable.count, transcriptCount: transcribed, unreadableCount: unreadable)
     }
 
     /// 녹음 파일의 실제 위치. Finder에서 보여 주거나 공유할 때 쓴다.

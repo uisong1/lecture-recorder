@@ -25,6 +25,8 @@ struct RecordingListView: View {
     @State private var bundleNotice: String?
     /// 내보내기 작은 창(녹음과 전사본 / 녹음만 / 전사본만). 열 때 그 순간의 녹음 수를 담는다.
     @State private var exportChoices: BundleExportChoices?
+    /// 작은 창에서 고른 것. 창이 닫힌 뒤(onDismiss) 폴더를 고르고 내보낸다.
+    @State private var pendingExport: BundleContents?
     /// 전사 결과를 여는 녹음.
     @State private var transcriptRecording: Recording?
 
@@ -342,17 +344,19 @@ struct RecordingListView: View {
             } message: {
                 Text(batchNotice ?? "")
             }
-            .sheet(isPresented: presence($exportChoices)) {
+            .sheet(isPresented: presence($exportChoices), onDismiss: {
+                // 작은 창이 다 닫힌 뒤에 폴더 고르는 창을 띄운다. 취소했으면 아무것도 하지 않는다.
+                guard let contents = pendingExport else { return }
+                pendingExport = nil
+                exportBundle(contents: contents)
+            }) {
                 if let choices = exportChoices {
                     ExportBundleSheet(label: library.exportLabel, choices: choices) {
+                        pendingExport = nil
                         exportChoices = nil
                     } onChoose: { contents in
+                        pendingExport = contents
                         exportChoices = nil
-                        // 작은 창이 닫힌 뒤에 폴더 고르는 창을 띄운다.
-                        Task { @MainActor in
-                            await Task.yield()
-                            exportBundle(contents: contents)
-                        }
                     }
                 }
             }
@@ -553,7 +557,10 @@ struct RecordingListView: View {
     /// 지금 목록(고른 과목과 기간)의 녹음을 폴더를 골라 묶어 내보내고 Finder에서 보여 준다.
     private func exportBundle(contents: BundleContents) {
         let recordings = library.exportRecordings
-        guard !recordings.isEmpty else { return }
+        guard !recordings.isEmpty else {
+            bundleNotice = "내보낼 녹음이 없어요. 목록이 바뀌었는지 확인해 주세요."
+            return
+        }
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true

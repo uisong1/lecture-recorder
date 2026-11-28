@@ -248,3 +248,36 @@ import Testing
         #expect(notice == "녹음 1개를 내보냈어요.\n전사하지 않아 빠진 녹음: 2주차")
     }
 }
+
+@Suite struct BundleExportUnreadableTests {
+    let files = FakeFileStore()
+    let root = URL(filePath: "/tmp/LectureRecorderTests/Recordings", directoryHint: .isDirectory)
+    let parent = URL(filePath: "/tmp/LectureRecorderTests/Out", directoryHint: .isDirectory)
+
+    @Test func 읽지_못한_전사는_전사_안_됨과_따로_알린다() throws {
+        let storage = RecordingStorage(root: root, files: files)
+        let exporter = RecordingBundleExporter(storage: storage, files: files, calendar: seoulCalendar)
+        let path = "2026년 1학기/자료구조/03-02 월 10-00.m4a"
+        files.add(storage.url(for: path))
+        let broken = BundleRecording(title: "1주차", subjectName: "자료구조", startedAt: date(2026, 3, 2, 10, 0), duration: 60, relativePath: path, transcriptUnreadable: true)
+        let blank = BundleRecording(
+            title: "2주차", subjectName: "자료구조", startedAt: date(2026, 3, 9, 10, 0), duration: 60, relativePath: path,
+            transcript: [TranscriptSegment(start: 0, end: 1, text: "  ")]
+        )
+
+        let result = try exporter.export([broken, blank], label: "자료구조", to: parent, now: date(2026, 10, 25, 20, 0))
+
+        #expect(result.unreadableTitles == ["1주차"])
+        #expect(BundleExportChoices.notice(for: result)?.contains("전사 결과를 읽지 못한 녹음") == true)
+        // 빈 문장만 있는 전사는 전사본이 없는 것으로 본다.
+        #expect(!RecordingBundleExporter.hasTranscript(blank))
+        #expect(throws: RecordingBundleError.self) {
+            try exporter.export([broken], label: "자료구조", to: parent, now: date(2026, 10, 25, 20, 0), contents: .transcriptOnly)
+        }
+    }
+
+    @Test func 전사를_읽지_못했으면_전사본만에_그_이유를_보인다() {
+        let choices = BundleExportChoices(recordingCount: 2, transcriptCount: 0, unreadableCount: 2)
+        #expect(choices.detail(for: .transcriptOnly).contains("읽지 못했어요"))
+    }
+}

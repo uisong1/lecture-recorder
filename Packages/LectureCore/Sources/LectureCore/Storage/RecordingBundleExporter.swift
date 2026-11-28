@@ -80,10 +80,13 @@ public enum BundleContents: String, CaseIterable, Sendable {
 public struct BundleExportChoices: Equatable, Sendable {
     public let recordingCount: Int
     public let transcriptCount: Int
+    /// 전사 결과가 있지만 읽지 못한 녹음 수.
+    public let unreadableCount: Int
 
-    public init(recordingCount: Int, transcriptCount: Int) {
+    public init(recordingCount: Int, transcriptCount: Int, unreadableCount: Int = 0) {
         self.recordingCount = recordingCount
         self.transcriptCount = transcriptCount
+        self.unreadableCount = unreadableCount
     }
 
     /// 선택지 아래 회색 설명 (예: "소리 파일 12개와 전사본 9개").
@@ -95,7 +98,9 @@ public struct BundleExportChoices: Equatable, Sendable {
         case .audioOnly:
             return "소리 파일 \(recordingCount)개"
         case .transcriptOnly:
-            if transcriptCount == 0 { return "전사한 녹음이 없어요" }
+            if transcriptCount == 0 {
+                return unreadableCount > 0 ? "전사 결과를 읽지 못했어요 (전사 탭에서 다시 전사해 주세요)" : "전사한 녹음이 없어요"
+            }
             return missing > 0 ? "전사본 \(transcriptCount)개 (전사 안 된 \(missing)개는 빠져요)" : "전사본 \(transcriptCount)개"
         }
     }
@@ -113,6 +118,9 @@ public struct BundleExportChoices: Equatable, Sendable {
         if !result.untranscribedTitles.isEmpty {
             parts.append("전사하지 않아 빠진 녹음: " + result.untranscribedTitles.joined(separator: ", "))
         }
+        if !result.unreadableTitles.isEmpty {
+            parts.append("전사 결과를 읽지 못한 녹음(전사 탭에서 다시 전사해 주세요): " + result.unreadableTitles.joined(separator: ", "))
+        }
         guard !parts.isEmpty else { return nil }
         return (["녹음 \(result.exportedCount)개를 내보냈어요."] + parts).joined(separator: "\n")
     }
@@ -128,12 +136,15 @@ public struct RecordingBundleResult: Sendable, Equatable {
     public let skippedTitles: [String]
     /// "전사본만"일 때 아직 전사하지 않아 빠진 녹음의 제목.
     public let untranscribedTitles: [String]
+    /// 전사 결과가 있지만 읽지 못해 전사본을 넣지 못한 녹음의 제목.
+    public let unreadableTitles: [String]
 
-    public init(folder: URL, exportedCount: Int, skippedTitles: [String], untranscribedTitles: [String] = []) {
+    public init(folder: URL, exportedCount: Int, skippedTitles: [String], untranscribedTitles: [String] = [], unreadableTitles: [String] = []) {
         self.folder = folder
         self.exportedCount = exportedCount
         self.skippedTitles = skippedTitles
         self.untranscribedTitles = untranscribedTitles
+        self.unreadableTitles = unreadableTitles
     }
 }
 
@@ -179,10 +190,16 @@ public struct RecordingBundleExporter: Sendable {
         var present: [BundleRecording] = []
         var skipped: [String] = []
         var untranscribed: [String] = []
+        var unreadable: [String] = []
         for recording in recordings.sorted(by: { $0.startedAt < $1.startedAt }) {
+            if contents.includesTranscript, recording.transcriptUnreadable { unreadable.append(recording.title) }
             if contents == .transcriptOnly {
                 // 소리 파일은 담지 않으니 파일이 없어도 된다. 전사본이 있어야 한다.
-                if Self.hasTranscript(recording) { present.append(recording) } else { untranscribed.append(recording.title) }
+                if Self.hasTranscript(recording) {
+                    present.append(recording)
+                } else if !recording.transcriptUnreadable {
+                    untranscribed.append(recording.title)
+                }
             } else if files.fileExists(at: storage.url(for: recording.relativePath)) {
                 present.append(recording)
             } else {
@@ -190,7 +207,10 @@ public struct RecordingBundleExporter: Sendable {
             }
         }
         guard !present.isEmpty else {
-            if contents == .transcriptOnly { throw RecordingBundleError.nothingTranscribed }
+            if contents == .transcriptOnly {
+                if !unreadable.isEmpty { throw RecordingBundleError.failed("전사 결과를 읽지 못했어요. 전사 탭에서 다시 전사해 주세요.") }
+                throw RecordingBundleError.nothingTranscribed
+            }
             throw RecordingBundleError.failed("녹음 파일을 찾을 수 없습니다.")
         }
 
@@ -223,14 +243,37 @@ public struct RecordingBundleExporter: Sendable {
             let text = markdown(entries: entries, label: label, now: now, contents: contents)
             try files.writeData(Data(text.utf8), to: folder.appending(path: Self.summaryFileName, directoryHint: .notDirectory))
         } catch {
-            try? files.removeItem(at: folder)
+            // 반쯤 만든 폴더를 지운다. 지우지 못하면 그 위치를 알려 사용자가 직접 지울 수 있게 한다.
+            do {
+                try files.removeItem(at: folder)
+            } catch let cleanupError {
+                Self.logError("반쯤 만든 내보내기 폴더를 지우지 못함 \(folder.path): \(cleanupError.localizedDescription)")
+                throw RecordingBundleError.failed("\(error.localizedDescription) (만들다 만 폴더가 남았어요: \(folder.path))")
+            }
             throw RecordingBundleError.failed(error.localizedDescription)
         }
-        return RecordingBundleResult(folder: folder, exportedCount: present.count, skippedTitles: skipped, untranscribedTitles: untranscribed)
+        return RecordingBundleResult(
+            folder: folder, exportedCount: present.count, skippedTitles: skipped,
+            untranscribedTitles: untranscribed, unreadableTitles: unreadable
+        )
     }
 
+    /// 빈 문장만 있는 전사는 전사본이 없는 것으로 본다.
     static func hasTranscript(_ recording: BundleRecording) -> Bool {
-        !(recording.transcript ?? []).isEmpty
+        !spokenSegments(recording).isEmpty
+    }
+
+    /// 글이 있는 문장만, 시각 순서로.
+    static func spokenSegments(_ recording: BundleRecording) -> [TranscriptSegment] {
+        (recording.transcript ?? [])
+            .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .sorted { $0.start < $1.start }
+    }
+
+    private static func logError(_ message: String) {
+        #if canImport(os)
+        Log.storage.error("\(message, privacy: .public)")
+        #endif
     }
 
     // MARK: - 이름
@@ -306,8 +349,9 @@ public struct RecordingBundleExporter: Sendable {
                 if !memo.isEmpty { lines.append("- 수업 메모: \(memo)") }
                 if r.isRecovered { lines.append("- 참고: 녹음 중 앱이 꺼져 복구한 녹음이라 끝부분이 없을 수 있습니다.") }
                 if contents.includesTranscript {
-                    if let segments = r.transcript, !segments.isEmpty {
-                        lines.append("- 전사: `\(Self.transcriptFolderName)/\(Self.transcriptFileName(for: item.fileName))` (문장 \(segments.count)개)")
+                    let spoken = Self.spokenSegments(r)
+                    if !spoken.isEmpty {
+                        lines.append("- 전사: `\(Self.transcriptFolderName)/\(Self.transcriptFileName(for: item.fileName))` (문장 \(spoken.count)개)")
                     } else if r.transcriptUnreadable {
                         lines.append("- 전사: 읽지 못함 (앱의 전사 탭에서 다시 전사해 주세요)")
                     } else {
@@ -345,9 +389,8 @@ public struct RecordingBundleExporter: Sendable {
             "- 맥에서 자동으로 받아 적은 글이라 틀린 말이 있을 수 있습니다. [시각]은 녹음 시작부터 잰 시간입니다.",
             "",
         ]
-        for segment in (recording.transcript ?? []).sorted(by: { $0.start < $1.start }) {
+        for segment in Self.spokenSegments(recording) {
             let text = segment.text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
-            guard !text.isEmpty else { continue }
             lines.append("[\(Self.clockText(segment.start))] \(text)")
         }
         return lines.joined(separator: "\n") + "\n"
