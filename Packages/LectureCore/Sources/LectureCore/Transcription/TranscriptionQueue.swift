@@ -1,8 +1,9 @@
 #if canImport(SwiftData)
 import Foundation
 import Observation
+import SwiftData
 
-/// 전사할 녹음 하나. `id`는 녹음의 상대 경로라, 끝났을 때 그 녹음을 다시 찾는 데 쓴다.
+/// 전사할 녹음 하나. `id`는 녹음의 고정 id(`Recording.transcriptionKey`)라, 전사 중 과목을 옮겨 경로가 바뀌어도 같은 녹음을 찾는다.
 public struct TranscriptionJob: Identifiable, Equatable, Sendable {
     public let id: String
     public let title: String
@@ -11,13 +12,32 @@ public struct TranscriptionJob: Identifiable, Equatable, Sendable {
     public let audioURL: URL
     /// 녹음 길이(초). 남은 시간 어림에 쓴다.
     public let duration: TimeInterval
+    /// 결과를 저장할 녹음. 없으면(테스트) `id`로만 구분한다.
+    public let recordingID: PersistentIdentifier?
+    /// 멈췄다 이어서 할 때 엔진이 하던 일(끝낸 조각)을 찾는 열쇠. 대기열에 넣을 때 정해지고 멈춰도 바뀌지 않는다.
+    public let workID: UUID
 
-    public init(id: String, title: String, subtitle: String, audioURL: URL, duration: TimeInterval) {
+    public init(
+        id: String,
+        title: String,
+        subtitle: String,
+        audioURL: URL,
+        duration: TimeInterval,
+        recordingID: PersistentIdentifier? = nil,
+        workID: UUID = UUID()
+    ) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.audioURL = audioURL
         self.duration = duration
+        self.recordingID = recordingID
+        self.workID = workID
+    }
+
+    /// 녹음이 옮겨졌거나 이름이 바뀐 뒤의 최신 정보로 바꾼 작업. 이어 하기 열쇠는 그대로 둔다.
+    public func refreshed(title: String, subtitle: String, audioURL: URL, duration: TimeInterval) -> TranscriptionJob {
+        TranscriptionJob(id: id, title: title, subtitle: subtitle, audioURL: audioURL, duration: duration, recordingID: recordingID, workID: workID)
     }
 }
 
@@ -25,6 +45,12 @@ public struct TranscriptionJob: Identifiable, Equatable, Sendable {
 /// 작업을 취소하면(`Task.cancel`) 하던 일을 멈추고 `CancellationError`를 던져야 한다.
 public protocol Transcribing: Sendable {
     func transcribe(_ job: TranscriptionJob, progress: @escaping @Sendable (Double) -> Void) async throws -> Transcript
+    /// 멈춰 둔 작업을 대기열에서 뺐을 때, 이어 하려고 남겨 둔 것(끝낸 조각)을 지운다.
+    func discardWork(for job: TranscriptionJob)
+}
+
+extension Transcribing {
+    public func discardWork(for job: TranscriptionJob) {}
 }
 
 /// 녹음이 끝난 뒤 여러 녹음을 동시에(기본 2개) 전사하는 대기열. 녹음 중이거나 전원 조건이 안 맞으면 멈춘다.
@@ -34,29 +60,40 @@ public final class TranscriptionQueue {
     public enum State: Equatable, Sendable {
         case waiting
         case running(progress: Double)
+        /// "멈춤"을 눌렀고, 도구가 지금 조각(최대 3분)을 마치길 기다리는 중.
+        case stopping(progress: Double)
+        /// 사용자가 멈춘 작업. "이어서"를 누르기 전에는 시작하지 않는다.
+        case paused(progress: Double)
         case failed(String)
         case done
     }
 
     public struct Entry: Identifiable, Equatable, Sendable {
-        public let job: TranscriptionJob
+        public internal(set) var job: TranscriptionJob
         public var state: State
+        /// 실패했을 때 도우미가 남긴 마지막 몇 줄. 실패 줄 아래 작게 보인다.
+        public var failureDetail: String?
         public var id: String { job.id }
 
-        public init(job: TranscriptionJob, state: State) {
+        public init(job: TranscriptionJob, state: State, failureDetail: String? = nil) {
             self.job = job
             self.state = state
+            self.failureDetail = failureDetail
         }
 
+        /// 엔진이 돌고 있는 줄 (멈추는 중 포함).
         public var isRunning: Bool {
-            if case .running = state { true } else { false }
+            switch state {
+            case .running, .stopping: true
+            case .waiting, .paused, .failed, .done: false
+            }
         }
 
         /// 끝났거나 실패한 줄.
         public var isFinished: Bool {
             switch state {
             case .done, .failed: true
-            case .waiting, .running: false
+            case .waiting, .running, .stopping, .paused: false
             }
         }
     }
@@ -83,11 +120,15 @@ public final class TranscriptionQueue {
 
     /// 한 녹음의 전사가 끝나면 부른다. 저장에 실패하면 던진 오류가 그 줄의 실패 문구가 된다.
     @ObservationIgnored public var onFinished: @MainActor (TranscriptionJob, Transcript) throws -> Void = { _, _ in }
+    /// 작업을 시작하기 직전에 부른다. 그 사이 녹음이 옮겨졌으면 새 경로로 바꾼 작업을, 지워졌으면 nil을 돌려준다.
+    @ObservationIgnored public var resolveJob: @MainActor (TranscriptionJob) -> TranscriptionJob? = { $0 }
 
     @ObservationIgnored private let engine: Transcribing
     @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
     /// 대기열에서 뺐거나 멈춘 작업. 취소되어 돌아올 때 대기로 되돌릴지 뺄지 가른다.
     @ObservationIgnored private var removedWhileRunning: Set<String> = []
+    /// 사용자가 "멈춤"을 눌러 취소한 작업. 돌아오면 대기 대신 멈춤으로 둔다.
+    @ObservationIgnored private var pausingIDs: Set<String> = []
 
     public init(engine: Transcribing, maxConcurrent: Int = TranscriptionQueue.defaultConcurrency) {
         self.engine = engine
@@ -112,7 +153,7 @@ public final class TranscriptionQueue {
         entries.filter { $0.state == .done }.count
     }
 
-    /// 아직 끝나지 않은(대기·진행) 작업이 있는지.
+    /// 아직 끝나지 않은(대기·진행) 작업이 있는지. 사용자가 멈춘 줄은 넣지 않는다.
     public var isActive: Bool {
         entries.contains { $0.state == .waiting || $0.isRunning }
     }
@@ -131,7 +172,8 @@ public final class TranscriptionQueue {
             case .failed: continue
             case .done: total += weight; done += weight
             case .waiting: total += weight
-            case .running(let progress): total += weight; done += weight * min(max(progress, 0), 1)
+            case .running(let progress), .stopping(let progress), .paused(let progress):
+                total += weight; done += weight * min(max(progress, 0), 1)
             }
         }
         return total > 0 ? done / total : 0
@@ -147,8 +189,8 @@ public final class TranscriptionQueue {
         for entry in entries {
             switch entry.state {
             case .waiting: remainingAudio += entry.job.duration
-            case .running(let progress): remainingAudio += entry.job.duration * (1 - min(max(progress, 0), 1))
-            case .failed, .done: continue
+            case .running(let progress), .stopping(let progress): remainingAudio += entry.job.duration * (1 - min(max(progress, 0), 1))
+            case .paused, .failed, .done: continue
             }
         }
         return remainingAudio * secondsPerAudioSecond / Double(max(concurrency, 1))
@@ -164,7 +206,9 @@ public final class TranscriptionQueue {
             if let index = entries.firstIndex(where: { $0.id == job.id }) {
                 switch entries[index].state {
                 case .failed, .done: entries[index] = Entry(job: job, state: .waiting)
-                case .waiting, .running: continue
+                // 멈춰 둔 작업은 하던 데서 이어 하도록 작업(이어 하기 열쇠)을 그대로 두고 대기로 돌린다.
+                case .paused: entries[index].state = .waiting
+                case .waiting, .running, .stopping: continue
                 }
             } else {
                 entries.append(Entry(job: job, state: .waiting))
@@ -173,19 +217,47 @@ public final class TranscriptionQueue {
         pump()
     }
 
-    /// 대기열에서 뺀다. 진행 중이면 멈추고 뺀다.
+    /// 대기열에서 뺀다. 진행 중이면 멈추고 뺀다. 이어 하려고 남겨 둔 것도 지운다.
     public func remove(id: String) {
         if let task = tasks[id] {
             removedWhileRunning.insert(id)
+            pausingIDs.remove(id)
             task.cancel()
         }
+        if let entry = entries.first(where: { $0.id == id && !$0.isRunning }) {
+            engine.discardWork(for: entry.job)
+        }
         entries.removeAll { $0.id == id && !$0.isRunning }
+    }
+
+    /// 진행 중인 작업을 멈춘다. 도구가 지금 조각을 마칠 때까지 "멈추는 중"이고, 그 뒤 멈춤이 된다.
+    /// 대기 중인 작업은 바로 멈춤이 된다. "이어서"(`resume`)로 하던 데서 다시 한다.
+    public func pause(id: String) {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        switch entries[index].state {
+        case .running(let progress):
+            pausingIDs.insert(id)
+            entries[index].state = .stopping(progress: progress)
+            tasks[id]?.cancel()
+        case .waiting:
+            entries[index].state = .paused(progress: 0)
+        case .stopping, .paused, .failed, .done:
+            return
+        }
+    }
+
+    /// 멈춘 작업을 대기로 돌려 다시 시작한다.
+    public func resume(id: String) {
+        guard let index = entries.firstIndex(where: { $0.id == id }), case .paused = entries[index].state else { return }
+        entries[index].state = .waiting
+        pump()
     }
 
     /// 실패한 줄을 다시 대기로.
     public func retry(id: String) {
         guard let index = entries.firstIndex(where: { $0.id == id }), case .failed = entries[index].state else { return }
         entries[index].state = .waiting
+        entries[index].failureDetail = nil
         pump()
     }
 
@@ -229,8 +301,15 @@ public final class TranscriptionQueue {
         }
     }
 
-    private func start(_ job: TranscriptionJob) {
-        setState(.running(progress: 0), for: job.id)
+    private func start(_ queued: TranscriptionJob) {
+        // 기다리는 사이 녹음을 옮겼거나 지웠을 수 있다. 시작 직전에 다시 찾는다.
+        guard let job = resolveJob(queued) else {
+            setState(.failed("녹음을 찾지 못했어요. 지웠을 수 있어요."), for: queued.id)
+            engine.discardWork(for: queued)
+            return
+        }
+        if let index = entries.firstIndex(where: { $0.id == job.id }) { entries[index].job = job }
+        setState(.running(progress: startingProgress(for: job.id)), for: job.id)
         let engine = engine
         // 대기열은 앱이 켜져 있는 동안 계속 살아 있으므로 작업이 끝날 때까지 강하게 붙잡아도 된다.
         tasks[job.id] = Task {
@@ -238,7 +317,7 @@ public final class TranscriptionQueue {
                 let transcript = try await engine.transcribe(job) { progress in
                     Task { @MainActor in self.updateProgress(progress, for: job.id) }
                 }
-                try Task.checkCancellation()
+                // 결과가 다 나왔으면 그 사이 멈춤·녹음 시작이 있었어도 버리지 않고 저장한다.
                 self.finish(job, with: .success(transcript))
             } catch {
                 self.finish(job, with: .failure(error))
@@ -246,31 +325,69 @@ public final class TranscriptionQueue {
         }
     }
 
+    /// 멈췄다 이어 할 때는 멈춘 진행률에서 시작해 보인다 (도구가 끝낸 조각을 건너뛴다).
+    private func startingProgress(for id: String) -> Double {
+        guard let entry = entries.first(where: { $0.id == id }) else { return 0 }
+        switch entry.state {
+        case .paused(let progress), .running(let progress), .stopping(let progress): return progress
+        case .waiting, .failed, .done: return lastProgress[id] ?? 0
+        }
+    }
+
+    /// 녹음 시작 등으로 끊겨 대기로 돌아간 작업의 진행률. 다시 시작할 때 0으로 보이지 않게 기억한다.
+    @ObservationIgnored private var lastProgress: [String: Double] = [:]
+
     private func updateProgress(_ progress: Double, for id: String) {
-        guard let index = entries.firstIndex(where: { $0.id == id }), case .running = entries[index].state else { return }
-        entries[index].state = .running(progress: min(max(progress, 0), 1))
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        let clamped = min(max(progress, 0), 1)
+        switch entries[index].state {
+        case .running: entries[index].state = .running(progress: clamped)
+        case .stopping: entries[index].state = .stopping(progress: clamped)
+        case .waiting, .paused, .failed, .done: return
+        }
+    }
+
+    private func progress(of id: String) -> Double {
+        switch entries.first(where: { $0.id == id })?.state {
+        case .running(let progress), .stopping(let progress), .paused(let progress): progress
+        default: 0
+        }
     }
 
     private func finish(_ job: TranscriptionJob, with result: Result<Transcript, Error>) {
         tasks[job.id] = nil
         let wasRemoved = removedWhileRunning.remove(job.id) != nil
+        let wasPausing = pausingIDs.remove(job.id) != nil
         if wasRemoved {
+            engine.discardWork(for: job)
             entries.removeAll { $0.id == job.id }
         } else {
             switch result {
             case .success(let transcript):
+                lastProgress[job.id] = nil
                 do {
                     try onFinished(job, transcript)
                     setState(.done, for: job.id)
                 } catch {
-                    setState(.failed("저장하지 못했어요: \(error.localizedDescription)"), for: job.id)
+                    setState(.failed(Self.message(for: error)), for: job.id)
                 }
             case .failure(let error):
                 if error is CancellationError {
-                    // 멈춤·녹음 시작으로 끊긴 것: 처음부터 다시 하도록 대기로 되돌린다.
-                    setState(.waiting, for: job.id)
+                    let progress = progress(of: job.id)
+                    if wasPausing {
+                        // 사용자가 멈춘 것: 하던 데까지 기억하고 "이어서"를 기다린다.
+                        setState(.paused(progress: progress), for: job.id)
+                    } else {
+                        // 모두 멈춤·녹음 시작으로 끊긴 것: 대기로 돌려 조건이 맞으면 이어서 한다.
+                        lastProgress[job.id] = progress
+                        setState(.waiting, for: job.id)
+                    }
                 } else {
+                    lastProgress[job.id] = nil
                     setState(.failed(Self.message(for: error)), for: job.id)
+                    if let index = entries.firstIndex(where: { $0.id == job.id }) {
+                        entries[index].failureDetail = (error as? TranscriptionError)?.detail
+                    }
                 }
             }
         }
@@ -292,7 +409,24 @@ public final class TranscriptionQueue {
 /// 전사 실패 이유. 화면에 그대로 보인다.
 public struct TranscriptionError: Error, Equatable, Sendable {
     public let message: String
-    public init(_ message: String) { self.message = message }
+    /// 도우미가 남긴 오류의 마지막 몇 줄. 실패 줄 아래 작게 보인다.
+    public let detail: String?
+    public init(_ message: String, detail: String? = nil) {
+        self.message = message
+        self.detail = detail
+    }
+
+    /// 같은 이유에 도우미 오류 내용을 붙인다.
+    public func with(detail: String?) -> TranscriptionError {
+        TranscriptionError(message, detail: detail)
+    }
+
+    /// 도우미가 stderr에 남긴 글에서 마지막 `lines`줄(빈 줄 제외)을 고른다. 없으면 nil.
+    nonisolated public static func tail(of log: String, lines: Int = 3) -> String? {
+        let kept = log.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard !kept.isEmpty else { return nil }
+        return kept.suffix(lines).joined(separator: "\n")
+    }
 
     /// 도우미 스크립트 종료 코드별 문구.
     public static func helperExit(_ status: Int?) -> TranscriptionError {
