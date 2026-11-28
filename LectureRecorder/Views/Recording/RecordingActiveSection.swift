@@ -30,14 +30,6 @@ struct RecordingActiveSection: View {
 
         BookmarkNoteField(recording: recording)
 
-        RecordingNoticeLines(notices: RecordingScreenNotices(
-            isRecording: true,
-            isPaused: recording.isPaused,
-            stallResumeNotice: recording.stallResumeNotice,
-            storageWarning: recording.storageWarning,
-            batteryWarning: recording.batteryWarning,
-            inputDeviceWarning: recording.inputDeviceWarning,
-            isInputSilent: recording.isInputSilent
-        ))
+        RecordingNoticeLines(notices: .forRecording(recording))
     }
 }

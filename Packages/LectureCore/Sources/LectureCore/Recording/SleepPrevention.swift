@@ -3,8 +3,9 @@ import Foundation
 /// 녹음하는 동안 맥이 잠자기에 들어가지 않게 막는다. 테스트에서는 가짜 구현을 쓴다.
 @MainActor
 public protocol SleepPreventing: AnyObject {
-    /// 잠자기 방지를 시작한다. 이미 켜져 있으면 아무 일도 하지 않는다.
-    func begin(reason: String)
+    /// 잠자기 방지를 시작한다. 이미 켜져 있으면 아무 일도 하지 않는다. 켜지 못했으면 false를 돌려준다.
+    @discardableResult
+    func begin(reason: String) -> Bool
     /// 잠자기 방지를 끈다. 켜져 있지 않으면 아무 일도 하지 않는다.
     func end()
 }
@@ -19,8 +20,9 @@ public final class SystemSleepPreventer: SleepPreventing {
 
     public init() {}
 
-    public func begin(reason: String) {
-        guard assertionID == nil else { return }
+    @discardableResult
+    public func begin(reason: String) -> Bool {
+        guard assertionID == nil else { return true }
         var id = IOPMAssertionID(0)
         let result = IOPMAssertionCreateWithName(
             kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,
@@ -28,11 +30,12 @@ public final class SystemSleepPreventer: SleepPreventing {
             reason as CFString,
             &id
         )
-        if result == kIOReturnSuccess {
-            assertionID = id
-        } else {
+        guard result == kIOReturnSuccess else {
             Log.recording.error("잠자기 방지 실패: IOReturn \(result, privacy: .public)")
+            return false
         }
+        assertionID = id
+        return true
     }
 
     public func end() {

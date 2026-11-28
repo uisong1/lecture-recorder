@@ -4,6 +4,34 @@ import SwiftData
 import Testing
 @testable import LectureCore
 
+/// 저장을 실패시킬지 고르는 스위치.
+@MainActor
+final class SaveGate {
+    var fails = false
+    var calls = 0
+}
+
+/// 무엇을 써도 실패하는 저널.
+final class FailingRecordingJournal: RecordingJournaling, @unchecked Sendable {
+    func load() -> PendingRecording? { nil }
+    func save(_ pending: PendingRecording) throws { throw CocoaError(.fileWriteNoPermission) }
+    func clear() {}
+    func keepUnsaved(_ pending: PendingRecording) throws { throw CocoaError(.fileWriteNoPermission) }
+    func loadUnsaved() -> [PendingRecording] { [] }
+    func clearUnsaved(relativePath: String) {}
+}
+
+/// 저장은 되지만 앞 녹음을 따로 보관하지는 못하는 저널.
+final class KeepFailingJournal: RecordingJournaling, @unchecked Sendable {
+    private var current: PendingRecording?
+    func load() -> PendingRecording? { current }
+    func save(_ pending: PendingRecording) throws { current = pending }
+    func clear() { current = nil }
+    func keepUnsaved(_ pending: PendingRecording) throws { throw CocoaError(.fileWriteOutOfSpace) }
+    func loadUnsaved() -> [PendingRecording] { [] }
+    func clearUnsaved(relativePath: String) {}
+}
+
 /// 테스트에서 시간을 마음대로 흘리는 시계.
 @MainActor
 final class TestClock {
@@ -34,7 +62,14 @@ final class TestClock {
 
     let overrunNotifier = FakeNotificationScheduler()
 
-    func makeController(at time: Date, compressing: Bool = false, clock: TestClock? = nil, permission: (any MicrophonePermissionProviding)? = nil) -> RecordingController {
+    func makeController(
+        at time: Date,
+        compressing: Bool = false,
+        clock: TestClock? = nil,
+        permission: (any MicrophonePermissionProviding)? = nil,
+        journal: (any RecordingJournaling)? = nil,
+        saveContext: (@MainActor (ModelContext) throws -> Void)? = nil
+    ) -> RecordingController {
         let storage = RecordingStorage(root: root, files: files)
         return RecordingController(
             context: container.mainContext,
@@ -42,7 +77,7 @@ final class TestClock {
             storage: storage,
             files: files,
             permission: permission ?? self.permission,
-            journal: journal,
+            journal: journal ?? self.journal,
             sleepPreventer: sleep,
             overrunNotifier: overrunNotifier,
             lifecycle: lifecycle,
@@ -52,7 +87,8 @@ final class TestClock {
             storageCheckInterval: nil,
             levelCheckInterval: nil,
             calendar: seoulCalendar,
-            now: { clock?.now ?? time }
+            now: { clock?.now ?? time },
+            saveContext: saveContext
         )
     }
 
@@ -62,6 +98,211 @@ final class TestClock {
         try ScheduleManager(context: container.mainContext)
             .add(subject: subject, weekday: .monday, start: TimeOfDay(hour: 10), end: TimeOfDay(hour: 11, minute: 15))
         return subject
+    }
+
+    @Test func 잠자기_방지를_켜지_못하면_녹음하는_동안_경고하고_정지하면_지운다() async throws {
+        sleep.fails = true
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+
+        #expect(controller.isRecording)
+        #expect(controller.sleepPreventionFailed)
+
+        try controller.stop()
+        #expect(!controller.sleepPreventionFailed)
+    }
+
+    @Test func 복구_기록을_쓰지_못하면_녹음은_계속하고_경고한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0), journal: FailingRecordingJournal())
+        try await controller.start()
+
+        #expect(controller.isRecording)
+        #expect(controller.recoveryJournalFailed)
+        controller.addBookmark()
+        #expect(controller.recoveryJournalFailed)
+
+        try controller.stop()
+        #expect(!controller.recoveryJournalFailed)
+    }
+
+    @Test func 저장에_실패하면_사라지지_않는_알림을_두고_다시_저장하면_마무리한다() async throws {
+        let gate = SaveGate()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0), saveContext: { context in
+            if gate.fails { throw CocoaError(.fileWriteUnknown) }
+            try context.save()
+        })
+        let stopped = SaveGate()
+        var stoppedCount: Int { stopped.calls }
+        controller.onStopped = { stopped.calls += 1 }
+        try await controller.start()
+        let path = try #require(controller.currentRelativePath)
+        gate.fails = true
+
+        #expect(throws: RecordingError.self) { try controller.stop() }
+
+        #expect(controller.saveFailure?.relativePath == path)
+        #expect(controller.lastSaved == nil)
+        // 녹음은 끝났으니 정지 뒤 처리(전사 재개 등)는 한다.
+        #expect(stoppedCount == 1)
+        #expect(journal.load()?.relativePath == path)
+
+        // 다시 저장도 실패하면 알림은 그대로 남고, 알림 안에 다시 실패한 이유를 보인다.
+        controller.retrySave()
+        #expect(controller.saveFailure?.retryFailed == true)
+        #expect(controller.saveFailure?.detail.contains("다시 저장하지 못했어요") == true)
+        #expect(controller.displayedErrorMessage == nil)
+
+        gate.fails = false
+        controller.retrySave()
+        #expect(controller.saveFailure == nil)
+        #expect(controller.errorMessage == nil)
+        #expect(controller.lastSaved?.relativePath == path)
+        #expect(stoppedCount == 1)
+        #expect(journal.load() == nil)
+    }
+
+    @Test func 저장에_실패한_뒤_새_녹음을_시작해도_다시_저장은_새_녹음의_저널을_지우지_않는다() async throws {
+        let gate = SaveGate()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock, saveContext: { context in
+            if gate.fails { throw CocoaError(.fileWriteUnknown) }
+            try context.save()
+        })
+        try await controller.start()
+        let firstPath = try #require(controller.currentRelativePath)
+        gate.fails = true
+        #expect(throws: RecordingError.self) { try controller.stop() }
+        gate.fails = false
+        clock.advance(by: 60)
+        try await controller.start()
+        let secondPath = try #require(controller.currentRelativePath)
+
+        controller.retrySave()
+
+        #expect(controller.saveFailure == nil)
+        #expect(journal.load()?.relativePath == secondPath)
+        #expect(!journal.loadUnsaved().contains { $0.relativePath == firstPath })
+        #expect(controller.isRecording)
+    }
+
+    @Test func 저장하지_못한_녹음이_또_생기면_앞_녹음을_덮어쓰지_않고_함께_다시_저장한다() async throws {
+        let gate = SaveGate()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock, saveContext: { context in
+            if gate.fails { throw CocoaError(.fileWriteUnknown) }
+            try context.save()
+        })
+        gate.fails = true
+        try await controller.start()
+        let firstPath = try #require(controller.currentRelativePath)
+        #expect(throws: RecordingError.self) { try controller.stop() }
+        clock.advance(by: 120)
+        try await controller.start()
+        let secondPath = try #require(controller.currentRelativePath)
+        #expect(throws: RecordingError.self) { try controller.stop() }
+
+        #expect(controller.saveFailure?.recordings.map(\.relativePath) == [firstPath, secondPath])
+        #expect(controller.saveFailure?.title == "녹음 2개의 정보를 저장하지 못했어요")
+
+        gate.fails = false
+        controller.retrySave()
+
+        #expect(controller.saveFailure == nil)
+        let saved = try container.mainContext.fetch(FetchDescriptor<Recording>()).map(\.relativePath)
+        #expect(Set(saved) == [firstPath, secondPath])
+        #expect(journal.load() == nil)
+        #expect(journal.loadUnsaved().isEmpty)
+    }
+
+    @Test func 앞_녹음의_저널을_보관하지_못하면_되살리기_경고를_계속_보인다() async throws {
+        let gate = SaveGate()
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let keeping = KeepFailingJournal()
+        let controller = makeController(at: clock.now, clock: clock, journal: keeping, saveContext: { context in
+            if gate.fails { throw CocoaError(.fileWriteUnknown) }
+            try context.save()
+        })
+        gate.fails = true
+        try await controller.start()
+        #expect(throws: RecordingError.self) { try controller.stop() }
+        gate.fails = false
+        clock.advance(by: 60)
+
+        try await controller.start()
+
+        #expect(controller.recoveryJournalFailed)
+        controller.addBookmark()
+        #expect(controller.recoveryJournalFailed)
+    }
+
+    @Test func 녹음기가_스스로_끝난_뒤_정지하면_파일_크기로_길이를_본다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        try await controller.start()
+        let url = recorder.startedURLs[0]
+        files.add(url)
+        files.sizes[url.standardizedFileURL.path] = Int64(RecordingFormat.workingBytesPerSecond) * 300
+        recorder.currentTime = 0
+        recorder.hasEnded = true
+
+        let saved = try controller.stop()
+
+        #expect(abs(saved.duration - 300) < 1)
+        // 사용자가 직접 멈춘 것이니 "녹음기가 멈춰 저장했어요" 안내는 띄우지 않는다.
+        #expect(controller.recorderStallNotice == nil)
+    }
+
+    @Test func 임시_저장소면_녹음_화면에서_처음_시작할_때_한_번만_묻는다() async throws {
+        let clock = TestClock(date(2026, 3, 2, 10, 0))
+        let controller = makeController(at: clock.now, clock: clock)
+        controller.isUsingTemporaryStore = true
+
+        await controller.toggleFromRecordingScreen()
+        #expect(controller.temporaryStorePrompt)
+        #expect(!controller.isRecording)
+
+        await controller.confirmTemporaryStoreAndStart()
+        #expect(!controller.temporaryStorePrompt)
+        #expect(controller.isRecording)
+
+        clock.advance(by: 600)
+        await controller.toggleFromRecordingScreen()
+        #expect(!controller.isRecording)
+        clock.advance(by: 60)
+        await controller.toggleFromRecordingScreen()
+        #expect(!controller.temporaryStorePrompt)
+        #expect(controller.isRecording)
+    }
+
+    @Test func 임시_저장소_확인을_닫으면_녹음하지_않고_다음에_다시_묻는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        controller.isUsingTemporaryStore = true
+
+        await controller.toggleFromRecordingScreen()
+        controller.cancelTemporaryStorePrompt()
+        #expect(!controller.temporaryStorePrompt)
+        #expect(!controller.isRecording)
+
+        await controller.toggleFromRecordingScreen()
+        #expect(controller.temporaryStorePrompt)
+    }
+
+    @Test func 임시_저장소여도_메뉴_막대_시작은_묻지_않고_녹음한다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+        controller.isUsingTemporaryStore = true
+
+        await controller.toggle()
+
+        #expect(controller.isRecording)
+        #expect(!controller.temporaryStorePrompt)
+    }
+
+    @Test func 평소에는_녹음_화면_시작도_묻지_않는다() async throws {
+        let controller = makeController(at: date(2026, 3, 2, 10, 0))
+
+        await controller.toggleFromRecordingScreen()
+
+        #expect(controller.isRecording)
+        #expect(!controller.temporaryStorePrompt)
     }
 
     @Test func 권한_답을_기다리는_동안_또_시작하면_거부하고_녹음은_하나만_한다() async throws {

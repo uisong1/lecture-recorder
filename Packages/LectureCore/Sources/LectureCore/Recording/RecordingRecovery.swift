@@ -30,12 +30,25 @@ public struct RecordingRecovery {
         self.calendar = calendar
     }
 
+    /// 되살리기 결과. 되살린 녹음과, 시도했지만 실패해 저널에 남긴 건수.
+    public struct Report {
+        public var recovered: [Recording] = []
+        public var failed = 0
+        public var firstError: Error?
+    }
+
     /// 저널에 남은 녹음이 있으면 되살린다. 되살린 녹음을 돌려주고, 할 일이 없으면 nil.
     /// 저장에 실패한 뒤 새 녹음 때문에 따로 보관된 기록(`keepUnsaved`)도 함께 되살린다. 여럿이면 가장 먼저 되살린 녹음을 돌려준다.
     @discardableResult
     public func recoverIfNeeded() throws -> Recording? {
-        var first: Recording?
-        var firstError: Error?
+        let report = recoverAll()
+        if let firstError = report.firstError, report.recovered.isEmpty { throw firstError }
+        return report.recovered.first
+    }
+
+    /// 남은 기록을 모두 되살리고, 몇 건이 실패했는지 함께 알려 준다. 실패한 기록은 저널에 남아 다음 실행 때 다시 시도한다.
+    public func recoverAll() -> Report {
+        var report = Report()
         var candidates: [(PendingRecording, () -> Void)] = []
         if let pending = journal.load() { candidates.append((pending, { journal.clear() })) }
         for pending in journal.loadUnsaved() {
@@ -44,15 +57,15 @@ public struct RecordingRecovery {
         }
         for (pending, clearEntry) in candidates {
             do {
-                if let recording = try recover(pending, clearing: clearEntry), first == nil { first = recording }
+                if let recording = try recover(pending, clearing: clearEntry) { report.recovered.append(recording) }
             } catch {
-                // 한 건이 실패해도 나머지는 되살린다. 실패한 기록은 저널에 남아 다음 실행 때 다시 시도한다.
+                // 한 건이 실패해도 나머지는 되살린다.
                 Log.recording.error("녹음 복구 실패 \(pending.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                firstError = firstError ?? error
+                report.failed += 1
+                report.firstError = report.firstError ?? error
             }
         }
-        if let firstError, first == nil { throw firstError }
-        return first
+        return report
     }
 
     private func recover(_ pending: PendingRecording, clearing clearEntry: () -> Void) throws -> Recording? {

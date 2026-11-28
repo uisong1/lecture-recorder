@@ -8,6 +8,7 @@ struct RecordingFilesSettingsView: View {
     let isRecording: Bool
     let storeBackup: StoreBackup?
     let storage: RecordingStorage
+    let health: StorageHealth
 
     @AppStorage(LMSImportModel.keepVideoDefaultsKey) private var keepLMSVideo = false
     @State private var lastBackup: Date?
@@ -21,6 +22,29 @@ struct RecordingFilesSettingsView: View {
 
     var body: some View {
         Form {
+            Section("저장 상태") {
+                if health.lines.isEmpty {
+                    Label(StorageHealth.allGoodText, systemImage: "checkmark.circle")
+                        .designText(.body)
+                        .foregroundStyle(Design.Palette.inkMuted)
+                        .accessibilityIdentifier("storageHealthAllGood")
+                }
+                ForEach(health.lines, id: \.kind) { line in
+                    HStack(alignment: .firstTextBaseline, spacing: Design.Spacing.xs) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .foregroundStyle(Design.Palette.danger)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: Design.Spacing.xxs) {
+                            Text(line.title).designText(.bodyStrong)
+                            Text(line.detail).designText(.caption).foregroundStyle(Design.Palette.inkMuted)
+                        }
+                        Spacer()
+                        healthAction(for: line.kind)
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("storageHealth-\(line.kind)")
+                }
+            }
             Section {
                 Text("녹음 폴더에 있는데 목록에 없는 파일을 찾아 목록에 되살립니다. 휴지통에서 되돌린 파일이나 앱을 다시 설치한 뒤에 쓸 수 있습니다. 파일은 옮기거나 지우지 않고, 비어 있는 폴더만 정리합니다.")
                     .designText(.caption)
@@ -108,6 +132,31 @@ struct RecordingFilesSettingsView: View {
         }
         .formStyle(.grouped)
         .padding(Design.Spacing.lg)
+    }
+
+    @ViewBuilder
+    private func healthAction(for kind: StorageHealth.Kind) -> some View {
+        switch kind {
+        case .uncompressed:
+            Button("다시 시도") { Task { await health.retryCompressionNow() } }
+                .buttonStyle(.pillCompact)
+                .disabled(health.isRetrying)
+        case .unmigrated:
+            Button("다시 시도") { Task { await health.retryMigrationNow() } }
+                .buttonStyle(.pillSecondaryCompact)
+                .disabled(health.isRetrying || isRecording)
+        case .unrecovered:
+            // 남은 기록은 다음에 앱을 켤 때도 다시 시도한다. 녹음 중에는 지금 녹음의 기록을 건드리지 않게 막는다.
+            HStack(spacing: Design.Spacing.xs) {
+                Button("다시 시도") { health.retryRecoveryNow() }
+                    .buttonStyle(.pillCompact)
+                    .disabled(health.isRetrying || isRecording)
+                Button("파일 위치 보기") { openRecordingsFolder() }
+                    .buttonStyle(.pillSecondaryCompact)
+            }
+        case .checkFailed:
+            EmptyView()
+        }
     }
 
     private func openRecordingsFolder() {

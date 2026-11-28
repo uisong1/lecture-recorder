@@ -27,6 +27,33 @@ public enum RecordingError: Error, Equatable, LocalizedError {
     }
 }
 
+/// 정지했지만 DB에 저장하지 못한 녹음을 알리는 내용. 지워지지 않고 "다시 저장"이 성공할 때까지 남는다.
+/// 저장하지 못한 채 다시 녹음하고 또 실패하면 앞 녹음도 함께 남긴다(덮어쓰지 않는다).
+public struct UnsavedRecordingNotice {
+    public static let singleTitle = "녹음 정보를 저장하지 못했어요"
+    public static let baseDetail = "소리 파일은 안전하게 남아 있어요. 다시 저장하거나, 다음에 앱을 켤 때 자동으로 되살려요."
+
+    /// 저장하지 못한 녹음들. 마지막이 가장 최근 녹음이다.
+    public internal(set) var recordings: [Recording]
+    /// 마지막으로 실패한 이유.
+    public internal(set) var reason: String
+    /// "다시 저장"도 실패했는지. 그러면 그 이유를 알림 안에 보인다.
+    public internal(set) var retryFailed = false
+    /// 정지할 때 `errorMessage`에 남은 문구. 같은 내용을 두 번 보이지 않게 쓴다.
+    let stopErrorText: String?
+
+    public var recording: Recording { recordings[recordings.count - 1] }
+    public var relativePath: String { recording.relativePath }
+
+    public var title: String {
+        recordings.count > 1 ? "녹음 \(recordings.count)개의 정보를 저장하지 못했어요" : Self.singleTitle
+    }
+
+    public var detail: String {
+        retryFailed ? "\(Self.baseDetail)\n다시 저장하지 못했어요: \(reason)" : Self.baseDetail
+    }
+}
+
 /// 녹음을 시작하기 전에 고른 과목. 고르지 않으면 시간표로 자동 분류한다.
 public enum SubjectChoice: Hashable {
     case automatic
@@ -71,6 +98,23 @@ public final class RecordingController {
     public private(set) var currentRelativePath: String?
     /// 마지막으로 저장된 녹음.
     public private(set) var lastSaved: Recording?
+    /// 정지했지만 DB에 저장하지 못한 녹음. "다시 저장"이 성공할 때까지 화면에 남는다. 파일은 디스크에 있다.
+    public private(set) var saveFailure: UnsavedRecordingNotice?
+    /// 저장하지 못한 앞 녹음의 저널을 새 녹음이 덮어쓰기 전에 보관하지 못했는지. 다시 저장에 성공하면 풀린다.
+    private var leftoverJournalLost = false
+    /// 녹음 중 복구 기록(저널)을 쓰지 못했는지. 이때 앱이 꺼지면 이 녹음을 목록에 되살리지 못할 수 있다.
+    public private(set) var recoveryJournalFailed = false
+    /// 녹음 중 잠자기 방지를 켜지 못했는지.
+    public private(set) var sleepPreventionFailed = false
+    /// DB를 열지 못해 메모리 저장소로 켜졌는지. 이때는 앱을 끄면 제목·과목·북마크·메모가 사라진다(소리 파일은 남는다). 앱이 정한다.
+    public var isUsingTemporaryStore = false
+    /// 임시 저장소 상태에서 녹음 화면의 시작 버튼을 처음 눌렀을 때 띄우는 확인. 확인하면 녹음한다.
+    public private(set) var temporaryStorePrompt = false
+    private var temporaryStoreAcknowledged = false
+    /// 저장 실패한 녹음을 "다시 저장"으로 저장했을 때 불린다. 목록을 다시 읽는 데 쓴다.
+    public var onSaveRetried: (@MainActor () -> Void)?
+    /// 정지 뒤 압축이 한 건 끝날 때마다 불린다(성공·실패 모두). 저장 상태 알림을 다시 세는 데 쓴다.
+    public var onCompressionFinished: (@MainActor () -> Void)?
     public var errorMessage: String?
     /// 잠자기나 종료 때문에 녹음이 중단되어 저장됐을 때 보여줄 안내.
     public var interruptionNotice: String?
@@ -157,6 +201,8 @@ public final class RecordingController {
     private var isStallContinuation = false
     private let calendar: Calendar
     private let now: @MainActor () -> Date
+    /// 녹음 기록을 DB에 저장한다. 테스트에서 저장 실패를 흉내 낼 때 바꾼다.
+    private let saveContext: @MainActor (ModelContext) throws -> Void
 
     public init(
         context: ModelContext,
@@ -175,8 +221,10 @@ public final class RecordingController {
         storageCheckInterval: Duration? = .seconds(10),
         levelCheckInterval: Duration? = .milliseconds(100),
         calendar: Calendar = .current,
-        now: @escaping @MainActor () -> Date = { Date() }
+        now: @escaping @MainActor () -> Date = { Date() },
+        saveContext: (@MainActor (ModelContext) throws -> Void)? = nil
     ) {
+        self.saveContext = saveContext ?? { try $0.save() }
         self.context = context
         self.recorder = recorder
         self.storage = storage
@@ -596,37 +644,45 @@ public final class RecordingController {
             nextClassNotifiedID = nil
         }
         loadNextClassSnapshot()
-        sleepPreventer?.begin(reason: "수업 녹음 중")
+        if let sleepPreventer {
+            sleepPreventionFailed = !sleepPreventer.begin(reason: "수업 녹음 중")
+        }
         onStarted?()
-        keepUnsavedLeftover()
+        if !keepUnsavedLeftover() { leftoverJournalLost = true }
         do {
             try journal?.save(pendingRecording(bookmarkTimes: []))
+            recoveryJournalFailed = leftoverJournalLost
         } catch {
-            // 녹음은 계속한다. 복구만 안 될 뿐이다.
+            // 녹음은 계속한다. 복구만 안 될 뿐이니 화면에 계속 알린다.
             Log.recording.error("녹음 저널 기록 실패: \(error.localizedDescription, privacy: .public)")
+            recoveryJournalFailed = true
         }
     }
 
     @discardableResult
     public func stop() throws(RecordingError) -> Recording {
-        try finishRecording(recorderStalled: false)
+        // 녹음기가 인코딩 오류 등으로 스스로 끝났다면(멈춤 감지 전이라도) 경과 시간을 믿지 말고 파일 크기로 길이를 본다.
+        try finishRecording(recorderStalled: false, measureFromFile: recorder.hasEnded)
     }
 
     /// 멈춘 녹음을 이어 녹음한 파일의 제목 끝에 붙는다. 같은 수업의 앞 파일과 같은 과목 목록에서 이어져 보인다.
     public static let continuationTitleSuffix = " (이어서)"
 
     /// 녹음을 닫고 저장한다. 녹음기가 멈춘 경우 `currentTime`이 0으로 돌아갈 수 있으니 실제 파일 크기로 길이를 어림한다.
-    private func finishRecording(recorderStalled: Bool) throws(RecordingError) -> Recording {
+    /// - Parameter measureFromFile: 녹음기가 비정상으로 끝나 경과 시간을 믿을 수 없으면 true. 멈춤 안내 없이 길이만 파일 크기로 본다.
+    private func finishRecording(recorderStalled: Bool, measureFromFile: Bool = false) throws(RecordingError) -> Recording {
         guard let startedAt = state.startedAt, let relativePath = currentRelativePath else {
             throw .notRecording
         }
         stallResumeNotice = nil
         var duration = recorder.stop()
-        if recorderStalled {
+        if recorderStalled || measureFromFile {
             let bytes = files.fileSize(at: storage.url(for: relativePath)) ?? 0
             duration = max(duration, Double(bytes) * 8 / RecordingRecovery.workingBitsPerSecond)
         }
         sleepPreventer?.end()
+        sleepPreventionFailed = false
+        recoveryJournalFailed = false
         storageMonitor?.cancel()
         storageMonitor = nil
         storageWarning = nil
@@ -662,18 +718,86 @@ public final class RecordingController {
         }
         bookmarkTimes = []
         bookmarkNotes = []
-        onStopped?()
         do {
-            try context.save()
+            try saveContext(context)
         } catch {
-            // 파일은 이미 디스크에 있다. 다음 실행 때 복구할 수 있도록 로그를 남긴다.
+            // 파일은 이미 디스크에 있고 저널도 남아 있어 다음 실행 때 복구된다. "다시 저장"할 때까지 화면에 남긴다.
             Log.recording.fault("녹음 메타데이터 저장 실패 \(relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            let errorText = RecordingError.saveFailed(error.localizedDescription).errorDescription
+            if var failure = saveFailure {
+                // 앞 녹음도 아직 저장하지 못했다. 덮어쓰지 않고 함께 남긴다.
+                failure.recordings.append(recording)
+                failure.reason = error.localizedDescription
+                failure.retryFailed = false
+                saveFailure = UnsavedRecordingNotice(recordings: failure.recordings, reason: failure.reason, stopErrorText: errorText)
+            } else {
+                saveFailure = UnsavedRecordingNotice(recordings: [recording], reason: error.localizedDescription, stopErrorText: errorText)
+            }
+            // 녹음 자체는 끝났으므로 전사 재개·알림 재예약 같은 정지 뒤 처리는 그대로 한다.
+            onStopped?()
             throw .saveFailed(error.localizedDescription)
         }
+        saveFailure = nil
         journal?.clear()
         lastSaved = recording
+        onStopped?()
         startCompression(of: recording)
         return recording
+    }
+
+    /// 화면에 보일 오류. 저장 실패는 사라지지 않는 알림(`saveFailure`)이 보여 주므로 같은 문구를 두 번 보이지 않는다.
+    public var displayedErrorMessage: String? {
+        guard let errorMessage else { return nil }
+        if let failure = saveFailure, errorMessage == failure.stopErrorText { return nil }
+        return errorMessage
+    }
+
+    /// 정지 때 저장하지 못한 녹음을 다시 저장한다. 성공하면 알림을 지우고 압축을 시작한다.
+    /// 실패하면 알림을 그대로 두고, 알림 안에 다시 실패한 이유를 보인다.
+    public func retrySave() {
+        guard var failure = saveFailure else { return }
+        var pending: [Recording] = []
+        for recording in failure.recordings {
+            if recording.isDeleted {
+                // 저장 전에 지워졌다(사용자가 목록에서 지움). 파일과 저널은 남아 있어 다음 실행 때 되살아날 수 있다.
+                Log.recording.fault("다시 저장하려던 녹음이 지워져 있음: \(recording.relativePath, privacy: .public)")
+                continue
+            }
+            if recording.modelContext == nil {
+                // 저장소가 다시 열리며 기록이 빠졌다. 다시 넣어 저장한다 (북마크는 저널에서 다음 실행 때 되살린다).
+                Log.recording.notice("저장 안 된 녹음을 다시 넣음: \(recording.relativePath, privacy: .public)")
+                context.insert(recording)
+            }
+            pending.append(recording)
+        }
+        guard !pending.isEmpty else {
+            failure.retryFailed = true
+            failure.reason = "녹음 기록이 지워져 다시 저장할 수 없어요. 파일은 남아 있어 설정 > 녹음 파일 > 녹음 폴더 다시 읽기로 되살릴 수 있어요."
+            saveFailure = failure
+            return
+        }
+        do {
+            try saveContext(context)
+        } catch {
+            Log.recording.fault("녹음 메타데이터 다시 저장 실패 \(failure.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            failure.recordings = pending
+            failure.reason = error.localizedDescription
+            failure.retryFailed = true
+            saveFailure = failure
+            return
+        }
+        saveFailure = nil
+        if errorMessage == failure.stopErrorText { errorMessage = nil }
+        leftoverJournalLost = false
+        for recording in pending {
+            // 저널에는 이 녹음 기록이 그대로 있거나(새 녹음 전), 새 녹음이 시작되며 따로 보관됐다. 지금 녹음의 저널은 건드리지 않는다.
+            if journal?.load()?.relativePath == recording.relativePath { journal?.clear() }
+            journal?.clearUnsaved(relativePath: recording.relativePath)
+            startCompression(of: recording)
+        }
+        if !isRecording, let last = pending.last { lastSaved = last }
+        // 정지 뒤 처리(onStopped)는 정지할 때 이미 했다. 새 녹음 중이면 전사를 다시 켜면 안 된다.
+        onSaveRetried?()
     }
 
     /// 정지한 녹음을 백그라운드에서 m4a로 압축한다. 끝나기 전에도 녹음은 CAF로 재생된다.
@@ -684,6 +808,7 @@ public final class RecordingController {
         compressionTask = Task {
             await previous?.value
             await compressor.compress(recording)
+            self.onCompressionFinished?()
         }
     }
 
@@ -712,20 +837,25 @@ public final class RecordingController {
     private func saveBookmarksToJournal() {
         do {
             try journal?.save(pendingRecording(bookmarkTimes: bookmarkTimes))
+            recoveryJournalFailed = leftoverJournalLost
         } catch {
             Log.recording.error("북마크 저널 기록 실패: \(error.localizedDescription, privacy: .public)")
+            recoveryJournalFailed = true
         }
     }
 
     /// 저널에 다른 녹음의 기록이 남아 있으면(정지 때 DB 저장이 실패한 경우) 새 녹음이 덮어쓰기 전에 따로 보관한다.
     /// 그래야 앱을 다시 켤 때 앞 녹음도 복구된다. 보관에 실패해도 새 녹음은 시작한다(파일은 남아 있어 "폴더 다시 읽기"로 되살릴 수 있다).
-    private func keepUnsavedLeftover() {
-        guard let leftover = journal?.load(), leftover.relativePath != currentRelativePath else { return }
+    /// 보관하지 못하면 false. 그러면 녹음 화면에 "되살리지 못할 수 있어요" 경고를 계속 보인다.
+    private func keepUnsavedLeftover() -> Bool {
+        guard let leftover = journal?.load(), leftover.relativePath != currentRelativePath else { return true }
         do {
             try journal?.keepUnsaved(leftover)
             Log.recording.notice("저장되지 못한 앞 녹음의 저널을 보관: \(leftover.relativePath, privacy: .public)")
+            return true
         } catch {
-            Log.recording.error("앞 녹음의 저널을 보관하지 못함: \(error.localizedDescription, privacy: .public)")
+            Log.recording.fault("앞 녹음의 저널을 보관하지 못함 \(leftover.relativePath, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return false
         }
     }
 
@@ -792,6 +922,28 @@ public final class RecordingController {
         } catch {
             errorMessage = error.errorDescription
         }
+    }
+
+    /// 녹음 화면의 시작·정지 버튼. 임시 저장소로 켜진 상태에서 처음 시작할 때만 한 번 확인을 받는다.
+    /// 녹음을 막지는 않는다: 확인하면 바로 녹음하고, 메뉴 막대·알림의 시작은 묻지 않는다.
+    public func toggleFromRecordingScreen() async {
+        if !isRecording, !isStarting, isUsingTemporaryStore, !temporaryStoreAcknowledged {
+            temporaryStorePrompt = true
+            return
+        }
+        await toggle()
+    }
+
+    /// 임시 저장소 확인에서 "녹음 시작"을 눌렀다. 다시 묻지 않고 녹음한다.
+    public func confirmTemporaryStoreAndStart() async {
+        temporaryStorePrompt = false
+        temporaryStoreAcknowledged = true
+        await toggle()
+    }
+
+    /// 임시 저장소 확인을 닫는다. 다음에 누르면 다시 묻는다.
+    public func cancelTemporaryStorePrompt() {
+        temporaryStorePrompt = false
     }
 
     /// 방금 저장한 녹음과 같은 과목으로 새 파일에 바로 이어서 녹음한다 (실수로 멈췄거나, 수업 시간표 밖이라 자동 분류가 틀릴 때).
