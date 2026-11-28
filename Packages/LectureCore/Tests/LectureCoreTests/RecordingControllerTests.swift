@@ -34,14 +34,14 @@ final class TestClock {
 
     let overrunNotifier = FakeNotificationScheduler()
 
-    func makeController(at time: Date, compressing: Bool = false, clock: TestClock? = nil) -> RecordingController {
+    func makeController(at time: Date, compressing: Bool = false, clock: TestClock? = nil, permission: (any MicrophonePermissionProviding)? = nil) -> RecordingController {
         let storage = RecordingStorage(root: root, files: files)
         return RecordingController(
             context: container.mainContext,
             recorder: recorder,
             storage: storage,
             files: files,
-            permission: permission,
+            permission: permission ?? self.permission,
             journal: journal,
             sleepPreventer: sleep,
             overrunNotifier: overrunNotifier,
@@ -62,6 +62,54 @@ final class TestClock {
         try ScheduleManager(context: container.mainContext)
             .add(subject: subject, weekday: .monday, start: TimeOfDay(hour: 10), end: TimeOfDay(hour: 11, minute: 15))
         return subject
+    }
+
+    @Test func 권한_답을_기다리는_동안_또_시작하면_거부하고_녹음은_하나만_한다() async throws {
+        let gate = GatedMicrophonePermission()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0), permission: gate)
+        let first = Task { try await controller.start() }
+        await gate.waitUntilAsked()
+        #expect(controller.isStarting)
+
+        await #expect(throws: RecordingError.alreadyRecording) { try await controller.start() }
+        await controller.toggle()
+        #expect(await controller.startRecording(forSubjectNamed: "자료구조") == .alreadyRecording)
+
+        gate.answer(.granted)
+        try await first.value
+        #expect(controller.isRecording)
+        #expect(!controller.isStarting)
+        #expect(recorder.startedURLs.count == 1)
+        #expect(gate.askCount == 1)
+    }
+
+    @Test func 시작_중에_알림으로_시작해도_먼저_고른_과목을_덮지_않는다() async throws {
+        let subjects = SubjectManager(context: container.mainContext)
+        let chosen = try subjects.add(name: "선형대수", color: .blue)
+        _ = try subjects.add(name: "자료구조", color: .green)
+        let gate = GatedMicrophonePermission()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0), permission: gate)
+        controller.subjectChoice = .subject(chosen.persistentModelID)
+        let first = Task { try await controller.start() }
+        await gate.waitUntilAsked()
+
+        #expect(await controller.startRecording(forSubjectNamed: "자료구조") == .alreadyRecording)
+        #expect(!controller.selectSubject(named: "자료구조"))
+
+        gate.answer(.granted)
+        try await first.value
+        #expect(controller.currentSubjectName == "선형대수")
+    }
+
+    @Test func 권한이_거부돼도_시작_중_표시가_풀려_다시_시작할_수_있다() async throws {
+        let gate = GatedMicrophonePermission()
+        let controller = makeController(at: date(2026, 3, 2, 10, 0), permission: gate)
+        let first = Task { try await controller.start() }
+        await gate.waitUntilAsked()
+        gate.answer(.denied)
+        await #expect(throws: RecordingError.permissionDenied) { try await first.value }
+        #expect(!controller.isStarting)
+        #expect(!controller.isRecording)
     }
 
     @Test func 수업이_끝나고_10분_뒤에도_녹음_중이면_안내하고_알림을_한_번_보낸다() async throws {

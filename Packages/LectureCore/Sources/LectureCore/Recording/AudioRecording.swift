@@ -37,9 +37,11 @@ public final class SystemAudioRecorder: NSObject, AudioRecording {
     public enum RecorderError: Error, LocalizedError {
         case couldNotStart
         case couldNotResume
+        case alreadyRecording
 
         public var errorDescription: String? {
             switch self {
+            case .alreadyRecording: "이미 녹음 중입니다."
             case .couldNotStart: "녹음을 시작하지 못했습니다."
             case .couldNotResume: "녹음을 다시 시작하지 못했습니다."
             }
@@ -84,6 +86,11 @@ public final class SystemAudioRecorder: NSObject, AudioRecording {
     }
 
     public func start(to url: URL) throws {
+        // 이미 녹음기가 있으면 덮어쓰지 않는다. 덮어쓰면 앞 녹음기가 닫히지 않은 채 버려지고 그 파일은 목록에서 사라진다.
+        guard recorder == nil else {
+            Log.recording.error("이미 녹음 중이라 새 녹음기를 만들지 않음: \(url.lastPathComponent, privacy: .public)")
+            throw RecorderError.alreadyRecording
+        }
         let recorder = try AVAudioRecorder(url: url, settings: Self.settings)
         recorder.delegate = self
         recorder.isMeteringEnabled = true
